@@ -1,0 +1,36 @@
+appId: com.fluxplayer.app
+productName: FluxPlayer
+publish:
+  - provider: github
+    owner: hey-sm
+    repo: FluxPlayer
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+  - resources/icon.png
+asar: true
+asarUnpack:
+  - node_modules/koffi/**/*
+  - node_modules/@koromix/koffi-win32-x64/**/*
+# 主进程 externalize 的运行时依赖（dependencies）会被自动打进 app.asar 的 node_modules
+win:
+  executableName: FluxPlayer
+  icon: resources/icon.png
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: FluxPlayer
+  artifactName: FluxPlayer-${version}-Setup.${ext}
+# 图标：resources/icon.svg 为源，scripts/gen-icons.mjs 生成 icon.png（builder 自动转 ico）
+# 更新 provider 固定为 hey-sm/FluxPlayer；未签名发布须在 release 文档标明 SmartScreen 风险。

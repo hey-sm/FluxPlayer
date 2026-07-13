@@ -1,0 +1,117 @@
+[
+  {
+    "provider": "netease",
+    "source": "netease",
+    "type": "song",
+    "id": 3339230677,
+    "name": "晴天",
+    "artist": "周杰伦- / A-LNK",
+    "artists": [
+      {
+        "id": 0,
+        "name": "周杰伦-"
+      },
+      {
+        "id": 98615668,
+        "name": "A-LNK"
+      }
+    ],
+    "artistId": 0,
+    "album": "不散",
+    "cover": "https://p1.music.126.net/rM6PP_YrU0HjFes4jggIOw==/109951172445882513.jpg",
+    "duration": 182890,
+    "fee": 8
+  },
+  {
+    "provider": "netease",
+    "source": "netease",
+    "type": "song",
+    "id": 3334653818,
+    "name": "晴天",
+    "artist": "周杰伦. / Asasblue",
+    "artists": [
+      {
+        "id": 0,
+        "name": "周杰伦."
+      },
+      {
+        "id": 122235907,
+        "name": "Asasblue"
+      }
+    ],
+    "artistId": 0,
+    "album": "晴天",
+    "cover": "https://p1.music.126.net/g5lQgcmD4EFPkr6rsoGCnw==/109951172501913537.jpg",
+    "duration": 119146,
+    "fee": 8
+  },
+  {
+    "provider": "netease",
+    "source": "netease",
+    "type": "song",
+    "id": 3344811140,
+    "name": "晴天(正式版)",
+    "artist": "周杰伦. / 阿图表妹",
+    "artists": [
+      {
+        "id": 0,
+        "name": "周杰伦."
+      },
+      {
+        "id": 121473800,
+        "name": "阿图表妹"
+      }
+    ],
+    "artistId": 0,
+    "album": "从前从前有个人爱你很久但偏偏风渐渐（不要你离开距离隔不开思念变成海）",
+    "cover": "https://p1.music.126.net/0xNaw4zPr7_IxmvqHJaZzQ==/109951172667158768.jpg",
+    "duration": 86423,
+    "fee": 8
+  },
+  {
+    "provider": "netease",
+    "source": "netease",
+    "type": "song",
+    "id": 3324852509,
+    "name": "晴天",
+    "artist": "B-KLl / 周杰伦、",
+    "artists": [
+      {
+        "id": 121703530,
+        "name": "B-KLl"
+      },
+      {
+        "id": 0,
+        "name": "周杰伦、"
+      }
+    ],
+    "artistId": 121703530,
+    "album": "爱到尽头",
+    "cover": "https://p1.music.126.net/eImhcnMQz-ZfuhQGiPALdQ==/109951172323546544.jpg",
+    "duration": 174706,
+    "fee": 8
+  },
+  {
+    "provider": "netease",
+    "source": "netease",
+    "type": "song",
+    "id": 3357694147,
+    "name": "晴天（正式版）",
+    "artist": "周杰伦- / Montagem",
+    "artists": [
+      {
+        "id": 0,
+        "name": "周杰伦-"
+      },
+      {
+        "id": 100446359,
+        "name": "Montagem"
+      }
+    ],
+    "artistId": 0,
+    "album": "惊鸿一面",
+    "cover": "https://p1.music.126.net/VGsmmMUgkgVoHwn9D7XU4g==/109951172861932473.jpg",
+    "duration": 161773,
+    "fee": 8
+  }
+]

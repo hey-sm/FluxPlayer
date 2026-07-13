@@ -1,0 +1,42 @@
+@import '../../theme/tokens.css';
+
+.flux-glass-surface {
+  color: var(--flux-text);
+  font-family: var(--flux-font-family);
+  font-size: calc(1em * var(--flux-font-scale));
+  background: var(--flux-glass-background, rgba(20, 22, 30, 0.72));
+  border: 1px solid var(--flux-glass-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--flux-glass-radius);
+  -webkit-backdrop-filter: blur(var(--flux-glass-blur)) saturate(var(--flux-glass-saturation));
+  backdrop-filter: blur(var(--flux-glass-blur)) saturate(var(--flux-glass-saturation));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--flux-panel-border) 5%, transparent);
+}
+
+.flux-glass-surface[data-elevation='raised'] {
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--flux-panel-border) 7%, transparent),
+    0 18px 48px rgba(0, 0, 0, 0.24);
+}
+
+.flux-glass-surface--interactive {
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.flux-glass-surface--interactive:hover {
+  border-color: color-mix(in srgb, var(--flux-panel-border) 16%, transparent);
+}
+
+.flux-glass-card,
+.flux-glass-button,
+.flux-glass-input {
+  font-family: var(--flux-font-family);
+  font-size: calc(1em * var(--flux-font-scale));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flux-glass-surface--interactive {
+    transition: none;
+  }
+}

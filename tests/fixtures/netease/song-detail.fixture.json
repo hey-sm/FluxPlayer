@@ -1,0 +1,180 @@
+{
+  "$fixture": {
+    "recordedAt": "2026-07-05T13:01:53.196Z",
+    "provenance": "recorded",
+    "endpoint": "NeteaseCloudMusicApi#song_detail",
+    "method": "POST",
+    "params": {
+      "ids": "186016"
+    },
+    "anonymous": true
+  },
+  "response": {
+    "songs": [
+      {
+        "name": "晴天",
+        "mainTitle": null,
+        "additionalTitle": null,
+        "id": 186016,
+        "pst": 0,
+        "t": 0,
+        "ar": [
+          {
+            "id": 6452,
+            "name": "周杰伦",
+            "tns": [],
+            "alias": []
+          }
+        ],
+        "alia": [
+          "Sunny Day"
+        ],
+        "pop": 100,
+        "st": 0,
+        "rt": "600902000006889364",
+        "fee": 0,
+        "v": 189,
+        "crbt": null,
+        "cf": "",
+        "al": {
+          "id": 18905,
+          "name": "叶惠美",
+          "picUrl": "https://p3.music.126.net/ZGffiDQZrGj5s_hnR1CNbg==/109951165566379710.jpg",
+          "tns": [],
+          "pic_str": "109951165566379710",
+          "pic": 109951165566379710
+        },
+        "dt": 269000,
+        "h": {
+          "br": 320000,
+          "fid": 0,
+          "size": 10792794,
+          "vd": -34556,
+          "sr": 44100
+        },
+        "m": {
+          "br": 192000,
+          "fid": 0,
+          "size": 6475693,
+          "vd": -31967,
+          "sr": 44100
+        },
+        "l": {
+          "br": 128000,
+          "fid": 0,
+          "size": 4317143,
+          "vd": -30311,
+          "sr": 44100
+        },
+        "sq": {
+          "br": 935088,
+          "fid": 0,
+          "size": 31529673,
+          "vd": -34548,
+          "sr": 44100
+        },
+        "hr": null,
+        "a": null,
+        "cd": "1",
+        "no": 3,
+        "rtUrl": null,
+        "ftype": 0,
+        "rtUrls": [],
+        "djId": 0,
+        "copyright": 1,
+        "s_id": 0,
+        "mark": 17179869184,
+        "originCoverType": 1,
+        "originSongSimpleData": null,
+        "tagPicList": null,
+        "resourceState": true,
+        "version": 155,
+        "songJumpInfo": null,
+        "entertainmentTags": null,
+        "awardTags": null,
+        "displayTags": null,
+        "artistClassics": false,
+        "markTags": [],
+        "songFeature": null,
+        "single": 0,
+        "noCopyrightRcmd": null,
+        "mv": 504177,
+        "rtype": 0,
+        "rurl": null,
+        "mst": 9,
+        "cp": 1007,
+        "publishTime": 1059580800000
+      }
+    ],
+    "privileges": [
+      {
+        "id": 186016,
+        "fee": 0,
+        "payed": 0,
+        "st": -200,
+        "pl": 0,
+        "dl": 0,
+        "sp": 0,
+        "cp": 0,
+        "subp": 0,
+        "cs": false,
+        "maxbr": 999000,
+        "fl": 0,
+        "toast": false,
+        "flag": 1081600,
+        "preSell": false,
+        "playMaxbr": 999000,
+        "downloadMaxbr": 999000,
+        "maxBrLevel": "lossless",
+        "playMaxBrLevel": "lossless",
+        "downloadMaxBrLevel": "lossless",
+        "plLevel": "none",
+        "dlLevel": "none",
+        "flLevel": "none",
+        "rscl": null,
+        "freeTrialPrivilege": {
+          "resConsumable": false,
+          "userConsumable": false,
+          "listenType": null,
+          "cannotListenReason": 1,
+          "playReason": null,
+          "freeLimitTagType": null
+        },
+        "rightSource": 0,
+        "chargeInfoList": [
+          {
+            "rate": 128000,
+            "chargeUrl": null,
+            "chargeMessage": null,
+            "chargeType": 0
+          },
+          {
+            "rate": 192000,
+            "chargeUrl": null,
+            "chargeMessage": null,
+            "chargeType": 0
+          },
+          {
+            "rate": 320000,
+            "chargeUrl": null,
+            "chargeMessage": null,
+            "chargeType": 0
+          },
+          {
+            "rate": 999000,
+            "chargeUrl": null,
+            "chargeMessage": null,
+            "chargeType": 1
+          }
+        ],
+        "code": 0,
+        "message": null,
+        "plLevels": null,
+        "dlLevels": null,
+        "ignoreCache": null,
+        "bd": null
+      }
+    ],
+    "code": 200
+  }
+}

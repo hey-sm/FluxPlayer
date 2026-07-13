@@ -1,0 +1,48 @@
+:root {
+  color-scheme: var(--flux-color-scheme, dark);
+  --flux-color-scheme: dark;
+
+  --flux-bg: #07080c;
+  --flux-text: rgba(255, 255, 255, 0.88);
+  --flux-text-muted: rgba(255, 255, 255, 0.45);
+  --flux-accent: #7c8cff;
+  --flux-danger: #ff6a7a;
+  --flux-panel-surface: #14161e;
+  --flux-panel-border: #ffffff;
+
+  --flux-glass-blur: 18px;
+  --flux-glass-saturation: 120%;
+  --flux-glass-bg-opacity: 0.72;
+  --flux-glass-border-opacity: 0.08;
+  --flux-glass-distortion: 0;
+  --flux-glass-chromatic-aberration: 0;
+  --flux-glass-radius: 14px;
+
+  --flux-font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  --flux-font-scale: 1;
+
+  /* Derived values are shared by native glass surfaces and ordinary controls. */
+  --flux-accent-soft: color-mix(in srgb, var(--flux-accent) 18%, transparent);
+  --flux-accent-strong: color-mix(in srgb, var(--flux-accent) 84%, white 16%);
+  --flux-glass-background: color-mix(
+    in srgb,
+    var(--flux-panel-surface) calc(var(--flux-glass-bg-opacity) * 100%),
+    transparent
+  );
+  --flux-glass-border: color-mix(
+    in srgb,
+    var(--flux-panel-border) calc(var(--flux-glass-border-opacity) * 100%),
+    transparent
+  );
+}
+
+/* Compatibility aliases while M3 incrementally replaces the original global styles. */
+:root {
+  --bg: var(--flux-bg);
+  --panel: var(--flux-glass-background);
+  --panel-border: var(--flux-glass-border);
+  --text: var(--flux-text);
+  --text-dim: var(--flux-text-muted);
+  --accent: var(--flux-accent);
+  --danger: var(--flux-danger);
+}

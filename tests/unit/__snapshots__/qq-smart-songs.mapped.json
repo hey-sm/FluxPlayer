@@ -1,0 +1,86 @@
+[
+  {
+    "provider": "qq",
+    "source": "qq",
+    "type": "qq",
+    "id": "0039MnYb0qxYhV",
+    "qqId": "97773",
+    "mid": "0039MnYb0qxYhV",
+    "songmid": "0039MnYb0qxYhV",
+    "name": "晴天",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "name": "周杰伦"
+      }
+    ],
+    "album": "",
+    "cover": "",
+    "duration": 0,
+    "fee": 0,
+    "playable": false
+  },
+  {
+    "provider": "qq",
+    "source": "qq",
+    "type": "qq",
+    "id": "000Ab2Sk4MkkpI",
+    "qqId": "373447092",
+    "mid": "000Ab2Sk4MkkpI",
+    "songmid": "000Ab2Sk4MkkpI",
+    "name": "周杰伦 - 晴天 demo",
+    "artist": "周杰伦微博台",
+    "artists": [
+      {
+        "name": "周杰伦微博台"
+      }
+    ],
+    "album": "",
+    "cover": "",
+    "duration": 0,
+    "fee": 0,
+    "playable": false
+  },
+  {
+    "provider": "qq",
+    "source": "qq",
+    "type": "qq",
+    "id": "0002fGVs2iterI",
+    "qqId": "341030119",
+    "mid": "0002fGVs2iterI",
+    "songmid": "0002fGVs2iterI",
+    "name": "晴天 (纯音乐)",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "name": "周杰伦"
+      }
+    ],
+    "album": "",
+    "cover": "",
+    "duration": 0,
+    "fee": 0,
+    "playable": false
+  },
+  {
+    "provider": "qq",
+    "source": "qq",
+    "type": "qq",
+    "id": "002QaW6I1ZtJgD",
+    "qqId": "253970285",
+    "mid": "002QaW6I1ZtJgD",
+    "songmid": "002QaW6I1ZtJgD",
+    "name": "周杰伦 - 晴天（电波版）",
+    "artist": "周杰伦微博台",
+    "artists": [
+      {
+        "name": "周杰伦微博台"
+      }
+    ],
+    "album": "",
+    "cover": "",
+    "duration": 0,
+    "fee": 0,
+    "playable": false
+  }
+]

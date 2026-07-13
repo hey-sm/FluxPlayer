@@ -1,0 +1,19 @@
+{
+  "provider": "netease",
+  "source": "netease",
+  "type": "song",
+  "id": 186016,
+  "name": "晴天",
+  "artist": "周杰伦",
+  "artists": [
+    {
+      "id": 6452,
+      "name": "周杰伦"
+    }
+  ],
+  "artistId": 6452,
+  "album": "叶惠美",
+  "cover": "https://p1.music.126.net/ZGffiDQZrGj5s_hnR1CNbg==/109951165566379710.jpg",
+  "duration": 269000,
+  "fee": 0
+}

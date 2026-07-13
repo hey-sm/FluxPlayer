@@ -1,0 +1,105 @@
+[
+  {
+    "provider": "netease",
+    "source": "netease",
+    "type": "song",
+    "id": 1973665667,
+    "name": "海屿你",
+    "artist": "马也_Crabbit",
+    "artists": [
+      {
+        "id": 13288861,
+        "name": "马也_Crabbit"
+      }
+    ],
+    "artistId": 13288861,
+    "album": "海屿你",
+    "cover": "https://p1.music.126.net/RfguLkQJ8aMVkiIaxdy70Q==/109951170483263672.jpg",
+    "duration": 295940,
+    "fee": 8
+  },
+  {
+    "provider": "netease",
+    "source": "netease",
+    "type": "song",
+    "id": 3382908505,
+    "name": "玻璃",
+    "artist": "Gareth.T",
+    "artists": [
+      {
+        "id": 32944030,
+        "name": "Gareth.T"
+      }
+    ],
+    "artistId": 32944030,
+    "album": "玻璃",
+    "cover": "https://p1.music.126.net/MSKoQP60up7v3y1P1d3JIQ==/109951173234747322.jpg",
+    "duration": 185040,
+    "fee": 8
+  },
+  {
+    "provider": "netease",
+    "source": "netease",
+    "type": "song",
+    "id": 1456890009,
+    "name": "罗生门（Follow）",
+    "artist": "梨冻紧 / Wiz_H张子豪",
+    "artists": [
+      {
+        "id": 33259235,
+        "name": "梨冻紧"
+      },
+      {
+        "id": 13112601,
+        "name": "Wiz_H张子豪"
+      }
+    ],
+    "artistId": 33259235,
+    "album": "罗生门（Follow）",
+    "cover": "https://p1.music.126.net/yN1ke1xYMJ718FiHaDWtYQ==/109951165076380471.jpg",
+    "duration": 243754,
+    "fee": 8
+  },
+  {
+    "provider": "netease",
+    "source": "netease",
+    "type": "song",
+    "id": 2145353565,
+    "name": "Баллада",
+    "artist": "Xcho / МОТ",
+    "artists": [
+      {
+        "id": 32491815,
+        "name": "Xcho"
+      },
+      {
+        "id": 59557534,
+        "name": "МОТ"
+      }
+    ],
+    "artistId": 32491815,
+    "album": "Баллада",
+    "cover": "https://p1.music.126.net/dH71ZS7zVSg86oXdO_xBZw==/109951169492314392.jpg",
+    "duration": 182000,
+    "fee": 8
+  },
+  {
+    "provider": "netease",
+    "source": "netease",
+    "type": "song",
+    "id": 2600493765,
+    "name": "恋人",
+    "artist": "李荣浩",
+    "artists": [
+      {
+        "id": 4292,
+        "name": "李荣浩"
+      }
+    ],
+    "artistId": 4292,
+    "album": "黑马",
+    "cover": "https://p1.music.126.net/0bk3Iqe2OZGBH2Iuyx7RzA==/109951170045577565.jpg",
+    "duration": 275912,
+    "fee": 1
+  }
+]

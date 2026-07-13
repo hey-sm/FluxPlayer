@@ -1,0 +1,344 @@
+{
+  "$fixture": {
+    "recordedAt": "2026-07-05T13:01:37.303Z",
+    "provenance": "recorded",
+    "endpoint": "https://u.y.qq.com/cgi-bin/musicu.fcg",
+    "method": "POST",
+    "params": {
+      "comm": {
+        "ct": 24,
+        "cv": 0
+      },
+      "songinfo": {
+        "module": "music.pf_song_detail_svr",
+        "method": "get_song_detail_yqq",
+        "param": {
+          "song_mid": "003OUlho2HcRHC"
+        }
+      }
+    },
+    "anonymous": true
+  },
+  "response": {
+    "code": 0,
+    "ts": 1783256495758,
+    "start_ts": 1783256495655,
+    "traceid": "12201709d57da96e",
+    "songinfo": {
+      "code": 0,
+      "data": {
+        "info": {
+          "company": {
+            "title": "唱片公司",
+            "type": "JUMP_TO_COMPANY",
+            "content": [
+              {
+                "id": 2317,
+                "value": "杰威尔音乐有限公司",
+                "mid": "",
+                "type": 0,
+                "show_type": 0,
+                "is_parent": 0,
+                "picurl": "",
+                "read_cnt": 0,
+                "author": "",
+                "jumpurl": "",
+                "ori_picurl": ""
+              }
+            ],
+            "pos": 51,
+            "more": 0,
+            "selected": "company",
+            "use_platform": 1
+          },
+          "genre": {
+            "title": "歌曲流派",
+            "type": "JUMP_TO_CATEGORY",
+            "content": [
+              {
+                "id": 42,
+                "value": "R&B",
+                "mid": "",
+                "type": 0,
+                "show_type": 2,
+                "is_parent": 0,
+                "picurl": "",
+                "read_cnt": 0,
+                "author": "",
+                "jumpurl": "http://y.qq.com/m/client/categoryzone/detail.html?categoryId=42&showType=2&isParent=0&_hidehd=1&groupId=100",
+                "ori_picurl": ""
+              }
+            ],
+            "pos": 12,
+            "more": 0,
+            "selected": "genre",
+            "use_platform": 3
+          },
+          "intro": {
+            "title": "简介",
+            "type": "SPECIAL_DISPLAY",
+            "content": [
+              {
+                "id": 0,
+                "value": "恋恋巴黎香榭  浪漫R&B告白神曲\n\n全世界最浪漫、最容易让人想谈恋爱的地方，绝对是巴黎左岸！这首告白情歌，前段充满R&B情调，描述遇上爱情的悸动；但是非常特别的是，副歌之后却转成浪漫”手摇歌”，让人听着听着，跟着旋律与节奏，就忍不住一起举起双手，摇动起来！像演唱会上拿着荧光棒，全场一起浪漫！\n你说你有点难追  想让我知难而退  礼物不需挑最贵  只要香榭的落叶\n喔～营造浪漫的约会  不害怕搞砸一切  拥有你就拥有  全世界\n亲爱的  爱上你  从那天起  甜蜜的很轻易\n亲爱的  别任性  你的眼睛  在说我愿意\n方文山用气球来描述女生说很难追的小趣味，让这首告白情歌的情节更浪漫；爱情总是发生在这些美好的小细节上；每个准备要告白的人，别怕爱说不出口，让这首歌给自己一点勇气，趁着气氛浪漫，告白吧！",
+                "mid": "",
+                "type": 0,
+                "show_type": 0,
+                "is_parent": 0,
+                "picurl": "",
+                "read_cnt": 0,
+                "author": "",
+                "jumpurl": "",
+                "ori_picurl": ""
+              }
+            ],
+            "pos": 52,
+            "more": 0,
+            "selected": "intro",
+            "use_platform": 3
+          },
+          "lan": {
+            "title": "歌曲语种",
+            "type": "JUMP_TO_CATEGORY",
+            "content": [
+              {
+                "id": 1,
+                "value": "国语",
+                "mid": "",
+                "type": 0,
+                "show_type": 2,
+                "is_parent": 0,
+                "picurl": "",
+                "read_cnt": 0,
+                "author": "",
+                "jumpurl": "http://y.qq.com/m/client/categoryzone/detail.html?categoryId=1&showType=2&isParent=0&_hidehd=1&groupId=100",
+                "ori_picurl": ""
+              }
+            ],
+            "pos": 11,
+            "more": 0,
+            "selected": "lan",
+            "use_platform": 3
+          },
+          "pub_time": {
+            "title": "发行时间",
+            "type": "desc",
+            "content": [
+              {
+                "id": 0,
+                "value": "2016-06-24",
+                "mid": "",
+                "type": 0,
+                "show_type": 0,
+                "is_parent": 0,
+                "picurl": "",
+                "read_cnt": 0,
+                "author": "",
+                "jumpurl": "",
+                "ori_picurl": ""
+              }
+            ],
+            "pos": 50,
+            "more": 0,
+            "selected": "pub_time",
+            "use_platform": 0
+          }
+        },
+        "extras": {
+          "name": "告白气球",
+          "transname": "",
+          "subtitle": "",
+          "from": "0",
+          "wikiurl": ""
+        },
+        "track_info": {
+          "id": 107192078,
+          "type": 0,
+          "mid": "003OUlho2HcRHC",
+          "name": "告白气球",
+          "title": "告白气球",
+          "subtitle": "",
+          "singer": [
+            {
+              "id": 4558,
+              "mid": "0025NhlN2yWrP4",
+              "name": "周杰伦",
+              "title": "周杰伦",
+              "type": 0,
+              "uin": 0
+            }
+          ],
+          "album": {
+            "id": 1458791,
+            "mid": "003RMaRI1iFoYd",
+            "name": "周杰伦的床边故事",
+            "title": "周杰伦的床边故事",
+            "subtitle": "",
+            "time_public": "2016-06-24",
+            "pmid": "003RMaRI1iFoYd_1"
+          },
+          "mv": {
+            "id": 1053277,
+            "vid": "u00222le4ox",
+            "name": "",
+            "title": "",
+            "vt": 0
+          },
+          "interval": 215,
+          "isonly": 0,
+          "language": 0,
+          "genre": 33,
+          "index_cd": 0,
+          "index_album": 8,
+          "time_public": "2016-06-24",
+          "status": 0,
+          "fnote": 4009,
+          "file": {
+            "media_mid": "003gbY6c0g1L4Q",
+            "size_24aac": 0,
+            "size_48aac": 1323936,
+            "size_96aac": 2641182,
+            "size_192ogg": 5027341,
+            "size_192aac": 5215383,
+            "size_128mp3": 3450877,
+            "size_320mp3": 8626883,
+            "size_ape": 0,
+            "size_flac": 47089150,
+            "size_dts": 0,
+            "size_try": 960887,
+            "try_begin": 64732,
+            "try_end": 85652,
+            "url": "",
+            "size_hires": 0,
+            "hires_sample": 0,
+            "hires_bitdepth": 0,
+            "b_30s": 0,
+            "e_30s": 60000,
+            "size_96ogg": 2504843,
+            "size_360ra": [],
+            "size_dolby": 0,
+            "size_new": [
+              145782921,
+              24539670,
+              62219026,
+              8997917,
+              0,
+              18797714,
+              28193942,
+              2049875,
+              24469965,
+              6074379,
+              0,
+              0,
+              22416852,
+              0
+            ]
+          },
+          "pay": {
+            "pay_month": 1,
+            "price_track": 400,
+            "price_album": 2000,
+            "pay_play": 1,
+            "pay_down": 1,
+            "pay_status": 0,
+            "time_free": 0
+          },
+          "action": {
+            "switch": 16897793,
+            "msgid": 13,
+            "alert": 41,
+            "icons": 12992510,
+            "msgshare": 0,
+            "msgfav": 0,
+            "msgdown": 0,
+            "msgpay": 6,
+            "switch2": 0,
+            "icon2": 0
+          },
+          "ksong": {
+            "id": 2313607,
+            "mid": "002gSnbX3Xznq0"
+          },
+          "volume": {
+            "gain": -8.99,
+            "peak": 0.997,
+            "lra": 5.026
+          },
+          "label": "0",
+          "url": "",
+          "bpm": 89,
+          "version": 0,
+          "trace": "",
+          "data_type": 0,
+          "modify_stamp": 0,
+          "pingpong": "",
+          "ppurl": "",
+          "tid": 0,
+          "ov": 0,
+          "sa": 17408,
+          "es": "",
+          "vs": [
+            "064CLTwV32wz04",
+            "",
+            "",
+            "000dPg3B0Jfers",
+            "000Ozb1u10PR67",
+            "",
+            "",
+            "",
+            "",
+            "000BFSuT2nXmW0",
+            "",
+            "",
+            "",
+            "004Z1AGi2J5HuV",
+            "002CNSvM2AoAgb",
+            "0026I0E42gmmDd",
+            "001HcEdi2w1hb7",
+            "001Pd4JI3elRDN",
+            "001WCe9t2JUJYj",
+            "000Z1zcv0urY0y",
+            "000g3duf11n0jS",
+            "004Afvd00gyFdL",
+            "001AHUYB1bXW3H",
+            "004GSBYm1QpCFd",
+            "000wFeIB3ANFFB",
+            "",
+            "000gWOzy0pGPOp",
+            "",
+            "001Wcjug18xcT2",
+            "00388QBO463tc2",
+            "0034b38R1Vi8wq",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "0043nMOk16KmTj"
+          ],
+          "vi": [
+            2317,
+            161,
+            160,
+            16308131,
+            64732,
+            94732,
+            1
+          ],
+          "ktag": "0",
+          "vf": [
+            -8.91764,
+            0.999969,
+            5.088,
+            0,
+            0,
+            0,
+            -7.94163,
+            0.99884,
+            4.81465
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "$fixture": {
+    "recordedAt": "2026-07-10T00:00:00.000Z",
+    "provenance": "hand-seeded",
+    "endpoint": "https://c.y.qq.com/base/fcgi-bin/fcg_music_express_mobile3.fcg",
+    "method": "GET",
+    "params": {
+      "songmid": "SONGMID",
+      "filename": "C400MEDIA.m4a",
+      "cid": 205361747,
+      "uin": 0
+    },
+    "anonymous": true
+  },
+  "response": {
+    "code": 0,
+    "data": {
+      "expiration": 80400,
+      "items": [
+        {
+          "subcode": 0,
+          "songmid": "SONGMID",
+          "filename": "C400MEDIA.m4a",
+          "vkey": "TRIAL_VKEY_FIXTURE"
+        }
+      ]
+    }
+  }
+}

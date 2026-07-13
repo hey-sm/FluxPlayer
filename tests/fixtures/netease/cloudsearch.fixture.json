@@ -1,0 +1,676 @@
+{
+  "$fixture": {
+    "recordedAt": "2026-07-05T13:01:52.873Z",
+    "provenance": "recorded",
+    "endpoint": "NeteaseCloudMusicApi#cloudsearch",
+    "method": "POST",
+    "params": {
+      "keywords": "周杰伦 晴天",
+      "limit": 5
+    },
+    "anonymous": true
+  },
+  "response": {
+    "result": {
+      "songs": [
+        {
+          "no": 5,
+          "rt": "",
+          "copyright": 0,
+          "fee": 8,
+          "privilege": {
+            "flag": 1540097,
+            "code": 0,
+            "dlLevel": "none",
+            "subp": 1,
+            "fl": 320000,
+            "fee": 8,
+            "dl": 0,
+            "plLevel": "exhigh",
+            "maxBrLevel": "jymaster",
+            "rightSource": 0,
+            "maxbr": 999000,
+            "id": 3339230677,
+            "sp": 7,
+            "payed": 0,
+            "st": 0,
+            "chargeInfoList": [
+              {
+                "rate": 128000,
+                "chargeType": 0
+              },
+              {
+                "rate": 192000,
+                "chargeType": 0
+              },
+              {
+                "rate": 320000,
+                "chargeType": 0
+              },
+              {
+                "rate": 999000,
+                "chargeType": 1
+              }
+            ],
+            "freeTrialPrivilege": {
+              "userConsumable": false,
+              "resConsumable": false
+            },
+            "downloadMaxbr": 999000,
+            "downloadMaxBrLevel": "jymaster",
+            "cp": 1,
+            "preSell": false,
+            "playMaxBrLevel": "jymaster",
+            "cs": false,
+            "toast": false,
+            "playMaxbr": 999000,
+            "flLevel": "exhigh",
+            "pl": 320000
+          },
+          "mst": 9,
+          "pst": 0,
+          "pop": 95,
+          "dt": 182890,
+          "rtype": 0,
+          "s_id": 0,
+          "rtUrls": [],
+          "resourceState": true,
+          "id": 3339230677,
+          "sq": {
+            "br": 854533,
+            "fid": 0,
+            "size": 19539143,
+            "vd": -6926,
+            "sr": 48000
+          },
+          "st": 0,
+          "cd": "01",
+          "publishTime": 0,
+          "cf": "",
+          "originCoverType": 0,
+          "h": {
+            "br": 320000,
+            "fid": 0,
+            "size": 7318125,
+            "vd": -6934,
+            "sr": 48000
+          },
+          "mv": 0,
+          "al": {
+            "picUrl": "http://p4.music.126.net/rM6PP_YrU0HjFes4jggIOw==/109951172445882513.jpg",
+            "name": "不散",
+            "tns": [],
+            "pic_str": "109951172445882513",
+            "id": 358214126,
+            "pic": 109951172445882510
+          },
+          "l": {
+            "br": 128000,
+            "fid": 0,
+            "size": 2927277,
+            "vd": -2770,
+            "sr": 48000
+          },
+          "m": {
+            "br": 192000,
+            "fid": 0,
+            "size": 4390893,
+            "vd": -4344,
+            "sr": 48000
+          },
+          "version": 14,
+          "cp": 0,
+          "alia": [],
+          "djId": 0,
+          "single": 0,
+          "ar": [
+            {
+              "name": "周杰伦-",
+              "tns": [],
+              "alias": [],
+              "id": 0
+            },
+            {
+              "name": "A-LNK",
+              "tns": [],
+              "alias": [],
+              "id": 98615668
+            }
+          ],
+          "ftype": 0,
+          "t": 0,
+          "v": 48,
+          "name": "晴天",
+          "mark": 128
+        },
+        {
+          "no": 1,
+          "rt": "",
+          "copyright": 0,
+          "fee": 8,
+          "privilege": {
+            "flag": 1540100,
+            "code": 0,
+            "dlLevel": "none",
+            "subp": 1,
+            "fl": 320000,
+            "fee": 8,
+            "dl": 0,
+            "plLevel": "exhigh",
+            "maxBrLevel": "jymaster",
+            "rightSource": 0,
+            "maxbr": 999000,
+            "id": 3334653818,
+            "sp": 7,
+            "payed": 0,
+            "st": 0,
+            "chargeInfoList": [
+              {
+                "rate": 128000,
+                "chargeType": 0
+              },
+              {
+                "rate": 192000,
+                "chargeType": 0
+              },
+              {
+                "rate": 320000,
+                "chargeType": 0
+              },
+              {
+                "rate": 999000,
+                "chargeType": 1
+              }
+            ],
+            "freeTrialPrivilege": {
+              "userConsumable": false,
+              "resConsumable": false
+            },
+            "downloadMaxbr": 999000,
+            "downloadMaxBrLevel": "jymaster",
+            "cp": 1,
+            "preSell": false,
+            "playMaxBrLevel": "jymaster",
+            "cs": false,
+            "toast": false,
+            "playMaxbr": 999000,
+            "flLevel": "exhigh",
+            "pl": 320000
+          },
+          "mst": 9,
+          "pst": 0,
+          "pop": 95,
+          "dt": 119146,
+          "rtype": 0,
+          "s_id": 0,
+          "rtUrls": [],
+          "resourceState": true,
+          "id": 3334653818,
+          "sq": {
+            "br": 788791,
+            "fid": 0,
+            "size": 11749981,
+            "vd": 9541,
+            "sr": 48000
+          },
+          "st": 0,
+          "cd": "01",
+          "publishTime": 0,
+          "cf": "",
+          "originCoverType": 0,
+          "h": {
+            "br": 320003,
+            "fid": 0,
+            "size": 4768365,
+            "vd": 9541,
+            "sr": 48000
+          },
+          "mv": 0,
+          "al": {
+            "picUrl": "http://p4.music.126.net/g5lQgcmD4EFPkr6rsoGCnw==/109951172501913537.jpg",
+            "name": "晴天",
+            "tns": [],
+            "pic_str": "109951172501913537",
+            "id": 356710068,
+            "pic": 109951172501913540
+          },
+          "l": {
+            "br": 128003,
+            "fid": 0,
+            "size": 1907373,
+            "vd": 14005,
+            "sr": 48000
+          },
+          "m": {
+            "br": 192003,
+            "fid": 0,
+            "size": 2861037,
+            "vd": 12169,
+            "sr": 48000
+          },
+          "version": 10,
+          "cp": 0,
+          "alia": [],
+          "djId": 0,
+          "single": 0,
+          "ar": [
+            {
+              "name": "周杰伦.",
+              "tns": [],
+              "alias": [],
+              "id": 0
+            },
+            {
+              "name": "Asasblue",
+              "tns": [],
+              "alias": [],
+              "id": 122235907
+            }
+          ],
+          "ftype": 0,
+          "t": 0,
+          "v": 44,
+          "name": "晴天",
+          "mark": 17179877376
+        },
+        {
+          "no": 1,
+          "rt": "",
+          "copyright": 0,
+          "fee": 8,
+          "privilege": {
+            "flag": 1540097,
+            "code": 0,
+            "dlLevel": "none",
+            "subp": 1,
+            "fl": 320000,
+            "fee": 8,
+            "dl": 0,
+            "plLevel": "exhigh",
+            "maxBrLevel": "jymaster",
+            "rightSource": 0,
+            "maxbr": 999000,
+            "id": 3344811140,
+            "sp": 7,
+            "payed": 0,
+            "st": 0,
+            "chargeInfoList": [
+              {
+                "rate": 128000,
+                "chargeType": 0
+              },
+              {
+                "rate": 192000,
+                "chargeType": 0
+              },
+              {
+                "rate": 320000,
+                "chargeType": 0
+              },
+              {
+                "rate": 999000,
+                "chargeType": 1
+              }
+            ],
+            "freeTrialPrivilege": {
+              "userConsumable": false,
+              "resConsumable": false
+            },
+            "downloadMaxbr": 999000,
+            "downloadMaxBrLevel": "jymaster",
+            "cp": 1,
+            "preSell": false,
+            "playMaxBrLevel": "jymaster",
+            "cs": false,
+            "toast": false,
+            "playMaxbr": 999000,
+            "flLevel": "exhigh",
+            "pl": 320000
+          },
+          "mst": 9,
+          "pst": 0,
+          "pop": 80,
+          "dt": 86423,
+          "rtype": 0,
+          "s_id": 0,
+          "rtUrls": [],
+          "resourceState": true,
+          "id": 3344811140,
+          "sq": {
+            "br": 822223,
+            "fid": 0,
+            "size": 8884055,
+            "vd": 52076,
+            "sr": 48000
+          },
+          "st": 0,
+          "cd": "01",
+          "publishTime": 0,
+          "cf": "",
+          "originCoverType": 0,
+          "h": {
+            "br": 320000,
+            "fid": 0,
+            "size": 3458925,
+            "vd": 52075,
+            "sr": 48000
+          },
+          "mv": 0,
+          "al": {
+            "picUrl": "http://p3.music.126.net/0xNaw4zPr7_IxmvqHJaZzQ==/109951172667158768.jpg",
+            "name": "从前从前有个人爱你很久但偏偏风渐渐（不要你离开距离隔不开思念变成海）",
+            "tns": [],
+            "pic_str": "109951172667158768",
+            "id": 360234079,
+            "pic": 109951172667158770
+          },
+          "l": {
+            "br": 128000,
+            "fid": 0,
+            "size": 1383597,
+            "vd": 56523,
+            "sr": 48000
+          },
+          "m": {
+            "br": 192000,
+            "fid": 0,
+            "size": 2075373,
+            "vd": 54716,
+            "sr": 48000
+          },
+          "version": 11,
+          "cp": 0,
+          "alia": [],
+          "djId": 0,
+          "single": 0,
+          "ar": [
+            {
+              "name": "周杰伦.",
+              "tns": [],
+              "alias": [],
+              "id": 0
+            },
+            {
+              "name": "阿图表妹",
+              "tns": [],
+              "alias": [],
+              "id": 121473800
+            }
+          ],
+          "ftype": 0,
+          "t": 0,
+          "v": 45,
+          "name": "晴天(正式版)",
+          "mark": 128
+        },
+        {
+          "no": 1,
+          "rt": "",
+          "copyright": 0,
+          "fee": 8,
+          "privilege": {
+            "flag": 1540100,
+            "code": 0,
+            "dlLevel": "none",
+            "subp": 1,
+            "fl": 320000,
+            "fee": 8,
+            "dl": 0,
+            "plLevel": "exhigh",
+            "maxBrLevel": "jymaster",
+            "rightSource": 0,
+            "maxbr": 999000,
+            "id": 3324852509,
+            "sp": 7,
+            "payed": 0,
+            "st": 0,
+            "chargeInfoList": [
+              {
+                "rate": 128000,
+                "chargeType": 0
+              },
+              {
+                "rate": 192000,
+                "chargeType": 0
+              },
+              {
+                "rate": 320000,
+                "chargeType": 0
+              },
+              {
+                "rate": 999000,
+                "chargeType": 1
+              }
+            ],
+            "freeTrialPrivilege": {
+              "userConsumable": false,
+              "resConsumable": false
+            },
+            "downloadMaxbr": 999000,
+            "downloadMaxBrLevel": "jymaster",
+            "cp": 1,
+            "preSell": false,
+            "playMaxBrLevel": "jymaster",
+            "cs": false,
+            "toast": false,
+            "playMaxbr": 999000,
+            "flLevel": "exhigh",
+            "pl": 320000
+          },
+          "mst": 9,
+          "pst": 0,
+          "pop": 70,
+          "dt": 174706,
+          "rtype": 0,
+          "s_id": 0,
+          "rtUrls": [],
+          "resourceState": true,
+          "id": 3324852509,
+          "sq": {
+            "br": 199478,
+            "fid": 0,
+            "size": 4359515,
+            "vd": -9442,
+            "sr": 44100
+          },
+          "st": 0,
+          "cd": "01",
+          "publishTime": 0,
+          "cf": "",
+          "originCoverType": 0,
+          "h": {
+            "br": 320000,
+            "fid": 0,
+            "size": 6990411,
+            "vd": -9442,
+            "sr": 44100
+          },
+          "mv": 0,
+          "al": {
+            "picUrl": "http://p3.music.126.net/eImhcnMQz-ZfuhQGiPALdQ==/109951172323546544.jpg",
+            "name": "爱到尽头",
+            "tns": [],
+            "pic_str": "109951172323546544",
+            "id": 353159275,
+            "pic": 109951172323546540
+          },
+          "l": {
+            "br": 128000,
+            "fid": 0,
+            "size": 2796191,
+            "vd": -4987,
+            "sr": 44100
+          },
+          "m": {
+            "br": 192000,
+            "fid": 0,
+            "size": 4194264,
+            "vd": -6797,
+            "sr": 44100
+          },
+          "version": 15,
+          "cp": 0,
+          "alia": [],
+          "djId": 0,
+          "single": 0,
+          "ar": [
+            {
+              "name": "B-KLl",
+              "tns": [],
+              "alias": [],
+              "id": 121703530
+            },
+            {
+              "name": "周杰伦、",
+              "tns": [],
+              "alias": [],
+              "id": 0
+            }
+          ],
+          "ftype": 0,
+          "t": 0,
+          "v": 49,
+          "name": "晴天",
+          "mark": 17179877376
+        },
+        {
+          "no": 3,
+          "rt": "",
+          "copyright": 0,
+          "fee": 8,
+          "privilege": {
+            "flag": 1277953,
+            "code": 0,
+            "dlLevel": "none",
+            "subp": 1,
+            "fl": 320000,
+            "fee": 8,
+            "dl": 0,
+            "plLevel": "exhigh",
+            "maxBrLevel": "jymaster",
+            "rightSource": 0,
+            "maxbr": 999000,
+            "id": 3357694147,
+            "sp": 7,
+            "payed": 0,
+            "st": 0,
+            "chargeInfoList": [
+              {
+                "rate": 128000,
+                "chargeType": 0
+              },
+              {
+                "rate": 192000,
+                "chargeType": 0
+              },
+              {
+                "rate": 320000,
+                "chargeType": 0
+              },
+              {
+                "rate": 999000,
+                "chargeType": 1
+              }
+            ],
+            "freeTrialPrivilege": {
+              "userConsumable": false,
+              "resConsumable": false
+            },
+            "downloadMaxbr": 999000,
+            "downloadMaxBrLevel": "jymaster",
+            "cp": 1,
+            "preSell": false,
+            "playMaxBrLevel": "jymaster",
+            "cs": false,
+            "toast": false,
+            "playMaxbr": 999000,
+            "flLevel": "exhigh",
+            "pl": 320000
+          },
+          "mst": 9,
+          "pst": 0,
+          "pop": 25,
+          "dt": 161773,
+          "rtype": 0,
+          "s_id": 0,
+          "rtUrls": [],
+          "resourceState": true,
+          "id": 3357694147,
+          "sq": {
+            "br": 795512,
+            "fid": 0,
+            "size": 16089584,
+            "vd": -18913,
+            "sr": 44100
+          },
+          "st": 0,
+          "cd": "01",
+          "publishTime": 0,
+          "cf": "",
+          "originCoverType": 0,
+          "h": {
+            "br": 320000,
+            "fid": 0,
+            "size": 6473187,
+            "vd": -18920,
+            "sr": 44100
+          },
+          "mv": 0,
+          "al": {
+            "picUrl": "http://p3.music.126.net/VGsmmMUgkgVoHwn9D7XU4g==/109951172861932473.jpg",
+            "name": "惊鸿一面",
+            "tns": [],
+            "pic_str": "109951172861932473",
+            "id": 365542364,
+            "pic": 109951172861932480
+          },
+          "l": {
+            "br": 128000,
+            "fid": 0,
+            "size": 2589301,
+            "vd": -14682,
+            "sr": 44100
+          },
+          "m": {
+            "br": 192000,
+            "fid": 0,
+            "size": 3883929,
+            "vd": -16317,
+            "sr": 44100
+          },
+          "version": 8,
+          "cp": 0,
+          "alia": [],
+          "djId": 0,
+          "single": 0,
+          "ar": [
+            {
+              "name": "周杰伦-",
+              "tns": [],
+              "alias": [],
+              "id": 0
+            },
+            {
+              "name": "Montagem",
+              "tns": [],
+              "alias": [],
+              "id": 100446359
+            }
+          ],
+          "ftype": 0,
+          "t": 0,
+          "v": 42,
+          "name": "晴天（正式版）",
+          "mark": 131200
+        }
+      ],
+      "songCount": 254
+    },
+    "code": 200,
+    "trp": {
+      "rules": [
+        "search_tab_song::3339230677::searchAlg$isGlobalQuality$1"
+      ]
+    }
+  }
+}

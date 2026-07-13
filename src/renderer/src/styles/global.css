@@ -1,0 +1,402 @@
+:root {
+  color-scheme: dark;
+  --bg: #07080c;
+  --panel: rgba(20, 22, 30, 0.72);
+  --panel-border: color-mix(in srgb, var(--flux-panel-border) 8%, transparent);
+  --text: rgba(255, 255, 255, 0.88);
+  --text-dim: rgba(255, 255, 255, 0.45);
+  --accent: #7c8cff;
+  --danger: #ff6a7a;
+  --saved-panel-glass-bg: rgba(0, 0, 0, 0.1);
+  --saved-panel-glass-filter: blur(12px) saturate(1.8) brightness(1.16);
+  --saved-panel-glass-shadow:
+    inset 0 0 2px 1px rgba(255, 255, 255, 0.35), inset 0 0 10px 4px rgba(255, 255, 255, 0.15),
+    0 4px 16px rgba(17, 17, 26, 0.05), 0 8px 24px rgba(17, 17, 26, 0.05), 0 16px 56px rgba(17, 17, 26, 0.05),
+    inset 0 4px 16px rgba(17, 17, 26, 0.05), inset 0 8px 24px rgba(17, 17, 26, 0.05),
+    inset 0 16px 56px rgba(17, 17, 26, 0.05);
+  --saved-panel-glass-radius: 50px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.app {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(1200px 500px at 20% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    radial-gradient(900px 480px at 90% 110%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%), var(--bg);
+}
+
+/* ---- 视觉引擎背景层：铺满、置底、不吃点击 ---- */
+.stage-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.app > .topbar,
+.app > .content {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- 顶部栏（frameless 拖拽区） ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 18px;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.topbar .brand-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: block;
+}
+.topbar .brand {
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  font-size: 13px;
+}
+.topbar .badge {
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.topbar .spacer {
+  flex: 1;
+}
+.topbar button {
+  -webkit-app-region: no-drag;
+  width: 32px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+}
+.topbar button:hover {
+  background: color-mix(in srgb, var(--flux-panel-border) 8%, transparent);
+  color: var(--text);
+}
+.topbar button.close:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* ---- 账号区 ---- */
+.account {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 4px;
+}
+.account .avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--flux-panel-border) 8%, transparent);
+}
+.account .nick {
+  font-size: 12px;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account .vip {
+  font-size: 10px;
+  color: #ffcf6a;
+  border: 1px solid rgba(255, 207, 106, 0.4);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.account .warn {
+  font-size: 10px;
+  color: var(--danger);
+  border: 1px solid rgba(255, 106, 122, 0.4);
+  border-radius: 999px;
+  padding: 1px 7px;
+  cursor: help;
+}
+.account .hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account button.login,
+.account button.logout {
+  -webkit-app-region: no-drag;
+  width: auto;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: rgba(124, 140, 255, 0.14);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.account button.login:hover,
+.account button.logout:hover {
+  background: rgba(124, 140, 255, 0.24);
+}
+.account button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- 主内容 ---- */
+.content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 22px 18px;
+  max-width: 860px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.searchbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.searchbar input {
+  flex: 1;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  outline: none;
+  font-size: 14px;
+}
+.searchbar input:focus {
+  border-color: rgba(124, 140, 255, 0.55);
+}
+.provider-tabs {
+  display: flex;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.provider-tabs button {
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+}
+.provider-tabs button.active {
+  background: rgba(124, 140, 255, 0.18);
+  color: var(--text);
+}
+
+.results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.results::-webkit-scrollbar {
+  width: 8px;
+}
+.results::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--flux-panel-border) 12%, transparent);
+  border-radius: 4px;
+}
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--flux-panel-border) 4%, transparent);
+}
+.result-row:hover {
+  background: color-mix(in srgb, var(--flux-panel-border) 5%, transparent);
+}
+.result-row.active {
+  background: rgba(124, 140, 255, 0.12);
+}
+.result-row img {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--flux-panel-border) 6%, transparent);
+}
+.result-row .meta {
+  flex: 1;
+  min-width: 0;
+}
+.result-row .meta .name {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.result-row .meta .artist {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.result-row .tag {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.empty {
+  padding: 42px 0;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* ---- 播放条 ---- */
+.playerbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.playerbar .play-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(124, 140, 255, 0.5);
+  background: rgba(124, 140, 255, 0.14);
+  color: var(--text);
+  font-size: 15px;
+  cursor: pointer;
+}
+.playerbar .nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.playerbar .nav-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--flux-panel-border) 8%, transparent);
+}
+.playerbar .nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.playerbar .info {
+  width: 220px;
+  min-width: 0;
+}
+.playerbar .info .name {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playerbar .info .status {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playerbar .info .status.error {
+  color: var(--danger);
+}
+.progress {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--flux-panel-border) 8%, transparent);
+  cursor: pointer;
+  position: relative;
+}
+.progress .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(124, 140, 255, 0.9), rgba(170, 130, 255, 0.9));
+}
+.playerbar .time {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  width: 86px;
+  text-align: right;
+}
+.playerbar input[type='range'] {
+  width: 90px;
+  accent-color: var(--accent);
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.fallback-notice {
+  position: fixed;
+  right: 18px;
+  bottom: 86px;
+  max-width: 340px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(20, 22, 34, 0.88);
+  border: 1px solid color-mix(in srgb, var(--flux-panel-border) 10%, transparent);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  z-index: 30;
+  pointer-events: none;
+}

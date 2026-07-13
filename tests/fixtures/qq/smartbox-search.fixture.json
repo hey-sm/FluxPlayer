@@ -1,0 +1,101 @@
+{
+  "$fixture": {
+    "recordedAt": "2026-07-05T13:01:36.914Z",
+    "provenance": "recorded",
+    "endpoint": "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg",
+    "method": "GET",
+    "params": {
+      "format": "json",
+      "key": "周杰伦 晴天",
+      "g_tk": "5381",
+      "loginUin": "0",
+      "hostUin": "0",
+      "inCharset": "utf8",
+      "outCharset": "utf-8",
+      "notice": "0",
+      "platform": "yqq.json",
+      "needNewCode": "0"
+    },
+    "anonymous": true
+  },
+  "response": {
+    "code": 0,
+    "data": {
+      "album": {
+        "count": 0,
+        "itemlist": [],
+        "name": "专辑",
+        "order": 2,
+        "type": 3
+      },
+      "mv": {
+        "count": 2,
+        "itemlist": [
+          {
+            "docid": "293791",
+            "id": "293791",
+            "mid": "00061J2t0b0PPW",
+            "name": "晴天",
+            "singer": "周杰伦",
+            "vid": "w0026q7f01a"
+          },
+          {
+            "docid": "1092600",
+            "id": "1092600",
+            "mid": "000UnfoU413SAd",
+            "name": "周杰伦【晴天+不能说的秘密】钢琴版 Cambridge李劲锋",
+            "singer": "演奏曲",
+            "vid": "b00234epipo"
+          }
+        ],
+        "name": "MV",
+        "order": 3,
+        "type": 4
+      },
+      "singer": {
+        "count": 0,
+        "itemlist": [],
+        "name": "歌手",
+        "order": 1,
+        "type": 2
+      },
+      "song": {
+        "count": 4,
+        "itemlist": [
+          {
+            "docid": "97773",
+            "id": "97773",
+            "mid": "0039MnYb0qxYhV",
+            "name": "晴天",
+            "singer": "周杰伦"
+          },
+          {
+            "docid": "373447092",
+            "id": "373447092",
+            "mid": "000Ab2Sk4MkkpI",
+            "name": "周杰伦 - 晴天 demo",
+            "singer": "周杰伦微博台"
+          },
+          {
+            "docid": "341030119",
+            "id": "341030119",
+            "mid": "0002fGVs2iterI",
+            "name": "晴天 (纯音乐)",
+            "singer": "周杰伦"
+          },
+          {
+            "docid": "253970285",
+            "id": "253970285",
+            "mid": "002QaW6I1ZtJgD",
+            "name": "周杰伦 - 晴天（电波版）",
+            "singer": "周杰伦微博台"
+          }
+        ],
+        "name": "单曲",
+        "order": 0,
+        "type": 1
+      }
+    },
+    "subcode": 0
+  }
+}

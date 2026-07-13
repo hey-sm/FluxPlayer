@@ -1,0 +1,137 @@
+[
+  {
+    "provider": "qq",
+    "source": "qq",
+    "type": "qq",
+    "id": "0039MnYb0qxYhV",
+    "qqId": 97773,
+    "mid": "0039MnYb0qxYhV",
+    "songmid": "0039MnYb0qxYhV",
+    "mediaMid": "003Qui1q2u1Zho",
+    "name": "晴天",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "id": 4558,
+        "mid": "0025NhlN2yWrP4",
+        "name": "周杰伦"
+      }
+    ],
+    "artistId": 4558,
+    "artistMid": "0025NhlN2yWrP4",
+    "album": "叶惠美",
+    "albumMid": "000MkMni19ClKG",
+    "cover": "https://y.qq.com/music/photo_new/T002R300x300M000000MkMni19ClKG.jpg?max_age=2592000",
+    "duration": 269000,
+    "fee": 1,
+    "playable": false
+  },
+  {
+    "provider": "qq",
+    "source": "qq",
+    "type": "qq",
+    "id": "0044SaFh0apuR2",
+    "qqId": 649556362,
+    "mid": "0044SaFh0apuR2",
+    "songmid": "0044SaFh0apuR2",
+    "mediaMid": "0044SaFh0apuR2",
+    "name": "那天下雨了",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "id": 4558,
+        "mid": "0025NhlN2yWrP4",
+        "name": "周杰伦"
+      }
+    ],
+    "artistId": 4558,
+    "artistMid": "0025NhlN2yWrP4",
+    "album": "太阳之子",
+    "albumMid": "0041WVfh2vtlJE",
+    "cover": "https://y.qq.com/music/photo_new/T002R300x300M0000041WVfh2vtlJE.jpg?max_age=2592000",
+    "duration": 223000,
+    "fee": 1,
+    "playable": false
+  },
+  {
+    "provider": "qq",
+    "source": "qq",
+    "type": "qq",
+    "id": "001Bbywq2gicae",
+    "qqId": 102065750,
+    "mid": "001Bbywq2gicae",
+    "songmid": "001Bbywq2gicae",
+    "mediaMid": "004UlK9x0jeuow",
+    "name": "搁浅",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "id": 4558,
+        "mid": "0025NhlN2yWrP4",
+        "name": "周杰伦"
+      }
+    ],
+    "artistId": 4558,
+    "artistMid": "0025NhlN2yWrP4",
+    "album": "七里香",
+    "albumMid": "003DFRzD192KKD",
+    "cover": "https://y.qq.com/music/photo_new/T002R300x300M000003DFRzD192KKD.jpg?max_age=2592000",
+    "duration": 240000,
+    "fee": 1,
+    "playable": false
+  },
+  {
+    "provider": "qq",
+    "source": "qq",
+    "type": "qq",
+    "id": "004Z8Ihr0JIu5s",
+    "qqId": 102065756,
+    "mid": "004Z8Ihr0JIu5s",
+    "songmid": "004Z8Ihr0JIu5s",
+    "mediaMid": "0012Ez0a1tFcOI",
+    "name": "七里香",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "id": 4558,
+        "mid": "0025NhlN2yWrP4",
+        "name": "周杰伦"
+      }
+    ],
+    "artistId": 4558,
+    "artistMid": "0025NhlN2yWrP4",
+    "album": "七里香",
+    "albumMid": "003DFRzD192KKD",
+    "cover": "https://y.qq.com/music/photo_new/T002R300x300M000003DFRzD192KKD.jpg?max_age=2592000",
+    "duration": 299000,
+    "fee": 1,
+    "playable": false
+  },
+  {
+    "provider": "qq",
+    "source": "qq",
+    "type": "qq",
+    "id": "001zMQr71F1Qo8",
+    "qqId": 718477,
+    "mid": "001zMQr71F1Qo8",
+    "songmid": "001zMQr71F1Qo8",
+    "mediaMid": "0024jrso28p8VA",
+    "name": "夜曲",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "id": 4558,
+        "mid": "0025NhlN2yWrP4",
+        "name": "周杰伦"
+      }
+    ],
+    "artistId": 4558,
+    "artistMid": "0025NhlN2yWrP4",
+    "album": "十一月的萧邦",
+    "albumMid": "0024bjiL2aocxT",
+    "cover": "https://y.qq.com/music/photo_new/T002R300x300M0000024bjiL2aocxT.jpg?max_age=2592000",
+    "duration": 226000,
+    "fee": 1,
+    "playable": false
+  }
+]
