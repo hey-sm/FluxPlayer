@@ -4,7 +4,6 @@
 // ============================================================
 import { useEffect, useRef } from 'react'
 import type { VisualPreset } from './bus'
-import type { ShelfAction, ShelfViewportPointerInput } from './shelf'
 import { VisualStage } from './stage'
 
 export interface StageCanvasProps {
@@ -14,17 +13,10 @@ export interface StageCanvasProps {
   className?: string
   /** 容器内联样式 */
   style?: React.CSSProperties
-  /** 只派发被 shelf 消费的低频 center/select 动作。 */
-  onShelfAction?(action: ShelfAction): void
 }
 
 function isProtectedUiTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false
-  return Boolean(
-    target.closest(
-      'button, input, select, textarea, a, [role="button"], [role="dialog"], .glass-surface, .flux-glass-surface, .flux-glass-card, .shelf-detail-panel, .library-edge, .detail-edge, .search-shell, .topbar, .playerbar',
-    ),
-  )
+  return target instanceof Element && Boolean(target.closest('button, input, select, textarea, a, [role="button"], [role="dialog"]'))
 }
 
 /**
@@ -34,17 +26,10 @@ function isProtectedUiTarget(target: EventTarget | null): boolean {
 export function StageCanvas({
   preset = 2,
   className,
-  style,
-  onShelfAction,
+  style
 }: StageCanvasProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const stageRef = useRef<VisualStage | null>(null)
-  const onShelfActionRef = useRef(onShelfAction)
-
-  useEffect(() => {
-    onShelfActionRef.current = onShelfAction
-  }, [onShelfAction])
-
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -54,33 +39,6 @@ export function StageCanvas({
     stage.setPreset(preset)
     const stop = stage.start()
 
-    const pointerInput = (
-      event: Pick<PointerEvent | WheelEvent, 'clientX' | 'clientY'>,
-      phase: ShelfViewportPointerInput['phase'],
-    ): ShelfViewportPointerInput => {
-      const bounds = container.getBoundingClientRect()
-      return {
-        x: event.clientX,
-        y: event.clientY,
-        width: bounds.width,
-        height: bounds.height,
-        left: bounds.left,
-        top: bounds.top,
-        phase,
-      }
-    }
-    const clearHover = (): void => {
-      const bounds = container.getBoundingClientRect()
-      stage.viewportShelfPointer({
-        x: bounds.left,
-        y: bounds.top,
-        width: bounds.width,
-        height: bounds.height,
-        left: bounds.left,
-        top: bounds.top,
-        phase: 'leave',
-      })
-    }
     let mouseDown = false
     let dragging = false
     let startX = 0
@@ -103,8 +61,6 @@ export function StageCanvas({
         lastY = event.clientY
         return
       }
-      if (isProtectedUiTarget(event.target)) { clearHover(); return }
-      stage.viewportShelfPointer(pointerInput(event, 'move'))
     }
     const onMouseDown = (event: MouseEvent): void => {
       if (event.button !== 0) return
@@ -118,7 +74,6 @@ export function StageCanvas({
     }
     const onWindowBlur = (): void => {
       stopDragging()
-      clearHover()
     }
     const onVisibilityChange = (): void => {
       if (document.hidden) stopDragging()

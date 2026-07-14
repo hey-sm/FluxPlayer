@@ -1,5 +1,3 @@
-export { LyricsView } from './LyricsView'
-export type { LyricsViewProps } from './LyricsView'
 export { LYRICS_QUERY_SCOPE, lyricPath, lyricQueryKey, lyricTrackKey } from './paths'
 export type { LyricsQueryKey, LyricTrackKey } from './paths'
 export { normalizeLyricDoc, useLyrics } from './query'

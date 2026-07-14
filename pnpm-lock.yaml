@@ -23,9 +23,6 @@ importers:
       koffi:
         specifier: 3.1.1
         version: 3.1.1
-      music-tempo:
-        specifier: ^1.0.3
-        version: 1.0.3
       three:
         specifier: 0.128.0
         version: 0.128.0
@@ -651,6 +648,11 @@ packages:
     resolution: {integrity: sha512-/Xqc3R0SVoMCYjMPZnJ9bULtRo364+dKmnQhfDrI83tSpxUHRw7HRNf12vBeL+hPgKxSBjtMpWfQ/ZIyVyLFag==}
     cpu: [x64]
     os: [openbsd]
+
+  '@koromix/koffi-win32-arm64@3.1.1':
+    resolution: {integrity: sha512-JhqHauEwQvdcWUERxrV5HH/DT9W7hY1A1eU6/o8tB+yck+D3kt5elpRDBt9KjpW6h+vHPy3V0sjDvO0CXyabTA==}
+    cpu: [arm64]
+    os: [win32]
 
   '@koromix/koffi-win32-ia32@3.1.1':
     resolution: {integrity: sha512-ZRuyYmlGS/rCc966qqs0qREXDW4FRdul7rDF1VgSWHbVmdc196PUgUT+blq/GjZgTwqzeEXtMRgM+cU8krHjvA==}
@@ -2284,9 +2286,6 @@ packages:
     resolution: {integrity: sha512-xrm3w7SV0Wk+OythZcSbaI8mcr/KHd0knJieu8bVpaPfMv/Agz5EooCAPz3OR5hbYMiUG6dgAPKZKnMzV+3amA==}
     engines: {node: '>=10'}
 
-  music-tempo@1.0.3:
-    resolution: {integrity: sha512-qAocTKLp3jaSeJLeGs98mkkpLYDFM1VCevA1OPFJvLPkHlzwTLUxChXMgnxZRHKSJQ13DuaT+Fr51BEUb2D4pQ==}
-
   nanoid@3.3.15:
     resolution: {integrity: sha512-y7Wygv/7mEOvxTuEQDB8StXdMRBWf1kR/tlhAzBRUFkB2jfcLOAxO/SHmOO2zgz1pVgK29/kyupn059/bCHdjA==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -3672,6 +3671,9 @@ snapshots:
     optional: true
 
   '@koromix/koffi-openbsd-x64@3.1.1':
+    optional: true
+
+  '@koromix/koffi-win32-arm64@3.1.1':
     optional: true
 
   '@koromix/koffi-win32-ia32@3.1.1':
@@ -5210,6 +5212,7 @@ snapshots:
       '@koromix/koffi-linux-x64': 3.1.1
       '@koromix/koffi-openbsd-ia32': 3.1.1
       '@koromix/koffi-openbsd-x64': 3.1.1
+      '@koromix/koffi-win32-arm64': 3.1.1
       '@koromix/koffi-win32-ia32': 3.1.1
       '@koromix/koffi-win32-x64': 3.1.1
 
@@ -5379,8 +5382,6 @@ snapshots:
       token-types: 4.2.1
     transitivePeerDependencies:
       - supports-color
-
-  music-tempo@1.0.3: {}
 
   nanoid@3.3.15: {}
 

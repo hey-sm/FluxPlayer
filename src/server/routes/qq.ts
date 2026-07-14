@@ -113,28 +113,4 @@ export function registerQQRoutes(app: Hono, qq: QQProvider): void {
     }
   })
 
-  app.get('/api/qq/artist/detail', async (c) => {
-    try {
-      const mid = c.req.query('mid') || c.req.query('singermid') || ''
-      const limit = Math.max(10, Math.min(80, parseInt(c.req.query('limit') || '36', 10) || 36))
-      if (!mid) return c.json({ provider: 'qq', error: 'MISSING_SINGER_MID', artist: null, songs: [] }, 400)
-      return c.json(await qq.artistDetail(mid, limit))
-    } catch (err: any) {
-      console.error('[QQArtistDetail]', err)
-      return c.json({ provider: 'qq', error: err.message, artist: null, songs: [] }, 500)
-    }
-  })
-
-  app.get('/api/qq/song/comments', async (c) => {
-    try {
-      const id = c.req.query('id') || c.req.query('qqId') || ''
-      const mid = c.req.query('mid') || c.req.query('songmid') || ''
-      const limit = Math.max(6, Math.min(50, parseInt(c.req.query('limit') || '20', 10) || 20))
-      const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10) || 0)
-      return c.json(await qq.songComments(id, mid, limit, offset))
-    } catch (err: any) {
-      console.error('[QQSongComments]', err)
-      return c.json({ provider: 'qq', error: err.message, comments: [] }, 500)
-    }
-  })
 }

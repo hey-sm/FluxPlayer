@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 // providers/netease/index.ts 顶层 import NCM SDK；单测只针对纯映射函数，mock 掉
 vi.mock('@server/providers/netease/sdk', () => ({ ncm: {} }))
 
-const { mapSongRecord, mapDiscoverPlaylist, classifyNeteasePlaybackRestriction, normalizeLoginInfo } =
+const { mapSongRecord, classifyNeteasePlaybackRestriction, normalizeLoginInfo } =
   await import('@server/providers/netease')
 
 // fixture：cloudsearch songs[] 的精简形状
@@ -39,15 +39,6 @@ describe('mapSongRecord', () => {
   })
 })
 
-describe('mapDiscoverPlaylist', () => {
-  it('uiElement 嵌套封面兜底', () => {
-    const pl = mapDiscoverPlaylist(
-      { resourceId: 9, name: 'P', uiElement: { image: { imageUrl: 'img://u' } }, playcount: 7 },
-      '推荐歌单',
-    )
-    expect(pl).toMatchObject({ id: 9, name: 'P', cover: 'img://u', playCount: 7, tag: '推荐歌单' })
-  })
-})
 
 describe('classifyNeteasePlaybackRestriction', () => {
   it('未登录 → login_required', () => {

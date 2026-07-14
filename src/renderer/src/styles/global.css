@@ -34,7 +34,6 @@ body {
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
-  border-radius: 12px;
   font-size: 14px;
 }
 
@@ -200,7 +199,6 @@ body {
   flex: 1;
   height: 40px;
   padding: 0 16px;
-  border-radius: 12px;
   border: 1px solid var(--panel-border);
   background: var(--panel);
   color: var(--text);
@@ -213,7 +211,6 @@ body {
 .provider-tabs {
   display: flex;
   border: 1px solid var(--panel-border);
-  border-radius: 12px;
   overflow: hidden;
 }
 .provider-tabs button {

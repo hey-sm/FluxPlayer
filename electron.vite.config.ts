@@ -27,10 +27,7 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        input: {
-          main: resolve('src/preload/main.ts'),
-          legacy: resolve('src/preload/legacy.ts'),
-        },
+        input: { main: resolve('src/preload/main.ts') },
         // ESM preload 会阻塞页面加载且出错时静默悬死（LOAD_TIMEOUT），一律用 CJS
         output: {
           format: 'cjs',

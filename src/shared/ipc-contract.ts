@@ -1,10 +1,4 @@
-/**
- * IPC 契约 —— 全部通道名的单一事实源。
- *
- * 通道名保持与旧版（Mineradio v1.1.1 desktop/preload.js）一致：
- * 这是 strangler 迁移的兼容边界，legacy 前端与新 React 前端共用同一套通道。
- * 已删除或尚未迁移的子系统仅保留仍在使用的兼容通道。
- */
+/** IPC 通道名的单一事实源。 */
 export const IPC = {
   // 窗口控制
   windowMinimize: 'desktop-window-minimize',
@@ -25,8 +19,6 @@ export const IPC = {
   restartApp: 'mineradio-restart-app',
   configureGlobalHotkeys: 'mineradio-hotkeys-configure-global',
   globalHotkey: 'mineradio-global-hotkey', // main -> renderer
-  exportJsonFile: 'mineradio-export-json-file',
-  importJsonFile: 'mineradio-import-json-file',
   // M6 更新状态机
   updaterGetState: 'flux-updater-get-state',
   updaterCheck: 'flux-updater-check',
@@ -41,12 +33,6 @@ export const IPC = {
   customBackgroundImportWallpaperEngine: 'flux-custom-background-import-wallpaper-engine',
   customBackgroundChooseWallpaperEngine: 'flux-custom-background-choose-wallpaper-engine',
   customBackgroundChanged: 'flux-custom-background-changed', // main -> renderer
-  // 兼容通道
-  openUpdateInstaller: 'mineradio-open-update-installer',
-  desktopLyricsSetEnabled: 'mineradio-desktop-lyrics-set-enabled',
-  desktopLyricsUpdate: 'mineradio-desktop-lyrics-update',
-  desktopLyricsLockState: 'mineradio-desktop-lyrics-lock-state', // main -> renderer
-  desktopLyricsEnabledState: 'mineradio-desktop-lyrics-enabled-state', // main -> renderer
 } as const
 
 export interface DisplayState {

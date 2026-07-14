@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ProviderId, QualityLevel, UnifiedPlaylist, UnifiedSong } from '@shared/models'
 import type { CustomBackground, WallpaperEngineProject } from '@shared/custom-background-contract'
@@ -9,8 +9,7 @@ import { searchPath } from './playback/match'
 import { ticker } from './perf/ticker'
 import { StageCanvas } from './visual/StageCanvas'
 import { visualBus, type VisualPreset } from './visual/bus'
-import { shelfChannel, stageLyricsChannel } from './visual/scene'
-import type { ShelfAction } from './visual/shelf'
+import { stageLyricsChannel } from './visual/scene'
 import { VISUAL_PRESETS, VISUAL_PRESET_BY_ID } from './visual/presets/registry'
 import {
   attach as attachVisualAudio,
@@ -35,12 +34,6 @@ import {
   fetchPlaylists,
   playlistQueryKeys,
 } from './features/playlist'
-import {
-  DIY_VISUAL_PARAM_KEYS,
-  DIY_VISUAL_PARAM_SCHEMA,
-  createDiyVisualParamsController,
-  type DiyVisualParamKey,
-} from './visual/diy'
 import { useLyrics } from './features/lyrics'
 import { SystemMaintenancePanel } from './features/system/SystemMaintenancePanel'
 import { fetchLikedTracks, readRecentPlays, recordRecentPlay, subscribeRecentPlays } from './features/library'
@@ -402,95 +395,12 @@ function ThemePanel({
   )
 }
 
-const diyVisualParamsController = createDiyVisualParamsController()
-const DIY_PARAM_LABELS: Readonly<Record<DiyVisualParamKey, string>> = {
-  intensity: '强度',
-  depth: '景深',
-  pointScale: '粒子大小',
-  speed: '速度',
-  twist: '扭曲',
-  colorBoost: '色彩增强',
-  scatter: '散射',
-  coverResolution: '封面解析度',
-  backgroundFade: '背景衰减',
-  bloomStrength: '辉光强度',
-  bloomSize: '辉光尺寸',
-  tintStrength: '染色强度',
-  alpha: '整体透明度',
-  particleDim: '粒子压暗',
-}
-const subscribeDiyVisualParams = (notify: () => void): (() => void) =>
-  diyVisualParamsController.subscribe(() => notify())
-const getDiyVisualParamsSnapshot = () => diyVisualParamsController.getSnapshot()
-
-function DiyVisualPanel({ open, onClose }: { open: boolean; onClose(): void }) {
-  const params = useSyncExternalStore(
-    subscribeDiyVisualParams,
-    getDiyVisualParamsSnapshot,
-    getDiyVisualParamsSnapshot,
-  )
-  if (!open) return null
-
-  return (
-    <div
-      className="settings-backdrop diy-settings-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
-      }}
-    >
-      <div className="diy-panel-shell" role="dialog" aria-modal="true" aria-label="DIY 视觉控制台">
-        <Glass.Card className="diy-panel" avoidSvgCreation>
-          <header>
-            <div>
-              <strong>DIY 视觉控制台</strong>
-              <p>参数独立保存，只通过 VisualBus 写入视觉引擎。</p>
-            </div>
-            <button
-              type="button"
-              className="settings-close"
-              aria-label="关闭 DIY 视觉控制台"
-              onClick={onClose}
-            >
-              ✕
-            </button>
-          </header>
-          <div className="diy-grid">
-            {DIY_VISUAL_PARAM_KEYS.map((key) => {
-              const definition = DIY_VISUAL_PARAM_SCHEMA[key]
-              return (
-                <ThemeRange
-                  key={key}
-                  label={DIY_PARAM_LABELS[key]}
-                  value={params[key]}
-                  min={definition.min}
-                  max={definition.max}
-                  step={definition.step}
-                  onChange={(value) => diyVisualParamsController.setParam(key, value)}
-                />
-              )
-            })}
-          </div>
-          <footer>
-            <button type="button" onClick={() => diyVisualParamsController.reset()}>
-              重置视觉参数
-            </button>
-          </footer>
-        </Glass.Card>
-      </div>
-    </div>
-  )
-}
 function TopBar({
   settingsOpen,
   onToggleSettings,
-  diyOpen,
-  onToggleDiy,
 }: {
   settingsOpen: boolean
   onToggleSettings: () => void
-  diyOpen: boolean
-  onToggleDiy: () => void
 }) {
   const { data: version } = useQuery({
     queryKey: ['app-version'],
@@ -503,7 +413,6 @@ function TopBar({
       <span className="brand">FLUXPLAYER</span>
       <span className="badge">v{version?.version || '…'}</span>
       <div className="spacer" />
-      <button className={`diy-toggle${diyOpen ? ' active' : ''}`} title="DIY 视觉控制台" aria-label="DIY 视觉控制台" aria-pressed={diyOpen} onClick={onToggleDiy}>DIY</button>
       <button className={`settings-toggle${settingsOpen ? ' active' : ''}`} title="主题设置" aria-label="主题设置" aria-pressed={settingsOpen} onClick={onToggleSettings}><SettingsIcon /></button>
       {desktop ? <>
         <button title="最小化" aria-label="最小化" onClick={() => desktop.minimize()}>—</button>
@@ -879,7 +788,6 @@ export default function App() {
   const [keyword, setKeyword] = useState('')
   const [visualPreset, setVisualPreset] = useState<VisualPreset>(initialVisualPreset)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [diyOpen, setDiyOpen] = useState(false)
   const [providerOrder, setProviderOrder] = useState<ProviderId[]>(readProviderOrder)
   const [provider, setProvider] = useState<ProviderId>(() => readProviderOrder()[0])
   const [searchOpen, setSearchOpen] = useState(false)
@@ -1018,11 +926,10 @@ export default function App() {
   }, [])
 
   const handleShelfAction = useCallback(
-    (action: ShelfAction) => {
-      if (action.action !== 'center' && action.action !== 'select') return
-      if (action.action !== 'select' || !activeIdentity) return
+    (index: number) => {
+      if (!activeIdentity) return
 
-      const playlist = shelfPlaylists[action.index]
+      const playlist = shelfPlaylists[index]
       if (!playlist) return
       const requestGeneration = ++shelfRequestGeneration.current
       setShelfDetail({
@@ -1078,8 +985,7 @@ export default function App() {
     const savedId = localStorage.getItem(`flux-last-playlist:${provider}:${activeIdentity}`)
     const index = savedId ? shelfPlaylists.findIndex((playlist) => String(playlist.id) === savedId) : -1
     if (index < 0) return
-    const playlist = shelfPlaylists[index]
-    queueMicrotask(() => handleShelfAction({ action: 'select', index, consumed: true, item: { id: String(playlist.id), title: playlist.name, subtitle: playlist.creator || '', coverUrl: playlist.cover || '' } }))
+    queueMicrotask(() => handleShelfAction(index))
   }, [activeIdentity, handleShelfAction, provider, shelfPlaylists, shelfScope])
 
   const openLibraryTracks = useCallback((title: string, tracks: UnifiedSong[], tag: string) => {
@@ -1178,16 +1084,6 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => {
-    shelfChannel.set({ items: [], centerIndex: 0, visible: false, accentColor })
-  }, [accentColor])
-
-  useEffect(
-    () => () => {
-      shelfChannel.set({ items: [], centerIndex: 0, visible: false, accentColor: '#7c8cff' })
-    },
-    [],
-  )
 
   // 全局快捷键：togglePlay / prevTrack / nextTrack / volumeUp / volumeDown / toggleFullscreen
   useEffect(() => {
@@ -1335,13 +1231,7 @@ export default function App() {
       <TopBar
         settingsOpen={settingsOpen}
         onToggleSettings={() => {
-          setDiyOpen(false)
           setSettingsOpen((open) => !open)
-        }}
-        diyOpen={diyOpen}
-        onToggleDiy={() => {
-          setSettingsOpen(false)
-          setDiyOpen((open) => !open)
         }}
       />
       <ThemePanel
@@ -1361,7 +1251,6 @@ export default function App() {
         motionStyle={motionStyle}
         onMotionStyleChange={(style) => { setMotionStyle(style); localStorage.setItem('flux-ui-motion', style) }}
       />
-      <DiyVisualPanel open={diyOpen} onClose={() => setDiyOpen(false)} />
       <div className={`detail-edge${detailOpen ? ' open' : ''}`} onPointerEnter={revealDetail} onPointerLeave={scheduleDetailClose}>
       {shelfDetail &&
       shelfDetail.provider === provider &&
@@ -1395,7 +1284,7 @@ export default function App() {
           </div>
           {shelfPlaylistsQuery.isFetching ? <div className="library-shelf-sync">正在同步歌单…</div> : null}
           <div className="library-playlist-list">{shelfPlaylists.map((playlist, index) => (
-            <button key={String(playlist.id)} type="button" className={String(shelfDetail?.playlist.id) === String(playlist.id) ? 'active' : ''} onClick={() => { localStorage.setItem(`flux-last-playlist:${provider}:${activeIdentity}`, String(playlist.id)); setDetailOpen(true); handleShelfAction({ action: 'select', index, consumed: true, item: { id: String(playlist.id), title: playlist.name, subtitle: playlist.creator || '', coverUrl: playlist.cover || '' } }) }}>
+            <button key={String(playlist.id)} type="button" className={String(shelfDetail?.playlist.id) === String(playlist.id) ? 'active' : ''} onClick={() => { localStorage.setItem(`flux-last-playlist:${provider}:${activeIdentity}`, String(playlist.id)); setDetailOpen(true); handleShelfAction(index) }}>
               <PlaylistCoverImage
                 key={`${playlist.id}:${playlist.cover}:${(playlistCoverFallbacks[String(playlist.id)] ?? []).join('|')}`}
                 candidates={[playlist.cover || '', ...(playlistCoverFallbacks[String(playlist.id)] ?? [])]}

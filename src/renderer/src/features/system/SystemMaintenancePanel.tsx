@@ -21,7 +21,6 @@ const COPY: Record<UpdaterStatus, { label: string; detail: string; tone: Tone }>
 const DISABLED = {
   development: '开发模式不执行应用更新。',
   smoke: '冒烟测试期间不执行应用更新。',
-  legacy: '兼容模式不执行应用更新。',
 } as const
 
 function version(value: string | null): string {

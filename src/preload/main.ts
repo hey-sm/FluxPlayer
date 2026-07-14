@@ -35,8 +35,6 @@ const api = {
   restartApp: () => ipcRenderer.invoke(IPC.restartApp),
   configureGlobalHotkeys: (bindings: any[]) => ipcRenderer.invoke(IPC.configureGlobalHotkeys, bindings || []),
   onGlobalHotkey: (callback: (payload: any) => void) => bind(IPC.globalHotkey, callback),
-  exportJsonFile: (payload: any) => ipcRenderer.invoke(IPC.exportJsonFile, payload || {}),
-  importJsonFile: () => ipcRenderer.invoke(IPC.importJsonFile),
   // M6 updater: no automatic check/download; every transition is an explicit renderer command.
   getUpdaterState: () => ipcRenderer.invoke(IPC.updaterGetState),
   checkForUpdates: () => ipcRenderer.invoke(IPC.updaterCheck),

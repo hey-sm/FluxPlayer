@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapQQPlaylistTrack, mapQQSmartSong, mapQQTrack } from '@server/providers/qq/mappers'
+import { mapQQSmartSong, mapQQTrack } from '@server/providers/qq/mappers'
 import { loadFixture } from '../helpers/fixtures'
 
 /**
@@ -12,7 +12,6 @@ import { loadFixture } from '../helpers/fixtures'
 
 const smartbox = loadFixture('qq/smartbox-search')
 const detail = loadFixture('qq/song-detail')
-const singer = loadFixture('qq/singer-songs')
 
 describe('QQ fixture 快照', () => {
   it('musicu get_song_detail_yqq → mapQQTrack：固定 mid，全量快照', async () => {
@@ -40,28 +39,4 @@ describe('QQ fixture 快照', () => {
     await expect(JSON.stringify(mapped, null, 2)).toMatchFileSnapshot('./__snapshots__/qq-smart-songs.mapped.json')
   })
 
-  it('singer get_singer_detail_info songlist（嵌套 track_info）→ mapQQTrack：不变量 + 快照', async () => {
-    const rawSongs = singer.response && singer.response.singer && singer.response.singer.data && singer.response.singer.data.songlist
-    expect(Array.isArray(rawSongs) && rawSongs.length > 0, `上游形状漂移：singer.data.songlist 缺失或为空（${singer.meta.endpoint}）`).toBe(true)
-    // 提取逻辑与 QQProvider.artistDetail 保持一致
-    const mapped = (rawSongs as any[]).map((raw) => mapQQTrack((raw && (raw.track_info || raw.songInfo || raw.songinfo || raw.song)) || raw, {}))
-    for (const s of mapped) {
-      expect(s.mid, `singer 条目缺 mid：${JSON.stringify({ name: s.name })}`).toBeTruthy()
-      expect(s.name).toBeTruthy()
-      expect(s.duration).toBeGreaterThan(0)
-      expect(s.cover).toMatch(/^https:\/\/y\.qq\.com\/music\/photo_new\//)
-    }
-    await expect(JSON.stringify(mapped, null, 2)).toMatchFileSnapshot('./__snapshots__/qq-singer-songs.mapped.json')
-  })
-
-  it('同一嵌套 songlist → mapQQPlaylistTrack 嵌套分支：不变量 + 快照', async () => {
-    const rawSongs = (singer.response.singer.data.songlist || []) as any[]
-    const mapped = rawSongs.map(mapQQPlaylistTrack)
-    for (const s of mapped) {
-      expect(s.mid || s.id, `playlist-track 嵌套分支缺 mid/id：${JSON.stringify({ name: s.name })}`).toBeTruthy()
-      expect(s.name).toBeTruthy()
-      expect(s.duration).toBeGreaterThan(0)
-    }
-    await expect(JSON.stringify(mapped, null, 2)).toMatchFileSnapshot('./__snapshots__/qq-playlist-tracks.mapped.json')
-  })
 })

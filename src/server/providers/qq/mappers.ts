@@ -122,26 +122,6 @@ export function mapQQPlaylist(pl: any, kind?: string): UnifiedPlaylist {
   }
 }
 
-export function mapQQComment(raw: any): any {
-  raw = raw || {}
-  const user = raw.user || raw.uin || {}
-  const nickname =
-    raw.nick || raw.nickname || raw.encrypt_uin || user.nick || user.nickname || user.name || 'QQ 音乐用户'
-  const avatar = raw.avatarurl || raw.avatar || user.avatarurl || user.avatar || ''
-  const timeRaw = Number(raw.time || raw.commenttime || raw.createTime || 0) || 0
-  return {
-    id: raw.commentid || raw.commentId || raw.id || '',
-    content: raw.rootcommentcontent || raw.content || raw.comment || '',
-    likedCount: Number(raw.praisenum || raw.praise_num || raw.likedCount || 0) || 0,
-    time: timeRaw && timeRaw < 10000000000 ? timeRaw * 1000 : timeRaw,
-    user: {
-      id: raw.encrypt_uin || raw.uin || user.uin || '',
-      nickname,
-      avatar,
-    },
-  }
-}
-
 export function isQQFavoritePlaylist(pl: any): boolean {
   const name = String((pl && pl.name) || '').trim()
   return /我喜欢|我的喜欢|喜欢的音乐/i.test(name)

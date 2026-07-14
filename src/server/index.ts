@@ -5,7 +5,6 @@ import { QQProvider } from './providers/qq'
 import { registerNeteaseRoutes } from './routes/netease'
 import { registerQQRoutes } from './routes/qq'
 import { registerMiscRoutes } from './routes/misc'
-import { registerWeatherRoutes } from './routes/weather'
 import { registerProxyRoutes } from './proxy'
 import { registerStatic } from './static'
 import type { ServerConfig } from './types'
@@ -26,7 +25,7 @@ export function createApp(config: ServerConfig): { app: Hono; netease: NeteasePr
   // /api/* 统一响应头（与旧 sendJSON 行为一致）
   // dev 模式下页面由 vite dev server 提供，对 server 的调用是跨源的：
   // POST + application/json 会先触发 OPTIONS 预检，必须回 Allow-Methods/Headers 并短路，
-  // 否则登录等写请求会被浏览器以 "Failed to fetch" 拦下（生产/legacy 同源不受影响）。
+  // 否则登录等写请求会被浏览器以 "Failed to fetch" 拦下。
   app.use('/api/*', async (c, next) => {
     c.header('Access-Control-Allow-Origin', '*')
     c.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -40,7 +39,6 @@ export function createApp(config: ServerConfig): { app: Hono; netease: NeteasePr
   registerMiscRoutes(app, config)
   registerNeteaseRoutes(app, netease)
   registerQQRoutes(app, qq)
-  registerWeatherRoutes(app, netease)
   registerProxyRoutes(app)
   registerStatic(app, config.staticRoot)
 
@@ -54,7 +52,6 @@ export function startLocalServer(config: ServerConfig): Promise<LocalServer> {
       const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
         console.log('======================================================')
         console.log(` FluxPlayer local server → http://${config.host}:${info.port}`)
-        console.log(` mode: ${config.legacyMode ? 'legacy (旧前端跑在新 server 上)' : 'standard'}`)
         console.log('======================================================')
         resolve({
           server,

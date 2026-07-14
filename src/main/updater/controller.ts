@@ -18,7 +18,6 @@ export type UpdaterStateListener = (state: UpdaterState) => void
 export interface UpdaterRuntimeMode {
   isDevelopment?: boolean
   isSmoke?: boolean
-  isLegacy?: boolean
 }
 
 export interface UpdaterControllerOptions extends UpdaterRuntimeMode {
@@ -33,7 +32,6 @@ export interface UpdaterControllerOptions extends UpdaterRuntimeMode {
 const DISABLED_MESSAGES: Record<UpdaterDisabledReason, string> = {
   development: 'Updater is disabled in development mode.',
   smoke: 'Updater is disabled during smoke tests.',
-  legacy: 'Updater is disabled in legacy mode.',
 }
 
 function finiteOrZero(value: unknown): number {
@@ -99,7 +97,6 @@ export function normalizeUpdaterError(
 export function resolveUpdaterDisabledReason(mode: UpdaterRuntimeMode = {}): UpdaterDisabledReason | null {
   if (mode.isDevelopment) return 'development'
   if (mode.isSmoke) return 'smoke'
-  if (mode.isLegacy) return 'legacy'
   return null
 }
 
@@ -132,7 +129,6 @@ export class UpdaterController {
     const mode = {
       isDevelopment: options.isDevelopment ?? options.mode?.isDevelopment,
       isSmoke: options.isSmoke ?? options.mode?.isSmoke,
-      isLegacy: options.isLegacy ?? options.mode?.isLegacy,
     }
     const disabledReason =
       options.disabledReason === undefined ? resolveUpdaterDisabledReason(mode) : options.disabledReason

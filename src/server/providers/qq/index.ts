@@ -9,13 +9,11 @@ import {
   decodeQQLyricText,
   isQQFavoritePlaylist,
   isQzoneBackgroundPlaylist,
-  mapQQComment,
   mapQQPlaylist,
   mapQQPlaylistTrack,
   mapQQSmartSong,
   mapQQTrack,
   normalizeQQSongId,
-  qqSingerAvatar,
 } from './mappers'
 import { parseJSONText, requestText } from '../../util/http'
 
@@ -659,102 +657,6 @@ export class QQProvider {
       trackCount: tracks.length,
     }
     return { loggedIn: true, provider: 'qq', playlist, tracks }
-  }
-
-  async artistDetail(mid: string, limit: number): Promise<any> {
-    const singerMid = String(mid || '').trim()
-    const num = Math.max(10, Math.min(80, limit || 36))
-    if (!singerMid) return { provider: 'qq', error: 'MISSING_SINGER_MID', artist: null, songs: [] }
-    const json = await this.client.musicuRequest(
-      {
-        comm: { ct: 24, cv: 0 },
-        singer: {
-          module: 'music.web_singer_info_svr',
-          method: 'get_singer_detail_info',
-          param: { sort: 5, singermid: singerMid, sin: 0, num },
-        },
-      },
-      { cookie: true },
-    )
-    const block = json && json.singer
-    if (!block || Number(block.code || 0) !== 0) {
-      return {
-        provider: 'qq',
-        error: (block && (block.message || block.msg || block.code)) || 'QQ_ARTIST_DETAIL_FAILED',
-        artist: null,
-        songs: [],
-      }
-    }
-    const data = block.data || {}
-    const info = data.singer_info || data.singerInfo || {}
-    const rawSongs = Array.isArray(data.songlist) ? data.songlist : []
-    const songs = rawSongs
-      .map((raw: any) => mapQQTrack((raw && (raw.track_info || raw.songInfo || raw.songinfo || raw.song)) || raw, {}))
-      .filter((song: UnifiedSong) => song && song.name && (song.mid || song.id))
-    const matchedSongArtist = songs[0] && (songs[0].artists || []).find((a: any) => a && a.mid === singerMid)
-    const artistMid = info.mid || singerMid
-    const artistName = info.name || info.title || (matchedSongArtist && matchedSongArtist.name) || ''
-    const totalSong = Number(data.total_song || data.song_count || 0) || songs.length
-    return {
-      provider: 'qq',
-      artist: {
-        provider: 'qq',
-        id: info.id || '',
-        mid: artistMid,
-        name: artistName,
-        avatar: info.pic || info.avatar || qqSingerAvatar(artistMid, 300),
-        fans: Number(info.fans || 0) || 0,
-        musicSize: totalSong,
-        albumSize: Number(data.total_album || 0) || 0,
-        mvSize: Number(data.total_mv || 0) || 0,
-      },
-      total: totalSong,
-      songs,
-    }
-  }
-
-  async songComments(id: string, mid: string, limit: number, offset: number): Promise<any> {
-    let topid = String(id || '').replace(/\D/g, '')
-    if (!topid && mid) {
-      try {
-        const detail = await this.songDetail(mid, { mid })
-        topid = String((detail && (detail.qqId || detail.id)) || '').replace(/\D/g, '')
-      } catch (e: any) {
-        console.warn('[QQComments] detail fallback failed:', e.message)
-      }
-    }
-    if (!topid) return { provider: 'qq', error: 'Missing QQ song id', comments: [] }
-    const page = Math.max(0, Math.floor((offset || 0) / Math.max(1, limit || 20)))
-    const uin = this.session.uin || '0'
-    const body = await this.client.getJSON(
-      'https://c.y.qq.com/base/fcgi-bin/fcg_global_comment_h5.fcg',
-      {
-        g_tk: '5381',
-        loginUin: uin,
-        hostUin: '0',
-        format: 'json',
-        inCharset: 'utf8',
-        outCharset: 'utf-8',
-        notice: '0',
-        platform: 'yqq.json',
-        needNewCode: '0',
-        cid: '205360772',
-        reqtype: '2',
-        biztype: '1',
-        topid,
-        cmd: '8',
-        needmusiccrit: '0',
-        pagenum: String(page),
-        pagesize: String(limit || 20),
-      },
-      { headers: { Referer: 'https://y.qq.com/n/ryqq/songDetail/' + encodeURIComponent(mid || topid) } },
-    )
-    const hotList = body && body.hot_comment && body.hot_comment.commentlist
-    const normalList = body && body.comment && body.comment.commentlist
-    const raw = offset === 0 && Array.isArray(hotList) && hotList.length ? hotList : normalList || []
-    const comments = ((raw || []) as any[]).map(mapQQComment).filter((c) => c.content)
-    const total = Number(body && body.comment && (body.comment.commenttotal || body.comment.comment_total)) || comments.length
-    return { provider: 'qq', id: topid, total, comments, hot: !!(offset === 0 && Array.isArray(hotList) && hotList.length) }
   }
 
   logout(): void {

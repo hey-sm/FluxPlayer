@@ -26,7 +26,6 @@ protocol.registerSchemesAsPrivileged([{
   privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
 }])
 
-const isLegacyMode = process.env.FLUX_LEGACY === '1' || process.argv.includes('--legacy')
 const isSmokeTest = process.env.FLUX_SMOKE === '1'
 
 let mainWindow: BrowserWindow | null = null
@@ -107,7 +106,7 @@ function updaterFallbackState(error?: unknown): UpdaterState {
   return {
     ...DEFAULT_UPDATER_STATE,
     currentVersion: app.getVersion(),
-    disabledReason: isLegacyMode ? 'legacy' : isSmokeTest ? 'smoke' : isDevelopment ? 'development' : null,
+    disabledReason: isSmokeTest ? 'smoke' : isDevelopment ? 'development' : null,
     ...(error
       ? {
           status: 'error' as const,
@@ -122,7 +121,7 @@ function updaterFallbackState(error?: unknown): UpdaterState {
 
 async function initializeUpdater(): Promise<UpdaterState> {
   // Disabled modes do not even load electron-updater, preventing accidental network/update side effects.
-  if (isDevelopment || isSmokeTest || isLegacyMode) return updaterFallbackState()
+  if (isDevelopment || isSmokeTest) return updaterFallbackState()
   try {
     const adapter = await createElectronUpdaterAdapter()
     updaterController = new UpdaterController({
@@ -175,43 +174,32 @@ function findOpenPort(startPort: number): Promise<number> {
 }
 
 function resolveStaticRoot(): string {
-  if (isLegacyMode) {
-    // legacy 模式：旧 public/ 的副本（scripts/sync-legacy.mjs 生成），用于 M2 strangler 验收
-    const legacyRoot = path.resolve(app.getAppPath(), 'legacy')
-    if (!fs.existsSync(path.join(legacyRoot, 'index.html'))) {
-      console.error('[FluxPlayer] legacy 模式需要先运行: pnpm sync-legacy')
-      app.exit(1)
-    }
-    return legacyRoot
-  }
   return path.join(import.meta.dirname, '../renderer')
 }
 
 function preloadPath(): string {
-  return path.join(import.meta.dirname, '../preload', isLegacyMode ? 'legacy.cjs' : 'main.cjs')
+  return path.join(import.meta.dirname, '../preload', 'main.cjs')
 }
 
 async function ensureLocalServer(): Promise<LocalServer> {
   if (localServer) return localServer
   // 正式版固定 origin，以确保 FluxPlayer 自身的 Web Storage/IndexedDB 跨启动稳定；
-  // 开发、smoke、legacy 与 E2E 使用空闲端口，允许隔离并行运行。
-  const isolatedRuntime = isDevelopment || isSmokeTest || isLegacyMode || process.env.FLUX_E2E === '1'
+  // 开发、smoke 与 E2E 使用空闲端口，允许隔离并行运行。
+  const isolatedRuntime = isDevelopment || isSmokeTest || process.env.FLUX_E2E === '1'
   const port = isolatedRuntime ? await findOpenPort(DEV_PORT_BASE) : DEV_PORT_BASE
   localServer = await startLocalServer({
     host: '127.0.0.1',
     port,
     staticRoot: resolveStaticRoot(),
     appVersion: app.getVersion(),
-    beatCacheDir: path.join(app.getPath('userData'), 'beatmaps'),
     credentials: credentialStore,
-    legacyMode: isLegacyMode,
   })
   return localServer
 }
 
 async function createWindow(): Promise<void> {
   const server = await ensureLocalServer()
-  const devRendererUrl = !isLegacyMode && process.env.ELECTRON_RENDERER_URL ? process.env.ELECTRON_RENDERER_URL : undefined
+  const devRendererUrl = process.env.ELECTRON_RENDERER_URL || undefined
 
   const iconPath = path.join(app.getAppPath(), 'resources', 'icon.png')
 
@@ -251,7 +239,7 @@ function runSmokeTest(port: number): void {
       const data: any = await resp.json()
       const windowLoaded = didWindowLoad(mainWindow)
       if (data && data.version && windowLoaded) {
-        console.log(`[smoke] OK version=${data.version} legacy=${!!data.legacyMode} windowLoaded=true`)
+        console.log(`[smoke] OK version=${data.version} windowLoaded=true`)
         clearTimeout(fail)
         setTimeout(() => app.exit(0), 300)
         return
@@ -263,7 +251,7 @@ function runSmokeTest(port: number): void {
       app.exit(1)
     }
   }
-  // createMainWindow 返回时首屏加载已完成（含透明降级重试），直接校验
+  // createMainWindow 返回时首屏加载已完成，直接校验
   void check()
 }
 
@@ -291,9 +279,7 @@ if (!gotSingleInstanceLock) {
       watchdog.unref?.()
     }
     const server = await ensureLocalServer()
-    const rendererUrl = !isLegacyMode && process.env.ELECTRON_RENDERER_URL
-      ? process.env.ELECTRON_RENDERER_URL
-      : `http://127.0.0.1:${server.port}`
+    const rendererUrl = process.env.ELECTRON_RENDERER_URL || `http://127.0.0.1:${server.port}`
     primaryRendererOrigin = new URL(rendererUrl).origin
     customBackgroundService = new CustomBackgroundService({ userDataPath: app.getPath('userData') })
     protocol.handle(CUSTOM_BACKGROUND_SCHEME, (request) => {

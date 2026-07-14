@@ -11,12 +11,11 @@ import { loadFixture, normalizeNcmCover } from '../helpers/fixtures'
 
 // providers/netease/index.ts 顶层 import NCM SDK；映射函数单测须 mock 掉（与 netease-mappers.test.ts 同模式）
 vi.mock('@server/providers/netease/sdk', () => ({ ncm: {} }))
-const { mapSongRecord, mapDiscoverPlaylist } = await import('@server/providers/netease')
+const { mapSongRecord } = await import('@server/providers/netease')
 
 const cloudsearch = loadFixture('netease/cloudsearch')
 const detail = loadFixture('netease/song-detail')
 const playlist = loadFixture('netease/playlist-tracks')
-const personalized = loadFixture('netease/personalized')
 
 /** 封面 CDN 主机轮换归一后再快照，避免重录假 diff */
 const normCover = (s: any) => ({ ...s, cover: normalizeNcmCover(s.cover) })
@@ -59,15 +58,4 @@ describe('网易云 fixture 快照', () => {
     await expect(JSON.stringify(mapped, null, 2)).toMatchFileSnapshot('./__snapshots__/netease-playlist-songs.mapped.json')
   })
 
-  it('personalized result → mapDiscoverPlaylist：不变量 + 快照', async () => {
-    const list = personalized.response && personalized.response.result
-    expect(Array.isArray(list) && list.length > 0, `上游形状漂移：result 缺失或为空（${personalized.meta.endpoint}）`).toBe(true)
-    const mapped = (list as any[]).map((pl) => mapDiscoverPlaylist(pl, '推荐歌单')).map(normCover)
-    for (const pl of mapped) {
-      expect(pl.id, `personalized 条目缺 id：${JSON.stringify({ name: pl.name })}`).toBeTruthy()
-      expect(pl.name).toBeTruthy()
-      expect(pl.cover).toBeTruthy()
-    }
-    await expect(JSON.stringify(mapped, null, 2)).toMatchFileSnapshot('./__snapshots__/netease-discover-playlists.mapped.json')
-  })
 })

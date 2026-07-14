@@ -13,8 +13,7 @@ import {
 } from './presets/runtime'
 import type { VisualCameraBaseline } from './presets/types'
 import { Lyrics3DLayer } from './lyrics3d'
-import { ShelfLayer, type ShelfAction, type ShelfViewportPointerInput } from './shelf'
-import { shelfChannel, stageLyricsChannel } from './scene'
+import { stageLyricsChannel } from './scene'
 import { vs, fs, bloomVs, bloomFs } from './shaders'
 
 const PLANE_SIZE = 4.8
@@ -104,7 +103,6 @@ export class VisualStage {
   private readonly textureLoader = new THREE.TextureLoader()
   private readonly placeholderCover: THREE.Texture
   private readonly lyricsLayer: Lyrics3DLayer
-  private readonly shelfLayer: ShelfLayer
 
   private container: HTMLElement | null = null
   private stopTick: (() => void) | null = null
@@ -251,25 +249,13 @@ export class VisualStage {
     this.resources.add(() => this.scene.remove(this.particles))
 
     // Scene overlays share this Stage/Ticker and never create their own animation clocks.
-    this.shelfLayer = new ShelfLayer()
-    // Keep the vertical shelf anchored to the viewport's right edge while visual presets orbit the scene camera.
-    this.scene.add(this.camera)
-    this.camera.add(this.shelfLayer.group)
-    this.shelfLayer.group.position.z = -6
-    this.resources.add(() => {
-      this.camera.remove(this.shelfLayer.group)
-      this.scene.remove(this.camera)
-      this.shelfLayer.dispose()
-    })
     this.lyricsLayer = new Lyrics3DLayer()
     this.scene.add(this.lyricsLayer.group)
     this.resources.add(() => {
       this.scene.remove(this.lyricsLayer.group)
       this.lyricsLayer.dispose()
     })
-    this.shelfLayer.setFrame(shelfChannel.getSnapshot())
     this.lyricsLayer.setFrame(stageLyricsChannel.getSnapshot())
-    this.resources.add(shelfChannel.subscribe((frame) => this.shelfLayer.setFrame(frame)))
     this.resources.add(stageLyricsChannel.subscribe((frame) => this.lyricsLayer.setFrame(frame)))
 
     this.applySnapshot(this.bus.getSnapshot(), null)
@@ -308,7 +294,6 @@ export class VisualStage {
       this.particles.rotation.set(this.pointerRotation.y, this.pointerRotation.x, 0)
       this.bloomParticles.rotation.copy(this.particles.rotation)
       this.lyricsLayer.group.rotation.copy(this.particles.rotation)
-      this.shelfLayer.update(deltaTime, this.camera)
       this.lyricsLayer.update(deltaTime)
       if (this.uniforms.uColorMixT.value < 1) {
         this.uniforms.uColorMixT.value = Math.min(
@@ -349,14 +334,6 @@ export class VisualStage {
     this.cameraTarget.radius = THREE.MathUtils.clamp(this.cameraTarget.radius + deltaY * 0.005, 3.2, 12)
   }
 
-  /** Shelf input stays outside VisualBus so its frozen playback/audio ABI is unchanged. */
-  viewportShelfPointer(input: ShelfViewportPointerInput): ShelfAction {
-    return this.shelfLayer.viewportPointer(input, this.camera)
-  }
-
-  wheelShelf(deltaY: number, deltaMode = 0): ShelfAction {
-    return this.shelfLayer.wheel(deltaY, deltaMode)
-  }
 
   dispose(): void {
     if (this.disposed) return

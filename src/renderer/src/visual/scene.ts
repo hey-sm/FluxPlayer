@@ -1,5 +1,4 @@
 import type { StageLyricsFrame } from './lyrics3d'
-import type { ShelfFrame } from './shelf'
 
 export type VisualSceneListener<T> = (snapshot: Readonly<T>) => void
 
@@ -35,11 +34,4 @@ export const stageLyricsChannel = new VisualSceneChannel<StageLyricsFrame>({
   position: 0,
   accentColor: '#7c8cff',
   visible: false,
-})
-
-export const shelfChannel = new VisualSceneChannel<ShelfFrame>({
-  items: [],
-  centerIndex: 0,
-  visible: false,
-  accentColor: '#7c8cff',
 })

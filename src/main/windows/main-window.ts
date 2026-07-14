@@ -178,23 +178,18 @@ export interface MainWindowOptions {
   serverPort: number
   preloadPath: string
   iconPath?: string
-  /** 开发模式下 electron-vite 提供的 renderer dev server 地址（legacy 模式忽略） */
+  /** 开发模式下 electron-vite 提供的 renderer dev server 地址 */
   devRendererUrl?: string
   onStateChange?: (win: BrowserWindow) => void
   /** Called synchronously before loadURL so startup IPC can verify the primary renderer sender. */
   onCreated?: (win: BrowserWindow) => void
 }
 
-/**
- * 创建主窗口。默认尝试透明无框窗口（玻璃视觉的前提）；
- * 部分 GPU/驱动/远程会话下透明窗口会导致渲染进程崩溃（首次加载 ERR_FAILED），
- * 此时自动降级为不透明深色窗口重建。FLUX_OPAQUE=1 可强制不透明。
- */
+/** 创建主窗口。 */
 export async function createMainWindow(options: MainWindowOptions): Promise<BrowserWindow> {
   htmlFullscreenActive = false
   windowFullscreenActive = false
-  const preferTransparent = process.env.FLUX_OPAQUE !== '1'
-  return buildAndLoad(preferTransparent, options)
+  return buildAndLoad(options)
 }
 
 const loadedWindows = new WeakSet<BrowserWindow>()
@@ -204,8 +199,8 @@ export function didWindowLoad(win: BrowserWindow | null): boolean {
   return !!win && !win.isDestroyed() && loadedWindows.has(win)
 }
 
-async function buildAndLoad(transparent: boolean, options: MainWindowOptions): Promise<BrowserWindow> {
-  const win = buildWindow(transparent, options)
+async function buildAndLoad(options: MainWindowOptions): Promise<BrowserWindow> {
+  const win = buildWindow(options)
   const target = options.devRendererUrl || `http://127.0.0.1:${options.serverPort}`
   try {
     // 某些环境下渲染进程崩溃会让 loadURL 永不 settle，必须加超时竞速
@@ -215,23 +210,12 @@ async function buildAndLoad(transparent: boolean, options: MainWindowOptions): P
     ])
     loadedWindows.add(win)
   } catch (e: any) {
-    if (transparent) {
-      console.warn(`[FluxPlayer] 透明窗口加载失败（${e.message}），降级为不透明窗口重建`)
-      // 先创建替代窗口再销毁旧窗口，避免出现零窗口瞬间触发 window-all-closed → app.quit()
-      const fallback = buildAndLoad(false, options)
-      try {
-        win.destroy()
-      } catch {
-        /* ignore */
-      }
-      return fallback
-    }
     console.error('Main window load failed:', e.message)
   }
   return win
 }
 
-function buildWindow(transparent: boolean, options: MainWindowOptions): BrowserWindow {
+function buildWindow(options: MainWindowOptions): BrowserWindow {
   const initialBounds = getWindowedBounds()
   const win = new BrowserWindow({
     ...initialBounds,
@@ -240,8 +224,7 @@ function buildWindow(transparent: boolean, options: MainWindowOptions): BrowserW
     show: false,
     frame: false,
     fullscreen: false,
-    transparent,
-    backgroundColor: transparent ? '#00000000' : '#0b0d12',
+    backgroundColor: '#0b0d12',
     hasShadow: true,
     autoHideMenuBar: true,
     title: 'FluxPlayer',

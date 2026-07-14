@@ -249,7 +249,6 @@ describe('UpdaterController', () => {
   it.each([
     ['development', { isDevelopment: true }],
     ['smoke', { isSmoke: true }],
-    ['legacy', { isLegacy: true }],
   ] as const)('disables all commands in %s mode', async (reason, mode) => {
     const adapter = new FakeUpdaterAdapter()
     const controller = new UpdaterController({

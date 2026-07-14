@@ -18,29 +18,14 @@ export interface NcmApi {
   song_detail: NcmCall
   song_url: NcmCall
   song_url_v1?: NcmCall
-  login_qr_key: NcmCall
-  login_qr_create: NcmCall
-  login_qr_check: NcmCall
   login_status: NcmCall
   logout: NcmCall
   user_account: NcmCall
   user_playlist: NcmCall
-  comment_music: NcmCall
-  artist_detail: NcmCall
-  artist_top_song: NcmCall
-  artist_songs: NcmCall
-  like: NcmCall
   likelist: NcmCall
-  song_like_check?: NcmCall
   playlist_tracks: NcmCall
-  playlist_track_add?: NcmCall
-  playlist_create: NcmCall
   playlist_detail?: NcmCall
   playlist_track_all?: NcmCall
-  personalized: NcmCall
-  recommend_resource: NcmCall
-  recommend_songs: NcmCall
-  dj_hot: NcmCall
   lyric: NcmCall
   lyric_new?: NcmCall
 }

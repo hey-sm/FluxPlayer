@@ -33,7 +33,7 @@ export interface UpdaterState {
   availableVersion: string | null
   progress: UpdaterProgress | null
   error: UpdaterError | null
-  disabledReason: 'development' | 'smoke' | 'legacy' | null
+  disabledReason: 'development' | 'smoke' | null
 }
 
 export interface UpdaterCommandResult {

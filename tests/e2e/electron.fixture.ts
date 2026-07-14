@@ -55,7 +55,6 @@ function environmentWithIsolatedPaths(sandboxPath: string): Record<string, strin
   delete env.ELECTRON_RUN_AS_NODE
   delete env.ELECTRON_RENDERER_URL
   delete env.FLUX_SMOKE
-  delete env.FLUX_LEGACY
 
   const home = path.join(sandboxPath, 'home')
   env.APPDATA = path.join(sandboxPath, 'appdata', 'roaming')
@@ -73,7 +72,6 @@ function environmentWithIsolatedPaths(sandboxPath: string): Record<string, strin
     env.HOMEPATH = home.slice(parsedHome.root.length - 1)
   }
 
-  env.FLUX_OPAQUE = '1'
   env.FLUX_E2E = '1'
   env.NODE_ENV = 'test'
   return env

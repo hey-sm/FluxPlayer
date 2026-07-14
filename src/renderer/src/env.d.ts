@@ -18,8 +18,6 @@ interface FluxDesktopApi {
   restartApp(): Promise<{ ok: boolean }>
   configureGlobalHotkeys(bindings: unknown[]): Promise<unknown>
   onGlobalHotkey(callback: (payload: { action: string }) => void): () => void
-  exportJsonFile(payload: unknown): Promise<{ ok: boolean }>
-  importJsonFile(): Promise<{ ok: boolean; text?: string }>
   getUpdaterState(): Promise<import('@shared/updater-contract').UpdaterState>
   checkForUpdates(): Promise<import('@shared/updater-contract').UpdaterCommandResult>
   downloadUpdate(): Promise<import('@shared/updater-contract').UpdaterCommandResult>

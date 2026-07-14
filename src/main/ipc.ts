@@ -1,5 +1,4 @@
 import { BrowserWindow, dialog, globalShortcut, ipcMain } from 'electron'
-import fs from 'node:fs'
 import { IPC, type HotkeyBinding, type HotkeyConfigureResult } from '@shared/ipc-contract'
 import type { UpdaterCommandResult, UpdaterState } from '@shared/updater-contract'
 import type { WallpaperEngineImportRequest } from '@shared/custom-background-contract'
@@ -130,42 +129,6 @@ export function registerIpcHandlers(deps: IpcDeps): void {
     configureGlobalHotkeys(deps.getMainWindow, bindings),
   )
 
-  // ---- 存档导入/导出 ----
-  ipcMain.handle(IPC.exportJsonFile, async (event, payload: any = {}) => {
-    try {
-      const owner = getSenderWindow(event) || undefined
-      const defaultName = String(payload.defaultName || 'fluxplayer-export.json').replace(/[\\/:*?"<>|]+/g, '-')
-      const result = await dialog.showSaveDialog(owner as BrowserWindow, {
-        title: '导出 FluxPlayer 存档',
-        defaultPath: defaultName.toLowerCase().endsWith('.json') ? defaultName : `${defaultName}.json`,
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-      })
-      if (result.canceled || !result.filePath) return { ok: false, canceled: true }
-      const text = typeof payload.text === 'string' ? payload.text : JSON.stringify(payload.data || {}, null, 2)
-      fs.writeFileSync(result.filePath, text, 'utf8')
-      return { ok: true, filePath: result.filePath }
-    } catch (e: any) {
-      return { ok: false, error: e.message || 'EXPORT_FAILED' }
-    }
-  })
-
-  ipcMain.handle(IPC.importJsonFile, async (event) => {
-    try {
-      const owner = getSenderWindow(event) || undefined
-      const result = await dialog.showOpenDialog(owner as BrowserWindow, {
-        title: '导入 FluxPlayer 存档',
-        properties: ['openFile'],
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-      })
-      if (result.canceled || !result.filePaths || !result.filePaths[0]) return { ok: false, canceled: true }
-      const filePath = result.filePaths[0]
-      const text = fs.readFileSync(filePath, 'utf8')
-      return { ok: true, filePath, text }
-    } catch (e: any) {
-      return { ok: false, error: e.message || 'IMPORT_FAILED' }
-    }
-  })
-
   // ---- 登录窗口 ----
   ipcMain.handle(IPC.neteaseOpenLogin, async (event) => openNeteaseMusicLoginWindow(getSenderWindow(event)))
   ipcMain.handle(IPC.neteaseClearLogin, async () => clearNeteaseMusicLoginSession())
@@ -209,18 +172,6 @@ export function registerIpcHandlers(deps: IpcDeps): void {
       unavailableUpdaterResult(deps, 'UPDATER_NOT_AVAILABLE', 'Updater is not available.')
   })
 
-  // 旧按钮兼容映射到新的显式安装动作。
-  ipcMain.handle(IPC.openUpdateInstaller, (event) => {
-    if (!isPrimaryRenderer(event, deps)) {
-      return unavailableUpdaterResult(deps, 'UNTRUSTED_UPDATER_SENDER', 'Updater command rejected.')
-    }
-    return deps.getUpdaterController()?.install() ??
-      unavailableUpdaterResult(deps, 'UPDATER_NOT_AVAILABLE', 'Updater is not available.')
-  })
-
-  // ---- 尚未迁移子系统的兼容应答 ----
-  ipcMain.handle(IPC.desktopLyricsSetEnabled, async () => ({ ok: false, error: 'DESKTOP_LYRICS_NOT_AVAILABLE_YET' }))
-  ipcMain.handle(IPC.desktopLyricsUpdate, async () => ({ ok: false, error: 'DESKTOP_LYRICS_NOT_AVAILABLE_YET' }))
   ipcMain.handle(IPC.customBackgroundGet, (event) => {
     if (!isPrimaryRenderer(event, deps)) return null
     return deps.getCustomBackgroundService().getCurrent()

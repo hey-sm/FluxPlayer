@@ -3,7 +3,7 @@
  * 录制真实上游响应 → tests/fixtures/**（映射层 fixture 快照测试的输入）。
  *
  * 用法:
- *   node scripts/record-fixtures.mjs [qq|netease|weather|all]   （默认 all）
+ *   node scripts/record-fixtures.mjs [qq|netease|all]   （默认 all）
  *   pnpm record:fixtures
  *
  * 约定:
@@ -227,21 +227,6 @@ async function recordQQ() {
     writeFixture(rel, { endpoint: QQ_CDLIST_URL, method: 'GET', params, trimmed }, json)
   })
 
-  await run('qq/singer-songs.fixture.json', async (rel) => {
-    // payload 照抄 QQProvider.artistDetail；num=5 直接控量（周杰伦）
-    const payload = {
-      comm: { ct: 24, cv: 0 },
-      singer: {
-        module: 'music.web_singer_info_svr',
-        method: 'get_singer_detail_info',
-        param: { sort: 5, singermid: '0025NhlN2yWrP4', sin: 0, num: 5 },
-      },
-    }
-    const json = await musicuRequest(payload)
-    const songlist = json && json.singer && json.singer.data && json.singer.data.songlist
-    if (!Array.isArray(songlist) || !songlist.length) throw new Error('响应缺 singer.data.songlist')
-    writeFixture(rel, { endpoint: QQ_MUSICU_URL, method: 'POST', params: payload }, json)
-  })
 }
 
 // ===== 网易云（与服务端同一 SDK，保证 fixture 与 mapper 输入同构）=====
@@ -276,46 +261,17 @@ async function recordNetease() {
     writeFixture(rel, { endpoint: 'NeteaseCloudMusicApi#playlist_track_all', method: 'POST', params, trimmed }, r.body)
   })
 
-  await run('netease/personalized.fixture.json', async (rel) => {
-    const params = { limit: 5 }
-    const r = await ncm.personalized(params)
-    const list = r && r.body && r.body.result
-    if (!Array.isArray(list) || !list.length) throw new Error('响应缺 result（匿名冷启动可能为空，重试或换时段）')
-    writeFixture(rel, { endpoint: 'NeteaseCloudMusicApi#personalized', method: 'POST', params }, r.body)
-  })
-}
-
-// ===== 天气（参数照抄 src/server/weather/index.ts fetchOpenMeteoWeather；timezone 固定不用 auto）=====
-
-async function recordWeather() {
-  await run('weather/open-meteo.fixture.json', async (rel) => {
-    const params = {
-      latitude: '31.2304',
-      longitude: '121.4737',
-      current:
-        'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m',
-      hourly: 'precipitation_probability,weather_code,temperature_2m',
-      forecast_days: '1',
-      timezone: 'Asia/Shanghai',
-    }
-    const u = new URL('https://api.open-meteo.com/v1/forecast')
-    for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v)
-    const json = await requestJson(u.toString(), { headers: { 'User-Agent': UA } })
-    if (!json || !json.current || json.current.weather_code == null) throw new Error('响应缺 current.weather_code')
-    writeFixture(rel, { endpoint: 'https://api.open-meteo.com/v1/forecast', method: 'GET', params }, json)
-  })
 }
 
 // ===== main =====
 
 const scope = process.argv[2] || 'all'
-if (!['qq', 'netease', 'weather', 'all'].includes(scope)) {
-  console.error('用法: node scripts/record-fixtures.mjs [qq|netease|weather|all]')
+if (!['qq', 'netease', 'all'].includes(scope)) {
+  console.error('用法: node scripts/record-fixtures.mjs [qq|netease|all]')
   process.exit(2)
 }
 if (scope === 'qq' || scope === 'all') await recordQQ()
 if (scope === 'netease' || scope === 'all') await recordNetease()
-if (scope === 'weather' || scope === 'all') await recordWeather()
 if (failed) {
   console.error('[record] 存在失败项（对应 fixture 未写入/未覆盖）')
   process.exitCode = 1
