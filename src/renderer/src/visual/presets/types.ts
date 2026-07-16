@@ -1,6 +1,6 @@
 import type { VisualPreset } from '../bus'
 
-export type VisualPresetName = 'SILK' | 'TUNNEL' | 'ORBIT' | 'VOID' | 'VINYL' | 'WALLPAPER'
+export type VisualPresetName = 'SILK' | 'TUNNEL' | 'ORBIT' | 'VOID' | 'VINYL' | 'WALLPAPER' | 'NEBULA' | 'CRYSTAL' | 'SKYLINE'
 
 export interface VisualCameraBaseline {
   radius: number

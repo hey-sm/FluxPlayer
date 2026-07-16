@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # FluxPlayer —— Claude 工作守则
 
 FluxPlayer：沉浸式桌面音乐播放器（`2.0.0-alpha.1`，GPL-3.0），独立的沉浸式桌面音乐播放器。
-技术栈：electron-vite 5 · Electron 42 · React 19 · TypeScript · zustand · TanStack Query · Hono（本地 API 服务）· three **0.128.0**。入口 `out/main/index.mjs`。
+技术栈：electron-vite 5 · Electron 42 · React 19 · TypeScript · zustand · TanStack Query · Hono（本地 API 服务）· three **0.185.1**。入口 `out/main/index.mjs`。
 
 完整架构见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，面向用户/贡献者的说明见 [README.md](README.md)。
 
@@ -13,7 +13,7 @@ FluxPlayer：沉浸式桌面音乐播放器（`2.0.0-alpha.1`，GPL-3.0），独
 
 1. **不可再生核心资产禁改**：粒子舞台 shader（`src/renderer/src/visual/stage.ts` + `shaders.ts`）、舞台 3D 歌词、玻璃 SVG 质感（`theme/classic/`）是从旧版逐字节搬迁的核心资产，各目录附 `LEGACY_COMPARISON.md`。**禁止顺手重构、格式化、"优化"**。
 2. **禁止裸 RAF**：渲染层一切动画必须注册到全局 Ticker（`src/renderer/src/perf/ticker.ts`），不得直接调用 `requestAnimationFrame`——这是"最小化零视觉开销"的结构性保证。
-3. **three 锁 0.128.0**：禁止升级、禁止换 import 方式；手写 ShaderMaterial 对版本敏感。`@types/three` 同锁。
+3. **three 锁 0.185.1**：本次升级已获用户明确批准；后续禁止擅自继续升级或更换 import 方式。手写 ShaderMaterial 对版本敏感，`@types/three` 必须同锁。
 4. **preload 必须 CJS**：`electron.vite.config.ts` 已固定 preload output format 为 cjs（`main.cjs`），不要改——ESM preload 会静默悬死页面加载（loadURL 永不 settle → LOAD_TIMEOUT）。
 6. **凭据零明文**：cookie 一律走 safeStorage（DPAPI）加密存取（`src/main/credentials.ts`），禁止写明文文件；`plain:` 前缀旧文件只读兼容。
 8. **视觉预设 ID = shader ABI**：`visual/presets/registry.ts` 的数字 ID（0 SILK/1 TUNNEL/2 ORBIT/3 VOID/4 VINYL/5 WALLPAPER，6 SKULL 保留）禁止重排。
@@ -33,15 +33,12 @@ FluxPlayer：沉浸式桌面音乐播放器（`2.0.0-alpha.1`，GPL-3.0），独
 - **多行 `node -e` 在本 shell 静默失败**：一律写成 `.mjs` 脚本文件再执行。
 - **NeteaseCloudMusicApi 必须外部化**：运行时会 fs 扫描自身目录，已在 vite external + `asarUnpack`/external 处理，不要打进 bundle。
 
-## 工作单元的完成定义（DoD）
+## 工作单元的完成定义（DoD，按改动范围分级）
 
-按顺序全部通过才算完成：
-
-1. `pnpm typecheck` 绿（node + web 两套 tsconfig）
-2. `pnpm test` 绿（vitest）
-3. 标准模式冒烟通过：`pnpm build && pnpm smoke`
-4. 用 `/code-review` 审一遍 diff
-5. 小步 git 提交（里程碑完成时打 tag，如 `m2-done`）
+- **每次必做**：`pnpm typecheck` 绿（node + web 两套 tsconfig）＋ `pnpm test` 绿（vitest）。
+- **冒烟（`pnpm build && pnpm smoke`）仅在动了跨进程/启动面时做**：`src/main/`、`src/preload/`、`src/server/`、`src/shared/`、`electron.vite.config.ts`、`package.json`。纯 renderer 组件小改可跳过；它抓的是 typecheck/test 抓不到的启动类问题（如 preload 格式错误静默悬死）。
+- **`/code-review` 降频**：非平凡 diff 或里程碑收尾时审一遍；几行小修可跳过。
+- **小步 git 提交**（里程碑完成时打 tag，如 `m2-done`）。
 
 ## 常用命令
 
@@ -51,7 +48,8 @@ pnpm typecheck        # node + web 两套 tsconfig
 pnpm test             # vitest 全量
 pnpm vitest run tests/unit/<name>.test.ts   # 跑单个测试文件
 pnpm test:e2e         # 先 build 再 playwright（tests/e2e/）
-pnpm lint             # eslint
+pnpm lint             # oxlint
+pnpm format           # oxfmt --check（只检查；格式化用 pnpm format:write <路径>，铁律资产与测试 fixture 已在 .oxfmtrc.json 中排除）
 pnpm build            # 三端构建到 out/
 pnpm smoke            # 冒烟：窗口加载 + /api/app/version 自检后自动退出
 pnpm record:fixtures  # 录制 tests/fixtures/ 的上游 API fixture（接口漂移后）

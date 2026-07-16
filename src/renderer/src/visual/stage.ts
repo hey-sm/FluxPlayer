@@ -15,6 +15,7 @@ import type { VisualCameraBaseline } from './presets/types'
 import { Lyrics3DLayer } from './lyrics3d'
 import { stageLyricsChannel } from './scene'
 import { vs, fs, bloomVs, bloomFs } from './shaders'
+import { ModernBackgrounds } from './backgrounds'
 
 const PLANE_SIZE = 4.8
 const RIPPLE_MAX = 12
@@ -85,7 +86,7 @@ function makePlaceholderTexture(css: string, size = 4): THREE.Texture {
 }
 
 function isVisualPreset(value: number): value is VisualPreset {
-  return Number.isInteger(value) && value >= 0 && value <= 5
+  return Number.isInteger(value) && ((value >= 0 && value <= 5) || (value >= 7 && value <= 9))
 }
 
 /** Three stage. All external state arrives through one VisualBus snapshot. */
@@ -103,12 +104,18 @@ export class VisualStage {
   private readonly textureLoader = new THREE.TextureLoader()
   private readonly placeholderCover: THREE.Texture
   private readonly lyricsLayer: Lyrics3DLayer
+  private readonly modernBackgrounds: ModernBackgrounds
 
   private container: HTMLElement | null = null
   private stopTick: (() => void) | null = null
   private disposed = false
+  private backgroundEnabled = true
   private pointerTarget = new THREE.Vector2()
   private pointerRotation = new THREE.Vector2()
+  private lyricsRotationTarget = new THREE.Vector2()
+  private lyricsRotation = new THREE.Vector2()
+  private lyricsDepthTarget = 1.46
+  private lyricsDepth = 1.46
 
   private coverGeneration = 0
   private coverUrl: string | null = null
@@ -129,10 +136,8 @@ export class VisualStage {
     this.camera.position.set(0, 0, 6.6)
     this.camera.lookAt(0, 0, 0)
 
-    this.renderer = this.resources.track(
-      new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' }),
-      (renderer) => renderer.dispose(),
-    )
+    // Renderer teardown is explicit in dispose(); scene resources must be released first.
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' })
     this.renderer.setClearColor(0x000000, 0)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35))
     const canvas = this.renderer.domElement
@@ -248,6 +253,13 @@ export class VisualStage {
     this.scene.add(this.particles)
     this.resources.add(() => this.scene.remove(this.particles))
 
+    this.modernBackgrounds = new ModernBackgrounds()
+    this.scene.add(this.modernBackgrounds.group)
+    this.resources.add(() => {
+      this.scene.remove(this.modernBackgrounds.group)
+      this.modernBackgrounds.dispose()
+    })
+
     // Scene overlays share this Stage/Ticker and never create their own animation clocks.
     this.lyricsLayer = new Lyrics3DLayer()
     this.scene.add(this.lyricsLayer.group)
@@ -285,23 +297,32 @@ export class VisualStage {
   start(): () => void {
     if (this.stopTick) return this.stopTick
     const unregister = ticker.add((deltaTime) => {
-      this.uniforms.uTime.value += deltaTime
-      this.tickVinylSpin(deltaTime)
-      this.tickPresetTransition(deltaTime)
-      this.updateCamera(deltaTime)
-      const pointerEase = 1 - Math.exp(-3.4 * Math.max(0, deltaTime))
-      this.pointerRotation.lerp(this.pointerTarget, pointerEase)
-      this.particles.rotation.set(this.pointerRotation.y, this.pointerRotation.x, 0)
-      this.bloomParticles.rotation.copy(this.particles.rotation)
-      this.lyricsLayer.group.rotation.copy(this.particles.rotation)
-      this.lyricsLayer.update(deltaTime)
-      if (this.uniforms.uColorMixT.value < 1) {
-        this.uniforms.uColorMixT.value = Math.min(
-          1,
-          this.uniforms.uColorMixT.value + deltaTime * COVER_MIX_SPEED,
-        )
-        if (this.uniforms.uColorMixT.value >= 1) this.finishCoverTransition()
+      if (this.backgroundEnabled) {
+        this.uniforms.uTime.value += deltaTime
+        this.tickVinylSpin(deltaTime)
+        this.tickPresetTransition(deltaTime)
+        this.updateCamera(deltaTime)
+        const pointerEase = 1 - Math.exp(-3.4 * Math.max(0, deltaTime))
+        this.pointerRotation.lerp(this.pointerTarget, pointerEase)
+        this.particles.rotation.set(this.pointerRotation.y, this.pointerRotation.x, 0)
+        this.bloomParticles.rotation.copy(this.particles.rotation)
+        this.modernBackgrounds.group.rotation.set(this.pointerRotation.y, this.pointerRotation.x, 0)
+        const snapshot = this.bus.getSnapshot()
+        this.modernBackgrounds.update(deltaTime, snapshot.analyserFrame, snapshot.beatPulse)
+        if (this.uniforms.uColorMixT.value < 1) {
+          this.uniforms.uColorMixT.value = Math.min(
+            1,
+            this.uniforms.uColorMixT.value + deltaTime * COVER_MIX_SPEED,
+          )
+          if (this.uniforms.uColorMixT.value >= 1) this.finishCoverTransition()
+        }
       }
+      const lyricsEase = 1 - Math.exp(-7 * Math.max(0, deltaTime))
+      this.lyricsRotation.lerp(this.lyricsRotationTarget, lyricsEase)
+      this.lyricsDepth += (this.lyricsDepthTarget - this.lyricsDepth) * lyricsEase
+      this.lyricsLayer.group.rotation.set(this.lyricsRotation.y, this.lyricsRotation.x, 0)
+      this.lyricsLayer.group.position.z = this.lyricsDepth
+      this.lyricsLayer.update(deltaTime)
       this.renderer.render(this.scene, this.camera)
     })
     let active = true
@@ -320,6 +341,27 @@ export class VisualStage {
     if (isVisualPreset(preset)) this.bus.setPreset(preset)
   }
 
+  setBackgroundEnabled(enabled: boolean): void {
+    if (this.backgroundEnabled === enabled) return
+    this.backgroundEnabled = enabled
+    const preset = this.bus.getSnapshot().preset
+    const modern = ModernBackgrounds.supports(preset)
+    this.particles.visible = enabled && !modern
+    this.bloomParticles.visible = enabled && !modern && this.bus.getSnapshot().params.bloomStrength > 0.01
+    this.modernBackgrounds.group.visible = enabled && modern
+    if (enabled) {
+      this.applySnapshot(this.bus.getSnapshot(), null)
+    } else {
+      this.stopCoverRotation()
+      this.coverGeneration += 1
+      this.releaseDynamicCovers()
+      this.uniforms.uCoverTex.value = this.placeholderCover
+      this.uniforms.uPrevCoverTex.value = this.placeholderCover
+      this.uniforms.uHasCover.value = 0
+      this.uniforms.uColorMixT.value = 1
+    }
+  }
+
   rotateCoverBy(deltaX: number, deltaY: number): void {
     this.pointerTarget.x += deltaX * 0.008
     this.pointerTarget.y += deltaY * 0.008
@@ -328,6 +370,19 @@ export class VisualStage {
   stopCoverRotation(): void {
     // Drop the remaining eased delta so releasing the button stops rotation immediately.
     this.pointerTarget.copy(this.pointerRotation)
+  }
+
+  rotateLyricsBy(deltaX: number, deltaY: number): void {
+    this.lyricsRotationTarget.x = THREE.MathUtils.clamp(this.lyricsRotationTarget.x + deltaX * 0.006, -0.75, 0.75)
+    this.lyricsRotationTarget.y = THREE.MathUtils.clamp(this.lyricsRotationTarget.y + deltaY * 0.006, -0.55, 0.55)
+  }
+
+  stopLyricsRotation(): void {
+    this.lyricsRotationTarget.copy(this.lyricsRotation)
+  }
+
+  zoomLyrics(deltaY: number): void {
+    this.lyricsDepthTarget = THREE.MathUtils.clamp(this.lyricsDepthTarget + deltaY * 0.0025, 0.2, 3.4)
   }
 
   zoomCover(deltaY: number): void {
@@ -339,9 +394,14 @@ export class VisualStage {
     if (this.disposed) return
     this.disposed = true
     this.coverGeneration += 1
+    this.stopTick?.()
+    this.stopTick = null
     this.releaseDynamicCovers()
     this.resources.disposeAll()
-    this.stopTick = null
+    this.renderer.renderLists.dispose()
+    this.renderer.dispose()
+    this.scene.clear()
+    this.container = null
   }
 
   private applySize(): void {
@@ -355,6 +415,7 @@ export class VisualStage {
   }
 
   private applySnapshot(snapshot: Readonly<VisualSnapshot>, previous: Readonly<VisualSnapshot> | null): void {
+    if (!this.backgroundEnabled) return
     const frame = snapshot.analyserFrame
     const params = snapshot.params
     const mappedAudio = mapPresetAudio(frame, snapshot.beatPulse, snapshot.preset, params.intensity)
@@ -363,7 +424,11 @@ export class VisualStage {
     this.uniforms.uTreble.value = mappedAudio.treble
     this.uniforms.uEnergy.value = frame.energy
     this.uniforms.uBeat.value = mappedAudio.beat
-    this.uniforms.uPreset.value = snapshot.preset
+    const modern = ModernBackgrounds.supports(snapshot.preset)
+    this.uniforms.uPreset.value = modern ? 2 : snapshot.preset
+    this.modernBackgrounds.setPreset(snapshot.preset)
+    this.modernBackgrounds.group.visible = this.backgroundEnabled && modern
+    this.particles.visible = this.backgroundEnabled && !modern
     this.uniforms.uIntensity.value = params.intensity
     this.uniforms.uDepth.value = params.depth
     this.uniforms.uPointScale.value = params.pointScale
@@ -383,7 +448,7 @@ export class VisualStage {
     if (!previous || snapshot.preset !== previous.preset) {
       this.applyPresetProfile(snapshot.preset, Boolean(previous))
     }
-    this.bloomParticles.visible = params.bloomStrength > 0.01
+    this.bloomParticles.visible = !modern && params.bloomStrength > 0.01
     if (!previous || snapshot.coverUrl !== previous.coverUrl) this.loadCover(snapshot.coverUrl)
   }
 

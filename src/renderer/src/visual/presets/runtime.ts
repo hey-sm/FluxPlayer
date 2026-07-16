@@ -35,7 +35,7 @@ export function mapPresetAudio(
   preset: VisualPreset,
   intensity: number,
 ): PresetAudioFrame {
-  if (preset < 4) {
+  if (preset < 4 || preset >= 7) {
     return { bass: frame.bass, mid: frame.mid, treble: frame.treble, beat: beatPulse }
   }
 

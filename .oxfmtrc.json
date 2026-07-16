@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "singleQuote": true,
+  "printWidth": 110,
+  "trailingComma": "all",
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "src/renderer/src/visual/stage.ts",
+    "src/renderer/src/visual/shaders.ts",
+    "src/renderer/src/visual/lyrics3d/**",
+    "src/renderer/src/theme/classic/**",
+    "tests/fixtures/**",
+    "tests/unit/__snapshots__/**"
+  ]
+}

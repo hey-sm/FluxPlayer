@@ -28,15 +28,16 @@
   border-color: color-mix(in srgb, var(--flux-panel-border) 16%, transparent);
 }
 
-.flux-glass-card,
-.flux-glass-button,
-.flux-glass-input {
-  font-family: var(--flux-font-family);
-  font-size: calc(1em * var(--flux-font-scale));
-}
 
 @media (prefers-reduced-motion: reduce) {
   .flux-glass-surface--interactive {
     transition: none;
   }
+}
+
+.flux-liquid-glass { color: var(--flux-text); }
+.flux-liquid-glass > * { width: 100%; }
+.flux-liquid-glass__content { width: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .flux-liquid-glass { --glass-flexibility: 0; }
 }

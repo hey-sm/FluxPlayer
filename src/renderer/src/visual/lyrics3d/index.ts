@@ -21,6 +21,9 @@ interface RenderedLine {
   readonly relativeIndex: number
   readonly mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>
   readonly texture: THREE.CanvasTexture
+  readonly line: LyricLine
+  readonly canvas: HTMLCanvasElement
+  readonly accentColor: string
   opacity: number
   y: number
   scale: number
@@ -56,7 +59,7 @@ function fitFont(context: CanvasRenderingContext2D, text: string, maximum: numbe
 function makeLineTexture(
   entry: Readonly<Lyrics3DWindowEntry>,
   accentColor: string,
-): { texture: THREE.CanvasTexture; aspect: number } | null {
+): { texture: THREE.CanvasTexture; aspect: number; canvas: HTMLCanvasElement } | null {
   if (typeof document === 'undefined' || typeof document.createElement !== 'function') return null
 
   try {
@@ -96,7 +99,7 @@ function makeLineTexture(
     texture.wrapS = THREE.ClampToEdgeWrapping
     texture.wrapT = THREE.ClampToEdgeWrapping
     texture.needsUpdate = true
-    return { texture, aspect: canvas.width / canvas.height }
+    return { texture, aspect: canvas.width / canvas.height, canvas }
   } catch {
     return null
   }
@@ -162,6 +165,7 @@ export class Lyrics3DLayer {
     if (this.disposed || !this.group.visible || !Number.isFinite(deltaTime)) return
 
     for (const rendered of this.rendered) {
+      const wordScale = 1
       const distance = Math.abs(rendered.relativeIndex)
       const active = distance === 0
       const targetOpacity = active ? 0.98 : Math.max(0.1, 0.34 - distance * 0.09)
@@ -173,7 +177,7 @@ export class Lyrics3DLayer {
       rendered.scale = ease(rendered.scale, targetScale, 9, deltaTime)
       rendered.mesh.material.opacity = rendered.opacity
       rendered.mesh.position.y = rendered.y
-      rendered.mesh.scale.setScalar(rendered.scale)
+      rendered.mesh.scale.setScalar(rendered.scale * wordScale)
     }
   }
 
@@ -218,12 +222,16 @@ export class Lyrics3DLayer {
         relativeIndex: entry.relativeIndex,
         mesh,
         texture: renderedTexture.texture,
+        line: entry.line,
+        canvas: renderedTexture.canvas,
+        accentColor,
         opacity: 0,
         y: mesh.position.y,
         scale: mesh.scale.x,
       })
     }
   }
+
 
   private clearRenderedLines(): void {
     for (const rendered of this.rendered) {

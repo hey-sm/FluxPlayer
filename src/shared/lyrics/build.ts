@@ -1,6 +1,6 @@
 import type { LyricLine } from '../models'
 import { decodeQQLyric } from './qq'
-import { mergeLyricLines, parseLrc, parseYrc, type BuildLyricLinesOptions, type LegacyLyrics } from './parser'
+import { estimateWordTimings, mergeLyricLines, parseLrc, parseYrc, type BuildLyricLinesOptions, type LegacyLyrics } from './parser'
 
 function lyricString(value: unknown): string {
   return decodeQQLyric(value)
@@ -17,7 +17,7 @@ export function buildLyricLines(
   const translated = parseLrc(lyricString(legacy.tlyric), options)
   const hasOriginalText = original.some((line) => line.text.trim())
 
-  return mergeLyricLines(hasOriginalText ? original : translated, hasOriginalText ? translated : [], options)
+  return estimateWordTimings(mergeLyricLines(hasOriginalText ? original : translated, hasOriginalText ? translated : [], options))
 }
 
 /** Return a shallow copy with computed lines while preserving every raw legacy field verbatim. */

@@ -52,8 +52,14 @@ describe('LRC parsing', () => {
   it('parses enhanced NetEase YRC line and word timing', () => {
     const yrc = '[2000,1800](2000,400,0)你(2400,500,0)好\n[500,1000](500,500,0)开场'
     expect(parseYrc(yrc)).toEqual([
-      { time: 0.5, text: '开场' },
-      { time: 2, text: '你好' },
+      { time: 0.5, text: '开场', words: [
+        { text: '开', time: 0.5, duration: 0.25 },
+        { text: '场', time: 0.75, duration: 0.25 },
+      ] },
+      { time: 2, text: '你好', words: [
+        { text: '你', time: 2, duration: 0.4 },
+        { text: '好', time: 2.4, duration: 0.5 },
+      ] },
     ])
     expect(parseLyricText(yrc)).toEqual(parseYrc(yrc))
   })
@@ -107,16 +113,22 @@ describe('translation merging and legacy construction', () => {
     const result = withLyricLines(legacy, { tolerance: 0.25 })
     expect(result).toEqual({
       ...legacy,
-      lines: [{ time: 2, text: 'Hello', ttext: '你好' }],
+      lines: [{ time: 2, text: 'Hello', ttext: '你好', words: [
+        { text: 'H', time: 2, duration: 0.1 }, { text: 'e', time: 2.1, duration: 0.1 },
+        { text: 'l', time: 2.2, duration: 0.1 }, { text: 'l', time: 2.3, duration: 0.1 },
+        { text: 'o', time: 2.4, duration: 0.1 },
+      ] }],
     })
     expect(result.lyric).toBe(legacy.lyric)
     expect(result.yrc).toBe(legacy.yrc)
   })
 
   it('uses translated lyrics as readable text when the original is absent', () => {
-    expect(buildLyricLines({ lyric: '', tlyric: '[00:03]translated only', yrc: '' })).toEqual([
-      { time: 3, text: 'translated only' },
-    ])
+    const lines = buildLyricLines({ lyric: '', tlyric: '[00:03]translated only', yrc: '' })
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatchObject({ time: 3, text: 'translated only' })
+    expect(lines[0].words?.map((word) => word.text).join('')).toBe('translated only')
+    expect(lines[0].words?.every((word) => word.estimated)).toBe(true)
   })
 })
 

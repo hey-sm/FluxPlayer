@@ -1,9 +1,6 @@
-export type ThemePresetId = 'default-dark' | 'dense-fog' | 'clear-glass' | 'liquid-glass' | 'soft-white' | 'classic-gold'
+export type ThemePresetId = 'classic-gold'
 
-/**
- * Serializable theme values. CSS variables remain the rendering source of truth;
- * numeric fields intentionally stay unitless so settings controls can patch them.
- */
+/** Serializable classic-theme values consumed as CSS variables. */
 export interface ThemeVisualParams {
   background: string
   text: string

@@ -1,9 +1,9 @@
-import type { LyricLine } from '../models'
+import type { LyricLine, LyricWord } from '../models'
 
 const LRC_TIMESTAMP = /\[(?:(\d{1,2}):)?(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/g
 const INLINE_TIMESTAMP = /<(?:(\d{1,2}):)?\d+:\d{1,2}(?:[.:]\d{1,3})?>/g
 const YRC_LINE = /^\s*\[(\d+),(\d+)\](.*)$/
-const YRC_WORD = /\(\d+,\d+(?:,\d+)?\)/g
+const YRC_WORD = /\((\d+),(\d+)(?:,\d+)?\)([^()]*)/g
 const OFFSET_TAG = /\[offset\s*:\s*([+-]?\d+)\s*\]/gi
 
 export interface ParseLrcOptions {
@@ -44,9 +44,34 @@ function finiteOffset(value: number | undefined): number {
 }
 
 function sortLines(lines: Array<LyricLine & { order: number }>): LyricLine[] {
-  return lines
-    .sort((a, b) => a.time - b.time || a.order - b.order)
-    .map(({ time, text, ttext }) => (ttext === undefined ? { time, text } : { time, text, ttext }))
+  return lines.sort((a, b) => a.time - b.time || a.order - b.order).map(({ order: _order, ...line }) => line)
+}
+
+function graphemes(text: string): string[] {
+  if (typeof Intl.Segmenter === 'function') {
+    return [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map((part) => part.segment)
+  }
+  return Array.from(text)
+}
+
+export function estimateWordTimings(lines: readonly LyricLine[], fallbackDuration = 4): LyricLine[] {
+  return lines.map((line, index) => {
+    if (line.words?.length || !line.text) return { ...line, words: line.words?.map((word) => ({ ...word })) }
+    const segments = graphemes(line.text)
+    if (!segments.length) return { ...line }
+    const nextTime = lines[index + 1]?.time
+    const duration = Math.max(0.4, Number.isFinite(nextTime) ? Number(nextTime) - line.time : fallbackDuration)
+    const weights = segments.map((value) => (/^\s|[，。！？、,.!?]$/.test(value) ? 0.45 : 1))
+    const total = weights.reduce((sum, value) => sum + value, 0)
+    let cursor = line.time
+    const words = segments.map((text, wordIndex): LyricWord => {
+      const wordDuration = duration * weights[wordIndex] / total
+      const word = { text, time: cursor, duration: wordDuration, estimated: true as const }
+      cursor += wordDuration
+      return word
+    })
+    return { ...line, words }
+  })
 }
 
 /**
@@ -94,8 +119,24 @@ export function parseYrc(input: unknown, options: ParseLrcOptions = {}): LyricLi
     const match = row.match(YRC_LINE)
     if (!match) continue
     const time = Math.max(0, Number(match[1]) / 1000 + offsetSeconds)
-    const text = match[3].replace(YRC_WORD, '').trim()
-    parsed.push({ time, text, order })
+    const words: LyricWord[] = []
+    YRC_WORD.lastIndex = 0
+    let wordMatch: RegExpExecArray | null
+    while ((wordMatch = YRC_WORD.exec(match[3]))) {
+      const text = wordMatch[3]
+      if (!text) continue
+      const tokenTime = Math.max(0, Number(wordMatch[1]) / 1000 + offsetSeconds)
+      const tokenDuration = Math.max(0, Number(wordMatch[2]) / 1000)
+      const characters = graphemes(text)
+      const characterDuration = characters.length ? tokenDuration / characters.length : tokenDuration
+      characters.forEach((character, characterIndex) => words.push({
+        text: character,
+        time: tokenTime + characterDuration * characterIndex,
+        duration: characterDuration,
+      }))
+    }
+    const text = words.length ? words.map((word) => word.text).join('').trim() : match[3].replace(YRC_WORD, '').trim()
+    parsed.push({ time, text, ...(words.length ? { words } : {}), order })
     order += 1
   }
 

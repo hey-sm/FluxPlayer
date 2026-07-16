@@ -83,10 +83,18 @@ export interface SongUrlResult {
   [key: string]: unknown
 }
 
+export interface LyricWord {
+  text: string
+  time: number
+  duration: number
+  estimated?: boolean
+}
+
 export interface LyricLine {
   time: number
   text: string
   ttext?: string
+  words?: LyricWord[]
 }
 
 export interface LyricDoc {

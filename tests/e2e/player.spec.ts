@@ -105,6 +105,33 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
     rendererCrashed: false,
   })
 
+  const shellLayout = await page.evaluate(() => {
+    const topbar = document.querySelector<HTMLElement>('.topbar')!
+    const library = document.querySelector<HTMLElement>('.flux-library-sheet')!
+    const topbarRect = topbar.getBoundingClientRect()
+    const libraryRect = library.getBoundingClientRect()
+    return {
+      topbarBackground: getComputedStyle(topbar).backgroundColor,
+      topbarBottom: topbarRect.bottom,
+      libraryTop: libraryRect.top,
+      libraryBottom: libraryRect.bottom,
+      viewportHeight: window.innerHeight,
+    }
+  })
+  expect(shellLayout.topbarBackground).toBe('rgba(0, 0, 0, 0)')
+  expect(shellLayout.libraryTop).toBeCloseTo(shellLayout.topbarBottom, 0)
+  expect(shellLayout.libraryBottom).toBeCloseTo(shellLayout.viewportHeight, 0)
+
+  await page.getByRole('button', { name: '设置' }).click()
+  const motionSelect = page.getByRole('combobox', { name: '界面动效' })
+  await expect(motionSelect).toBeVisible()
+  await expect(motionSelect).toHaveJSProperty('tagName', 'BUTTON')
+  await motionSelect.click()
+  await expect(page.getByRole('option', { name: '弹性浮现' })).toBeVisible()
+  await expect(page.locator('.glass-select-content .flux-liquid-glass')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: '关闭' }).click()
+
   await page.getByPlaceholder(/搜索歌曲/).fill('M6 E2E')
   const searchResults = page.getByRole('region', { name: '搜索结果' })
   const song = searchResults.getByText(TRACK.name, { exact: true })
@@ -113,8 +140,15 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
 
   await song.click()
   await expect(page.getByText(`${TRACK.name} — ${TRACK.artist}`, { exact: true })).toBeVisible()
-  await expect(page.getByText('音质：E2E WAV', { exact: true })).toBeVisible()
+  await expect(page.getByText('音质：E2E WAV', { exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '暂停' })).toBeVisible()
+  const playerAlignment = await page.evaluate(() => {
+    const quality = document.querySelector<HTMLElement>('.quality-trigger')!.getBoundingClientRect()
+    const info = document.querySelector<HTMLElement>('.playerbar .info')!.getBoundingClientRect()
+    const progress = document.querySelector<HTMLElement>('.playerbar .progress')!.getBoundingClientRect()
+    return [quality, info, progress].map((rect) => rect.top + rect.height / 2)
+  })
+  expect(Math.max(...playerAlignment) - Math.min(...playerAlignment)).toBeLessThan(1)
 
   await expect.poll(async () => (await inspectTrackedAudio(page)).exists).toBe(true)
   await expect.poll(async () => (await inspectTrackedAudio(page)).paused).toBe(false)
@@ -142,7 +176,7 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   expect(intercepted.audio.length).toBeGreaterThanOrEqual(1)
   expect(rendererCrashes).toEqual([])
 
-  await page.getByTitle('关闭', { exact: true }).click()
+  await page.getByRole('button', { name: '关闭', exact: true }).click()
   const exit = await electronHarness.waitForExit()
   expect(exit.signal).toBeNull()
   expect(exit.code).toBe(0)

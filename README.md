@@ -3,7 +3,7 @@
 沉浸式桌面音乐播放器 —— Mineradio v1.1.1 的工程化重构版（React 重写，strangler 迁移完成后的独立仓库）。
 
 - 版本：`2.0.0-alpha.1` · 许可证：GPL-3.0 · 平台：Windows（NSIS 安装包）
-- 技术栈：electron-vite 5 · Electron 42 · React 19 · TypeScript · zustand · TanStack Query · Hono（本地 API 服务）· three 0.128.0
+- 技术栈：electron-vite 5 · Electron 42 · React 19 · TypeScript · zustand · TanStack Query · Hono（本地 API 服务）· three 0.185.1
 
 详细架构说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
@@ -48,7 +48,7 @@ pnpm dev              # 开发模式（main/preload/renderer 三端 HMR + 本地
 pnpm typecheck        # node + web 双 tsconfig 类型检查
 pnpm test             # vitest 单测
 pnpm test:e2e         # 构建后跑 Playwright E2E
-pnpm lint             # eslint
+pnpm lint             # oxlint
 pnpm build            # electron-vite 构建到 out/
 pnpm smoke            # 冒烟：沙盒启动 → 窗口加载 + /api/app/version 自检 → 自动退出
 pnpm build:win        # NSIS 安装包（dist/）
@@ -88,4 +88,4 @@ node node_modules/electron/install.js
 
 ## 贡献须知
 
-改代码前请先读 [CLAUDE.md](CLAUDE.md) 的"铁律"一节：粒子舞台 shader、3D 歌词、经典玻璃质感为逐字节搬迁的核心资产禁止重构；渲染层动画必须走全局 Ticker；three 锁 0.128.0；preload 必须 CJS。工作单元的完成定义（DoD）：typecheck → test → 标准模式冒烟 → code review → 小步提交。
+改代码前请先读 [CLAUDE.md](CLAUDE.md) 的"铁律"一节：粒子舞台 shader、3D 歌词、经典玻璃质感为逐字节搬迁的核心资产禁止重构；渲染层动画必须走全局 Ticker；three 锁 0.185.1；preload 必须 CJS。工作单元的完成定义（DoD，按改动范围分级）：typecheck + test 每次必做；动了 main/preload/server/shared 或构建配置再跑标准模式冒烟；非平凡 diff 做 code review；小步提交。

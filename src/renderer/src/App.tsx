@@ -17,13 +17,20 @@ import {
   start as startVisualAudio,
   stop as stopVisualAudio,
 } from './visual/audio'
-import { Glass } from './components/glass'
+import { Alert, AlertDescription } from './components/ui/alert'
+import { Card } from './components/ui/card'
+import { Input } from './components/ui/input'
+import { GlassSelect } from './components/ui/glass-select'
+import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs'
+import { AppTopBar, type ActiveSheet } from './components/shell/AppTopBar'
+import { LibrarySheet } from './components/shell/LibrarySheet'
+import { PlaylistDetailSheet } from './components/shell/PlaylistDetailSheet'
+import { SettingsDialog } from './components/shell/SettingsDialog'
 import {
   CLASSIC_GLASS_CSS_VARIABLES,
   CLASSIC_GLASS_FILTER_ID,
   CLASSIC_GLASS_FILTER_SVG,
   CLASSIC_GLASS_MAP_ID,
-  THEME_PRESET_LIST,
   createClassicGlassDisplacementSvg,
   useThemeStore,
 } from './theme'
@@ -37,7 +44,7 @@ import {
 import { useLyrics } from './features/lyrics'
 import { SystemMaintenancePanel } from './features/system/SystemMaintenancePanel'
 import { fetchLikedTracks, readRecentPlays, recordRecentPlay, subscribeRecentPlays } from './features/library'
-import { NextIcon, PauseIcon, PlayIcon, PreviousIcon, RepeatIcon, RepeatOneIcon, SettingsIcon, ShuffleIcon } from './components/Icons'
+import { NextIcon, PauseIcon, PlayIcon, PreviousIcon, RepeatIcon, RepeatOneIcon, ShuffleIcon } from './components/Icons'
 
 function formatTime(sec: number): string {
   if (!Number.isFinite(sec) || sec <= 0) return '0:00'
@@ -126,38 +133,6 @@ function AccountArea({ provider }: { provider: ProviderId }) {
   )
 }
 
-interface ThemeRangeProps {
-  label: string
-  value: number
-  min: number
-  max: number
-  step: number
-  suffix?: string
-  onChange(value: number): void
-}
-
-function ThemeRange({ label, value, min, max, step, suffix = '', onChange }: ThemeRangeProps) {
-  return (
-    <label className="theme-range">
-      <span>
-        {label}
-        <output>
-          {Number.isInteger(step) ? Math.round(value) : value.toFixed(step < 0.1 ? 2 : 1)}
-          {suffix}
-        </output>
-      </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  )
-}
-
 function ThemePanel({
   open,
   onClose,
@@ -191,78 +166,60 @@ function ThemePanel({
   motionStyle: string
   onMotionStyleChange(style: string): void
 }) {
-  const { selectedPresetId, visualParams, customized, selectPreset, patchVisualParams, reset } =
-    useThemeStore()
   const [activeTab, setActiveTab] = useState<'appearance' | 'system'>('appearance')
   if (!open) return null
 
-  const gpuHeavy = visualParams.distortion > 0 || visualParams.chromaticAberration > 0
   const activeVisualPreset = VISUAL_PRESET_BY_ID.get(visualPreset)
   return (
-    <div
-      className="settings-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
-      }}
-    >
-      <div className={`theme-panel-shell${activeTab === 'system' ? ' theme-panel-shell--wide' : ''}`} role="dialog" aria-modal="true" aria-label="设置">
-        <Glass.Card className="theme-panel" avoidSvgCreation>
+    <SettingsDialog open={open} wide={activeTab === 'system'} onOpenChange={(nextOpen) => { if (!nextOpen) onClose() }}>
+      <Card className="theme-panel border-0 bg-transparent shadow-none">
           <header>
             <div>
               <strong>主题设置</strong>
               <p>主题变量会实时应用并自动保存。</p>
             </div>
-            <button type="button" className="settings-close" aria-label="关闭主题设置" onClick={onClose}>
-              ✕
-            </button>
           </header>
-          <nav className="settings-tabs" aria-label="设置分类">
-            <button type="button" className={activeTab === 'appearance' ? 'active' : ''} onClick={() => setActiveTab('appearance')}>外观</button>
-            <button type="button" className={activeTab === 'system' ? 'active' : ''} onClick={() => setActiveTab('system')}>系统</button>
-          </nav>
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)}>
+          <TabsList className="settings-tabs" aria-label="设置分类">
+            <TabsTrigger value="appearance">外观</TabsTrigger>
+            <TabsTrigger value="system">系统</TabsTrigger>
+          </TabsList>
 
           {activeTab === 'appearance' ? <>
-          <label className="theme-field">
+          <div className="theme-field">
             <span>界面动效</span>
-            <select value={motionStyle} onChange={(event) => onMotionStyleChange(event.target.value)}>
-              <option value="glide">丝滑滑入</option><option value="spring">弹性浮现</option><option value="fade">柔和淡入</option><option value="scale">景深缩放</option>
-            </select>
+            <GlassSelect
+              value={motionStyle}
+              ariaLabel="界面动效"
+              className="theme-select-trigger"
+              contentClassName="theme-select-menu"
+              options={[
+                { value: 'glide', label: '丝滑滑入' },
+                { value: 'spring', label: '弹性浮现' },
+                { value: 'fade', label: '柔和淡入' },
+                { value: 'scale', label: '景深缩放' },
+              ]}
+              onValueChange={onMotionStyleChange}
+            />
             <small>统一应用于搜索、歌单、歌曲列表和列表项目。</small>
-          </label>
+          </div>
 
-          <label className="theme-field">
-            <span>预设{customized ? ' · 已自定义' : ''}</span>
-            <select
-              value={selectedPresetId}
-              onChange={(event) => selectPreset(event.target.value as typeof selectedPresetId)}
-            >
-              {THEME_PRESET_LIST.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="theme-field">
+          <div className="theme-field">
             <span>音乐视觉</span>
-            <select
-              value={visualPreset}
-              onChange={(event) => onVisualPresetChange(Number(event.target.value) as VisualPreset)}
-            >
-              {VISUAL_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
+            <GlassSelect
+              value={String(visualPreset)}
+              ariaLabel="音乐视觉"
+              className="theme-select-trigger"
+              contentClassName="theme-select-menu"
+              options={VISUAL_PRESETS.map((preset) => ({ value: String(preset.id), label: preset.label }))}
+              onValueChange={(value) => onVisualPresetChange(Number(value) as VisualPreset)}
+            />
             <small>{activeVisualPreset?.description}</small>
-          </label>
+          </div>
 
           <section className="custom-background-settings" aria-label="自定义背景">
             <div className="custom-background-heading">
-              <span><strong>自定义背景</strong><small>图片或静音循环视频，视觉舞台始终保留</small></span>
+              <span><strong>自定义背景</strong><small>图片或静音循环视频；启用后替换音乐视觉并保留 3D 歌词</small></span>
               {customBackground ? <em>{customBackground.source === 'wallpaper-engine' ? 'Wallpaper Engine' : '本地文件'}</em> : null}
             </div>
             <div className="custom-background-current">{customBackground ? customBackground.name : '当前使用主题视觉背景'}</div>
@@ -272,154 +229,19 @@ function ThemePanel({
               <button type="button" disabled={backgroundBusy} onClick={onChooseWallpaperEngine}>手选 WE 项目</button>
               {customBackground ? <button type="button" disabled={backgroundBusy} onClick={onClearBackground}>清除</button> : null}
             </div>
-            {wallpaperProjects.length ? <div className="wallpaper-project-list">{wallpaperProjects.map((project) => (
+            {wallpaperProjects.length ? <div className="wallpaper-project-list" data-scroll-region>{wallpaperProjects.map((project) => (
               <button type="button" key={project.id} disabled={backgroundBusy} onClick={() => onImportWallpaperEngine(project.id)}>
                 <span className="wallpaper-project-preview">{project.previewUrl ? <img src={project.previewUrl} alt="" loading="lazy" /> : null}</span>
                 <span className="wallpaper-project-title">{project.title}<small>视频</small></span>
               </button>
             ))}</div> : null}
-            {backgroundError ? <p className="custom-background-error" role="alert">{backgroundError}</p> : null}
+            {backgroundError ? <Alert variant="destructive" className="custom-background-error"><AlertDescription>{backgroundError}</AlertDescription></Alert> : null}
           </section>
 
-          <label className="theme-field theme-color">
-            <span>强调色</span>
-            <span>
-              <input
-                type="color"
-                value={visualParams.accent}
-                onChange={(event) => patchVisualParams({ accent: event.target.value })}
-              />
-              <code>{visualParams.accent}</code>
-            </span>
-          </label>
-
-          <div className="theme-grid">
-            <ThemeRange
-              label="模糊"
-              value={visualParams.blur}
-              min={0}
-              max={40}
-              step={1}
-              suffix="px"
-              onChange={(blur) => patchVisualParams({ blur })}
-            />
-            <ThemeRange
-              label="饱和度"
-              value={visualParams.saturation}
-              min={80}
-              max={180}
-              step={1}
-              suffix="%"
-              onChange={(saturation) => patchVisualParams({ saturation })}
-            />
-            <ThemeRange
-              label="透明度"
-              value={visualParams.backgroundOpacity}
-              min={0.2}
-              max={1}
-              step={0.01}
-              onChange={(backgroundOpacity) => patchVisualParams({ backgroundOpacity })}
-            />
-            <ThemeRange
-              label="边框"
-              value={visualParams.borderOpacity}
-              min={0}
-              max={0.4}
-              step={0.01}
-              onChange={(borderOpacity) => patchVisualParams({ borderOpacity })}
-            />
-            <ThemeRange
-              label="圆角"
-              value={visualParams.radius}
-              min={0}
-              max={50}
-              step={1}
-              suffix="px"
-              onChange={(radius) => patchVisualParams({ radius })}
-            />
-            <ThemeRange
-              label="字号"
-              value={visualParams.fontScale}
-              min={0.8}
-              max={1.4}
-              step={0.05}
-              suffix="×"
-              onChange={(fontScale) => patchVisualParams({ fontScale })}
-            />
-            <ThemeRange
-              label="扭曲"
-              value={visualParams.distortion}
-              min={0}
-              max={100}
-              step={1}
-              onChange={(distortion) => patchVisualParams({ distortion })}
-            />
-            <ThemeRange
-              label="色散"
-              value={visualParams.chromaticAberration}
-              min={0}
-              max={20}
-              step={1}
-              onChange={(chromaticAberration) => patchVisualParams({ chromaticAberration })}
-            />
-          </div>
-
-          <label className="theme-field">
-            <span>字体</span>
-            <select
-              value={visualParams.fontFamily}
-              onChange={(event) => patchVisualParams({ fontFamily: event.target.value })}
-            >
-              <option value="'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif">系统默认</option>
-              <option value="'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif">微软雅黑</option>
-              <option value="Inter, 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif">
-                Inter / Segoe UI
-              </option>
-            </select>
-          </label>
-
-          {gpuHeavy ? (
-            <p className="gpu-hint">
-              扭曲或色散会为紧凑卡片启用 SVG 滤镜，可能增加 GPU 开销；大面积表面不受影响。
-            </p>
-          ) : null}
-          <footer>
-            <button type="button" onClick={reset}>
-              重置默认主题
-            </button>
-          </footer>
           </> : <SystemMaintenancePanel />}
-        </Glass.Card>
-      </div>
-    </div>
-  )
-}
-
-function TopBar({
-  settingsOpen,
-  onToggleSettings,
-}: {
-  settingsOpen: boolean
-  onToggleSettings: () => void
-}) {
-  const { data: version } = useQuery({
-    queryKey: ['app-version'],
-    queryFn: () => apiJson<{ version: string }>('/api/app/version'),
-  })
-  const desktop = window.fluxDesktop
-  return (
-    <div className="topbar glass-surface">
-      <img className="brand-logo" src="/favicon.svg" alt="" />
-      <span className="brand">FLUXPLAYER</span>
-      <span className="badge">v{version?.version || '…'}</span>
-      <div className="spacer" />
-      <button className={`settings-toggle${settingsOpen ? ' active' : ''}`} title="主题设置" aria-label="主题设置" aria-pressed={settingsOpen} onClick={onToggleSettings}><SettingsIcon /></button>
-      {desktop ? <>
-        <button title="最小化" aria-label="最小化" onClick={() => desktop.minimize()}>—</button>
-        <button title="全屏" aria-label="全屏" onClick={() => desktop.toggleFullscreen()}>▢</button>
-        <button className="close" title="关闭" aria-label="关闭" onClick={() => desktop.close()}>✕</button>
-      </> : null}
-    </div>
+          </Tabs>
+      </Card>
+    </SettingsDialog>
   )
 }
 
@@ -517,6 +339,61 @@ function useClassicControlGlass(
   return controlRef
 }
 
+
+const QUALITY_LABELS: Readonly<Record<QualityLevel, string>> = {
+  standard: '标准',
+  exhigh: '极高',
+  lossless: '无损',
+  hires: 'Hi-Res',
+  jymaster: '臻品',
+}
+
+function QualityMenu({
+  provider,
+  preference,
+  resolved,
+  onChange,
+}: {
+  provider: ProviderId
+  preference: QualityLevel
+  resolved: QualityLevel | null
+  onChange(value: QualityLevel): Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const options: readonly QualityLevel[] = provider === 'qq'
+    ? ['hires', 'lossless', 'exhigh', 'standard']
+    : ['jymaster', 'hires', 'lossless', 'exhigh', 'standard']
+  const actual = resolved ?? preference
+
+  return (
+    <GlassSelect
+      value={preference}
+      ariaLabel="选择播放音质"
+      title={`当前音质：${QUALITY_LABELS[actual]}`}
+      disabled={busy}
+      side="top"
+      className="quality-trigger"
+      contentClassName="quality-menu"
+      options={options.map((quality) => ({
+        value: quality,
+        label: QUALITY_LABELS[quality],
+        trailing: actual === quality ? '当前' : undefined,
+      }))}
+      renderValue={() => (
+        <>
+          {QUALITY_LABELS[actual]}
+          {!resolved ? <small>待确认</small> : resolved !== preference ? <small>已降档</small> : null}
+        </>
+      )}
+      onValueChange={(value) => {
+        if (busy) return
+        setBusy(true)
+        void onChange(value as QualityLevel).finally(() => setBusy(false))
+      }}
+    />
+  )
+}
+
 function PlayerBar() {
   const {
     current,
@@ -548,6 +425,11 @@ function PlayerBar() {
   const hasQueue = queue.length > 0
   const nextMode = mode === 'sequence' ? 'repeat-one' : mode === 'repeat-one' ? 'shuffle' : 'sequence'
   const modeLabel = mode === 'sequence' ? '列表循环' : mode === 'repeat-one' ? '单曲循环' : '随机播放'
+  const playerMessage = status === 'loading'
+    ? '取链中…'
+    : message.startsWith('音质：')
+      ? ''
+      : message
   return (
     <div
       ref={controlGlassRef}
@@ -569,39 +451,26 @@ function PlayerBar() {
       >
         {mode === 'sequence' ? <RepeatIcon /> : mode === 'repeat-one' ? <RepeatOneIcon /> : <ShuffleIcon />}
       </button>
-      <label className="quality-control" title="播放音质">
-        <span>{resolvedQuality && resolvedQuality !== qualityPreference ? '实际' : '音质'}</span>
-        <select
-          value={qualityPreference}
-          aria-label="播放音质"
-          onChange={(event) => void setQualityPreference(event.target.value as QualityLevel)}
-        >
-          {current.provider === 'qq' ? (
-            <>
-              <option value="hires">Hi-Res</option><option value="lossless">无损</option>
-              <option value="exhigh">极高</option><option value="standard">标准</option>
-            </>
-          ) : (
-            <>
-              <option value="jymaster">臻品</option><option value="hires">Hi-Res</option>
-              <option value="lossless">无损</option><option value="exhigh">极高</option><option value="standard">标准</option>
-            </>
-          )}
-        </select>
-        {resolvedQuality && resolvedQuality !== qualityPreference ? <em>{resolvedQuality === 'standard' ? '标准' : resolvedQuality === 'exhigh' ? '极高' : resolvedQuality === 'lossless' ? '无损' : resolvedQuality === 'hires' ? 'Hi-Res' : '臻品'}</em> : null}
-      </label>
+      <QualityMenu
+        provider={current.provider}
+        preference={qualityPreference}
+        resolved={resolvedQuality}
+        onChange={setQualityPreference}
+      />
       <div className="info">
         <div className="name">
           {current.name} — {current.artist}
         </div>
-        <div className={`status${status === 'error' ? ' error' : ''}`}>
-          <span>{status === 'loading' ? '取链中…' : message || status}</span>
-          {status === 'error' ? (
-            <button type="button" className="retry-source" onClick={() => void retryWithAlternateSource()}>
-              换源重试
-            </button>
-          ) : null}
-        </div>
+        {playerMessage || status === 'error' ? (
+          <div className={`status${status === 'error' ? ' error' : ''}`}>
+            <span>{playerMessage || '播放失败'}</span>
+            {status === 'error' ? (
+              <button type="button" className="retry-source" onClick={() => void retryWithAlternateSource()}>
+                换源重试
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <div
         className="progress"
@@ -618,6 +487,8 @@ function PlayerBar() {
     </div>
   )
 }
+
+type BackgroundMode = 'visual' | 'wallpaper'
 
 const VISUAL_PRESET_KEY = 'fluxplayer-visual-preset-v1'
 
@@ -696,15 +567,26 @@ const SHELF_DETAIL_ROW_HEIGHT = 58
 
 function ShelfDetailPanel({
   detail,
-  onClose,
   onPlay,
 }: {
   detail: ShelfPlaylistDetail
-  onClose(): void
   onPlay(songs: readonly UnifiedSong[], index: number): void
 }) {
   const [scrollTop, setScrollTop] = useState(0)
-  const viewportHeight = Math.max(220, window.innerHeight - 190)
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const [viewportHeight, setViewportHeight] = useState(() => Math.max(220, window.innerHeight - 150))
+
+  useEffect(() => {
+    if (detail.tracks.length === 0) return
+    const list = listRef.current
+    if (!list) return
+    const syncViewportHeight = (): void => setViewportHeight(Math.max(1, list.clientHeight))
+    syncViewportHeight()
+    const resizeObserver = new ResizeObserver(syncViewportHeight)
+    resizeObserver.observe(list)
+    return () => resizeObserver.disconnect()
+  }, [detail.tracks.length])
+
   const windowSlice = useMemo(
     () =>
       calculateWindow(
@@ -733,9 +615,6 @@ function ShelfDetailPanel({
             {detail.playlist.trackCount} 首
           </small>
         </div>
-        <button type="button" aria-label="关闭歌单详情" onClick={onClose}>
-          ✕
-        </button>
       </header>
       {detail.status === 'loading' ? <div className="shelf-detail-status">正在加载歌曲…</div> : null}
       {detail.status === 'error' ? (
@@ -748,8 +627,9 @@ function ShelfDetailPanel({
       ) : null}
       {detail.tracks.length > 0 ? (
         <div
+          ref={listRef}
           className="shelf-detail-list"
-          style={{ height: viewportHeight }}
+          data-scroll-region
           onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
         >
           <div aria-hidden="true" style={{ height: windowSlice.offsetTop }} />
@@ -792,16 +672,14 @@ export default function App() {
   const [provider, setProvider] = useState<ProviderId>(() => readProviderOrder()[0])
   const [searchOpen, setSearchOpen] = useState(false)
   const [draggedProvider, setDraggedProvider] = useState<ProviderId | null>(null)
-  const [libraryOpen, setLibraryOpen] = useState(true)
-  const [detailOpen, setDetailOpen] = useState(false)
+  const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null)
   const [motionStyle, setMotionStyle] = useState(() => localStorage.getItem('flux-ui-motion') || 'glide')
   const [customBackground, setCustomBackground] = useState<CustomBackground | null>(null)
+  const [backgroundMediaFailed, setBackgroundMediaFailed] = useState(false)
   const [backgroundBusy, setBackgroundBusy] = useState(false)
   const [backgroundError, setBackgroundError] = useState('')
   const [wallpaperProjects, setWallpaperProjects] = useState<WallpaperEngineProject[]>([])
   const [recentTracks, setRecentTracks] = useState<UnifiedSong[]>([])
-  const libraryCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const detailCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const debouncedKeyword = useDebounced(keyword.trim(), 320)
   const inputRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -991,6 +869,7 @@ export default function App() {
   const openLibraryTracks = useCallback((title: string, tracks: UnifiedSong[], tag: string) => {
     const playlist: UnifiedPlaylist = { id: `flux:${tag}`, name: title, cover: tracks[0]?.cover || '', trackCount: tracks.length, tag }
     setShelfDetail({ provider, identityToken: activeIdentity || 'guest', playlist, tracks, status: 'success' })
+    setActiveSheet('detail')
   }, [activeIdentity, provider])
 
   const openLikedTracks = useCallback(() => {
@@ -998,6 +877,7 @@ export default function App() {
     const generation = ++shelfRequestGeneration.current
     const placeholder: UnifiedPlaylist = { id: 'flux:liked', name: '我的喜欢', cover: '', trackCount: 0 }
     setShelfDetail({ provider, identityToken: activeIdentity, playlist: placeholder, tracks: [], status: 'loading' })
+    setActiveSheet('detail')
     void fetchLikedTracks(provider, { limit: 200 }).then((result) => {
       if (generation === shelfRequestGeneration.current) openLibraryTracks('我的喜欢', result.tracks, '平台收藏')
     }).catch((error: unknown) => {
@@ -1006,10 +886,6 @@ export default function App() {
   }, [activeIdentity, openLibraryTracks, provider, shelfLoggedIn])
 
   const openRecentTracks = useCallback(() => openLibraryTracks('最近播放', recentTracks, 'FluxPlayer 记录'), [openLibraryTracks, recentTracks])
-
-  useEffect(() => {
-    if (playerStatus === 'playing') queueMicrotask(() => setLibraryOpen(false))
-  }, [playerStatus])
 
   // 启动时并发拉两个登录态
   useEffect(() => {
@@ -1043,6 +919,10 @@ export default function App() {
     void desktop.getCustomBackground().then((result) => { if (result.ok) setCustomBackground(result.background) })
     return desktop.onCustomBackgroundChanged((result) => { if (result.ok) setCustomBackground(result.background) })
   }, [])
+
+  useEffect(() => {
+    setBackgroundMediaFailed(false)
+  }, [customBackground?.url])
 
   useEffect(() => {
     try {
@@ -1162,26 +1042,6 @@ export default function App() {
     }
   }, [])
 
-  const revealLibrary = (): void => {
-    if (libraryCloseTimer.current) clearTimeout(libraryCloseTimer.current)
-    setLibraryOpen(true)
-  }
-  const scheduleLibraryClose = (): void => {
-    if (libraryCloseTimer.current) clearTimeout(libraryCloseTimer.current)
-    libraryCloseTimer.current = setTimeout(() => setLibraryOpen(false), 2000)
-  }
-  const revealDetail = (): void => {
-    if (detailCloseTimer.current) clearTimeout(detailCloseTimer.current)
-    setDetailOpen(true)
-  }
-  const scheduleDetailClose = (): void => {
-    if (detailCloseTimer.current) clearTimeout(detailCloseTimer.current)
-    detailCloseTimer.current = setTimeout(() => setDetailOpen(false), 2000)
-  }
-  const closeDetailImmediately = (): void => {
-    if (detailCloseTimer.current) clearTimeout(detailCloseTimer.current)
-    setDetailOpen(false)
-  }
   const dropProvider = (target: ProviderId): void => {
     if (!draggedProvider || draggedProvider === target) return
     setProviderOrder(() => [target, draggedProvider])
@@ -1196,6 +1056,7 @@ export default function App() {
       if (!result || result.canceled) return
       if (!result.ok) throw new Error(result.error || '背景导入失败')
       setCustomBackground(result.background)
+      setBackgroundMediaFailed(false)
       setWallpaperProjects([])
     } catch (error) {
       setBackgroundError(error instanceof Error ? error.message : '背景导入失败')
@@ -1221,18 +1082,19 @@ export default function App() {
     }
   }, [])
 
+  const backgroundMode: BackgroundMode = customBackground && !backgroundMediaFailed ? 'wallpaper' : 'visual'
+
   return (
-    <div className={`app motion-${motionStyle}`}>
-      {/* 自定义媒体只作为舞台底图；视觉舞台始终开启。 */}
-      {customBackground ? <div className="custom-background-layer" aria-hidden="true">
-        {customBackground.kind === 'video' ? <video key={customBackground.url} src={customBackground.url} muted loop autoPlay playsInline /> : <img src={customBackground.url} alt="" />}
+    <div className={`app motion-${motionStyle}`} data-background-mode={backgroundMode}>
+      {backgroundMode === 'wallpaper' && customBackground ? <div className="custom-background-layer" aria-hidden="true">
+        {customBackground.kind === 'video'
+          ? <video key={customBackground.url} src={customBackground.url} muted loop autoPlay playsInline onError={() => { setBackgroundMediaFailed(true); setBackgroundError('背景视频加载失败，已恢复音乐视觉。') }} />
+          : <img key={customBackground.url} src={customBackground.url} alt="" onError={() => { setBackgroundMediaFailed(true); setBackgroundError('背景图片加载失败，已恢复音乐视觉。') }} />}
       </div> : null}
-      <StageCanvas className="stage-bg" preset={visualPreset} />
-      <TopBar
+      <StageCanvas className="stage-bg" preset={visualPreset} backgroundEnabled={backgroundMode === 'visual'} />
+      <AppTopBar
         settingsOpen={settingsOpen}
-        onToggleSettings={() => {
-          setSettingsOpen((open) => !open)
-        }}
+        onToggleSettings={() => { setActiveSheet(null); setSettingsOpen((open) => !open) }}
       />
       <ThemePanel
         open={settingsOpen}
@@ -1251,25 +1113,24 @@ export default function App() {
         motionStyle={motionStyle}
         onMotionStyleChange={(style) => { setMotionStyle(style); localStorage.setItem('flux-ui-motion', style) }}
       />
-      <div className={`detail-edge${detailOpen ? ' open' : ''}`} onPointerEnter={revealDetail} onPointerLeave={scheduleDetailClose}>
+      <PlaylistDetailSheet
+        open={activeSheet === 'detail'}
+        available={Boolean(shelfDetail)}
+        onOpenChange={(open) => setActiveSheet(open ? 'detail' : null)}
+      >
       {shelfDetail &&
       shelfDetail.provider === provider &&
       shelfDetail.identityToken === (activeIdentity || 'guest') ? (
         <ShelfDetailPanel
           key={`${shelfDetail.provider}:${shelfDetail.playlist.id}`}
           detail={shelfDetail}
-          onClose={closeShelfDetail}
-          onPlay={(tracks, startIndex) => { void setQueue([...tracks], startIndex); closeDetailImmediately() }}
+          onPlay={(tracks, startIndex) => { void setQueue([...tracks], startIndex) }}
         />
-      ) : null}
-      </div>
+      ) : <div className="shelf-detail-status">请先从音乐库选择歌单</div>}
+      </PlaylistDetailSheet>
       <StageLyricsSynchronizer />
-      <div
-        className={`library-edge${libraryOpen ? ' open' : ''}`}
-        onPointerEnter={revealLibrary}
-        onPointerLeave={scheduleLibraryClose}
-      >
-        <aside className="library-drawer glass-surface" aria-label="用户音乐库">
+      <LibrarySheet>
+        <aside className="library-drawer" aria-label="用户音乐库">
           <div className="library-provider-tabs" role="tablist" aria-label="音乐平台">
             {(['netease', 'qq'] as const).map((item) => (
               <button key={item} role="tab" aria-selected={provider === item} className={provider === item ? 'active' : ''} onClick={() => { setProvider(item); closeShelfDetail() }}>
@@ -1283,8 +1144,8 @@ export default function App() {
             <button type="button" disabled={recentTracks.length === 0} onClick={openRecentTracks}><strong>最近播放</strong><small>{recentTracks.length ? `${recentTracks.length} 首` : '暂无记录'}</small></button>
           </div>
           {shelfPlaylistsQuery.isFetching ? <div className="library-shelf-sync">正在同步歌单…</div> : null}
-          <div className="library-playlist-list">{shelfPlaylists.map((playlist, index) => (
-            <button key={String(playlist.id)} type="button" className={String(shelfDetail?.playlist.id) === String(playlist.id) ? 'active' : ''} onClick={() => { localStorage.setItem(`flux-last-playlist:${provider}:${activeIdentity}`, String(playlist.id)); setDetailOpen(true); handleShelfAction(index) }}>
+          <div className="library-playlist-list" data-scroll-region>{shelfPlaylists.map((playlist, index) => (
+            <button key={String(playlist.id)} type="button" className={String(shelfDetail?.playlist.id) === String(playlist.id) ? 'active' : ''} onClick={() => { localStorage.setItem(`flux-last-playlist:${provider}:${activeIdentity}`, String(playlist.id)); setActiveSheet('detail'); handleShelfAction(index) }}>
               <PlaylistCoverImage
                 key={`${playlist.id}:${playlist.cover}:${(playlistCoverFallbacks[String(playlist.id)] ?? []).join('|')}`}
                 candidates={[playlist.cover || '', ...(playlistCoverFallbacks[String(playlist.id)] ?? [])]}
@@ -1293,7 +1154,8 @@ export default function App() {
             </button>
           ))}</div>
         </aside>
-      </div>
+      </LibrarySheet>
+      <div className="search-hover-sensor" aria-hidden="true" onPointerEnter={() => { setSearchOpen(Boolean(keyword.trim())); inputRef.current?.focus() }} />
       <div className="content">
         <div className="search-shell" ref={searchRef}>
           <div ref={searchGlassRef} className={`searchbar${classicTheme ? ' classic-search-glass' : ''}`}>
@@ -1304,7 +1166,7 @@ export default function App() {
                   .replaceAll(CLASSIC_GLASS_MAP_ID, 'flux-classic-search-glass-map') }} />
               </svg>
             ) : null}
-            <input
+            <Input
               ref={inputRef}
               value={keyword}
               placeholder="搜索歌曲 / 歌手"
@@ -1337,7 +1199,7 @@ export default function App() {
                 ))}
                 <span className="search-parallel-hint">双渠道并行</span>
               </div>
-              <div className="results search-results">
+              <div className="results search-results" data-scroll-region>
                 {songs.length === 0 ? (
                   <div className="empty">
                     {activeSearch.isFetching ? '搜索中…' : activeSearch.error instanceof Error ? `搜索失败：${activeSearch.error.message}` : debouncedKeyword ? '没有结果' : '准备搜索…'}
