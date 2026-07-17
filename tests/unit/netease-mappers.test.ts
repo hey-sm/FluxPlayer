@@ -20,7 +20,6 @@ describe('mapSongRecord', () => {
   it('映射 cloudsearch 歌曲为统一模型', () => {
     expect(mapSongRecord(NCM_SONG_FIXTURE)).toEqual({
       provider: 'netease',
-      source: 'netease',
       type: 'song',
       id: 186016,
       name: '晴天',
@@ -39,15 +38,14 @@ describe('mapSongRecord', () => {
   })
 })
 
-
 describe('classifyNeteasePlaybackRestriction', () => {
   it('未登录 → login_required', () => {
     expect(classifyNeteasePlaybackRestriction(null, { loggedIn: false }).category).toBe('login_required')
   })
   it('试听 → trial_only', () => {
-    expect(classifyNeteasePlaybackRestriction({ freeTrialInfo: { start: 0 } }, { loggedIn: true }).category).toBe(
-      'trial_only',
-    )
+    expect(
+      classifyNeteasePlaybackRestriction({ freeTrialInfo: { start: 0 } }, { loggedIn: true }).category,
+    ).toBe('trial_only')
   })
   it('fee=1 → vip_required；fee=4/8 → paid_required', () => {
     expect(classifyNeteasePlaybackRestriction({ fee: 1 }, { loggedIn: true }).category).toBe('vip_required')
@@ -63,7 +61,13 @@ describe('classifyNeteasePlaybackRestriction', () => {
 describe('normalizeLoginInfo', () => {
   it('vipType>=10 判定 SVIP', () => {
     const info = normalizeLoginInfo({ userId: 1, nickname: 'N', vipType: 11 }, null)
-    expect(info).toMatchObject({ loggedIn: true, isVip: true, isSvip: true, vipLevel: 'svip', vipLabel: 'SVIP' })
+    expect(info).toMatchObject({
+      loggedIn: true,
+      isVip: true,
+      isSvip: true,
+      vipLevel: 'svip',
+      vipLabel: 'SVIP',
+    })
   })
   it('无 userId → 未登录', () => {
     expect(normalizeLoginInfo({}, {}).loggedIn).toBe(false)

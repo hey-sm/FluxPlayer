@@ -1,7 +1,6 @@
 [
   {
     "provider": "qq",
-    "source": "qq",
     "type": "qq",
     "id": "0039MnYb0qxYhV",
     "qqId": "97773",
@@ -22,7 +21,6 @@
   },
   {
     "provider": "qq",
-    "source": "qq",
     "type": "qq",
     "id": "000Ab2Sk4MkkpI",
     "qqId": "373447092",
@@ -43,7 +41,6 @@
   },
   {
     "provider": "qq",
-    "source": "qq",
     "type": "qq",
     "id": "0002fGVs2iterI",
     "qqId": "341030119",
@@ -64,7 +61,6 @@
   },
   {
     "provider": "qq",
-    "source": "qq",
     "type": "qq",
     "id": "002QaW6I1ZtJgD",
     "qqId": "253970285",

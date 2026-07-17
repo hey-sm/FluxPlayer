@@ -1,8 +1,3 @@
-/**
- * 统一数据模型 —— 描述本地 API 的线格式（wire format）。
- * 字段与旧版 server.js 的响应保持一致：legacy 前端直接消费这些 JSON。
- */
-
 export type ProviderId = 'netease' | 'qq'
 
 export interface UnifiedArtist {
@@ -13,7 +8,6 @@ export interface UnifiedArtist {
 
 export interface UnifiedSong {
   provider: ProviderId
-  source: ProviderId
   type: string
   id: number | string
   name: string
@@ -24,7 +18,6 @@ export interface UnifiedSong {
   cover: string
   duration: number
   fee?: number
-  // QQ 专有
   qqId?: number | string
   mid?: string
   songmid?: string
@@ -35,9 +28,8 @@ export interface UnifiedSong {
 }
 
 export interface UnifiedPlaylist {
-  provider?: ProviderId
-  source?: ProviderId
-  type?: string
+  provider: ProviderId
+  type: string
   id: number | string
   name: string
   cover: string
@@ -101,11 +93,9 @@ export interface LyricDoc {
   provider?: ProviderId
   id?: number | string
   mid?: string
-  /** 兼容 legacy API 的原始字段；M3 期间不得删除或改名。 */
   lyric: string
   tlyric: string
   yrc: string
-  /** 已解析并按时间排序、合并翻译的歌词行。 */
   lines: LyricLine[]
   qrc?: string
   roma?: string
@@ -173,7 +163,10 @@ export function normalizeQualityPreference(value: unknown): QualityLevel {
   return 'hires'
 }
 
-export function qualityCandidatesFrom<T extends { level: string }>(target: string, candidates: readonly T[]): T[] {
+export function qualityCandidatesFrom<T extends { level: string }>(
+  target: string,
+  candidates: readonly T[],
+): T[] {
   const normalized = normalizeQualityPreference(target)
   let start = candidates.findIndex((item) => item.level === normalized)
   if (start < 0) start = 0

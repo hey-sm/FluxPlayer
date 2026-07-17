@@ -21,13 +21,19 @@ describe('classifyQQPlaybackRestriction', () => {
   })
 
   it('消息命中 vip/付费词 → paid_required', () => {
-    const r = classifyQQPlaybackRestriction({ msg: '该歌曲需要付费购买' }, { hasSession: true, hasPlaybackKey: true })
+    const r = classifyQQPlaybackRestriction(
+      { msg: '该歌曲需要付费购买' },
+      { hasSession: true, hasPlaybackKey: true },
+    )
     expect(r.category).toBe('paid_required')
     expect(r.action).toBe('upgrade')
   })
 
   it('其他非零 code → copyright_unavailable，透传原始消息', () => {
-    const r = classifyQQPlaybackRestriction({ result: 2001, msg: 'blocked' }, { hasSession: true, hasPlaybackKey: true })
+    const r = classifyQQPlaybackRestriction(
+      { result: 2001, msg: 'blocked' },
+      { hasSession: true, hasPlaybackKey: true },
+    )
     expect(r.category).toBe('copyright_unavailable')
     expect(r.rawMessage).toBe('blocked')
   })

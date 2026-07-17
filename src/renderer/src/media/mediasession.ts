@@ -1,5 +1,4 @@
 import type { UnifiedSong } from '@shared/models'
-import { coverProxyUrl } from '../api'
 
 /**
  * 系统媒体会话桥接 —— 把 navigator.mediaSession 连到 player store。
@@ -62,7 +61,15 @@ export function updateMediaMetadata(song: UnifiedSong | null): void {
       artist: song.artist,
       album: song.album || '',
       artwork: song.cover
-        ? [{ src: coverProxyUrl(song.cover), sizes: '512x512', type: 'image/jpeg' }]
+        ? [
+            {
+              src: song.cover.startsWith('flux-media://cover')
+                ? song.cover
+                : `flux-media://cover?url=${encodeURIComponent(song.cover)}`,
+              sizes: '512x512',
+              type: 'image/jpeg',
+            },
+          ]
         : [],
     })
   } catch {

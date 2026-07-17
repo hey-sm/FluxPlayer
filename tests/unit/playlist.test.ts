@@ -1,10 +1,67 @@
-import { describe, expect, it } from 'vitest'
+import { QueryClient } from '@tanstack/react-query'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PlaylistListResult, PlaylistTracksResult } from '@shared/music-contract'
+import type { UnifiedPlaylist, UnifiedSong } from '@shared/models'
+import { fetchPlaylists, fetchPlaylistTracks } from '@renderer/features/playlist/api'
 import {
-  normalizePlaylistListResponse,
-  normalizePlaylistTracksResponse,
-} from '@renderer/features/playlist/api'
-import { playlistQueryKeys } from '@renderer/features/playlist/queries'
+  createPlaylistListQuery,
+  createPlaylistTracksQuery,
+  lastPlaylistStorageKey,
+  playlistQueryKeys,
+  prefetchLastPlaylist,
+} from '@renderer/features/playlist/queries'
 import { calculateWindow } from '@renderer/features/playlist/window'
+import { getPlaylists, getPlaylistTracks } from '@renderer/api'
+
+const apiMock = vi.hoisted(() => ({
+  getPlaylists: vi.fn(),
+  getPlaylistTracks: vi.fn(),
+}))
+
+vi.mock('@renderer/api', () => ({
+  getPlaylists: apiMock.getPlaylists,
+  getPlaylistTracks: apiMock.getPlaylistTracks,
+}))
+
+const playlist: UnifiedPlaylist = {
+  provider: 'qq',
+  id: 'playlist-1',
+  name: 'Typed playlist',
+  cover: '',
+  trackCount: 1,
+}
+
+const song: UnifiedSong = {
+  provider: 'qq',
+  type: 'song',
+  id: 'song-1',
+  name: 'Typed song',
+  artist: 'Artist',
+  artists: [{ name: 'Artist' }],
+  album: 'Album',
+  cover: '',
+  duration: 1000,
+}
+
+const listResult: PlaylistListResult = {
+  provider: 'qq',
+  loggedIn: true,
+  identity: '42',
+  playlists: [playlist],
+}
+
+const tracksResult: PlaylistTracksResult = {
+  provider: 'qq',
+  loggedIn: true,
+  playlist,
+  tracks: [song],
+}
+
+beforeEach(() => {
+  vi.restoreAllMocks()
+  apiMock.getPlaylists.mockReset().mockResolvedValue(listResult)
+  apiMock.getPlaylistTracks.mockReset().mockResolvedValue(tracksResult)
+})
 
 describe('playlist query keys', () => {
   it('isolates providers and account identities', () => {
@@ -18,55 +75,85 @@ describe('playlist query keys', () => {
   })
 })
 
-describe('playlist response normalization', () => {
-  it('keeps current fields and accepts legacy aliases', () => {
-    const result = normalizePlaylistListResponse(
-      {
-        loggedIn: true,
-        userId: 7,
-        playlists: [
-          { id: 1, name: 'Current', cover: 'a', trackCount: 2 },
-          { disstid: 'q2', dissname: 'Legacy', logo: 'b', songnum: '3', visitnum: 9 },
-          { id: 3 },
-          null,
-        ],
-      },
-      'qq',
+describe('typed playlist data flow', () => {
+  it('forwards strict list and track requests with their AbortSignals', async () => {
+    const listController = new AbortController()
+    const tracksController = new AbortController()
+
+    await expect(fetchPlaylists('qq', 60, listController.signal)).resolves.toBe(listResult)
+    await expect(fetchPlaylistTracks('qq', 'playlist-1', tracksController.signal)).resolves.toBe(tracksResult)
+
+    expect(getPlaylists).toHaveBeenCalledWith({ provider: 'qq', limit: 60 }, listController.signal)
+    expect(getPlaylistTracks).toHaveBeenCalledWith(
+      { provider: 'qq', id: 'playlist-1' },
+      tracksController.signal,
     )
-    expect(result.identity).toBe('7')
-    expect(result.playlists).toHaveLength(2)
-    expect(result.playlists[1]).toMatchObject({
-      id: 'q2',
-      name: 'Legacy',
-      cover: 'b',
-      trackCount: 3,
-      playCount: 9,
-      provider: 'qq',
+  })
+
+  it('returns strict IPC results unchanged', async () => {
+    const receivedList = await fetchPlaylists('qq', 60)
+    const receivedTracks = await fetchPlaylistTracks('qq', 'playlist-1')
+
+    expect(receivedList).toBe(listResult)
+    expect(receivedTracks).toBe(tracksResult)
+    expect(receivedList.playlists[0]).toEqual(playlist)
+    expect(receivedTracks.tracks[0]).toEqual(song)
+  })
+
+  it('loads playlist tracks only when the detail query is executed', async () => {
+    const listQuery = createPlaylistListQuery('qq', 'user:42', 60)
+    const tracksQuery = createPlaylistTracksQuery('qq', 'user:42', 'playlist-1')
+
+    expect(getPlaylists).not.toHaveBeenCalled()
+    expect(getPlaylistTracks).not.toHaveBeenCalled()
+
+    const listSignal = new AbortController().signal
+    await listQuery.queryFn({ signal: listSignal } as never)
+    expect(getPlaylists).toHaveBeenCalledOnce()
+    expect(getPlaylistTracks).not.toHaveBeenCalled()
+
+    const tracksSignal = new AbortController().signal
+    await tracksQuery.queryFn({ signal: tracksSignal } as never)
+    expect(getPlaylistTracks).toHaveBeenCalledOnce()
+    expect(getPlaylistTracks).toHaveBeenCalledWith({ provider: 'qq', id: 'playlist-1' }, tracksSignal)
+  })
+
+  it('prefetches at most the single last-opened playlist instead of warming every playlist', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
     })
-  })
+    const playlists: UnifiedPlaylist[] = [
+      playlist,
+      { ...playlist, id: 'playlist-2', name: 'Second playlist' },
+      { ...playlist, id: 'playlist-3', name: 'Third playlist' },
+    ]
+    const storage = {
+      getItem: vi.fn((key: string) =>
+        key === lastPlaylistStorageKey('qq', 'user:42') ? 'playlist-2' : null,
+      ),
+    }
 
-  it('normalizes nested legacy tracks and drops malformed records', () => {
-    const result = normalizePlaylistTracksResponse(
-      {
-        data: {
-          songs: [
-            { id: 1, name: 'Mapped', artist: 'Artist', album: 'Album', duration: 1000 },
-            { songmid: 'mid2', songname: 'QQ old', singer: [{ mid: 's1', name: 'Singer' }], interval: 9 },
-            { id: 3 },
-            undefined,
-          ],
-        },
-      },
-      'qq',
+    await prefetchLastPlaylist(queryClient, 'qq', 'user:42', playlists, storage)
+
+    expect(getPlaylistTracks).toHaveBeenCalledOnce()
+    expect(getPlaylistTracks).toHaveBeenCalledWith(
+      { provider: 'qq', id: 'playlist-2' },
+      expect.any(AbortSignal),
     )
-    expect(result.tracks).toHaveLength(2)
-    expect(result.tracks[0]).toMatchObject({ provider: 'qq', source: 'qq', name: 'Mapped', duration: 1000 })
-    expect(result.tracks[1]).toMatchObject({ id: 'mid2', artist: 'Singer', duration: 9000 })
+    queryClient.clear()
   })
 
-  it('is safe for null and malformed response bodies', () => {
-    expect(normalizePlaylistListResponse(null, 'netease').playlists).toEqual([])
-    expect(normalizePlaylistTracksResponse({ tracks: 'bad' }, 'netease').tracks).toEqual([])
+  it('does not prefetch tracks when there is no remembered playlist', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    await prefetchLastPlaylist(queryClient, 'qq', 'user:42', [playlist], {
+      getItem: () => null,
+    })
+
+    expect(getPlaylistTracks).not.toHaveBeenCalled()
+    queryClient.clear()
   })
 })
 

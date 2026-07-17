@@ -7,7 +7,12 @@ export interface LiquidGlassSurfaceProps extends Omit<HTMLAttributes<HTMLDivElem
 }
 
 /** Project adapter: third-party liquid glass is limited to compact overlays. */
-export function LiquidGlassSurface({ children, className = '', compact = true, ...props }: LiquidGlassSurfaceProps) {
+export function LiquidGlassSurface({
+  children,
+  className = '',
+  compact = true,
+  ...props
+}: LiquidGlassSurfaceProps) {
   return (
     <div {...props} className={`flux-liquid-glass ${className}`} data-compact={compact ? '' : undefined}>
       <GlassCard

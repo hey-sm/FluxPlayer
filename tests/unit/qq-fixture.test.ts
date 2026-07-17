@@ -15,7 +15,11 @@ const detail = loadFixture('qq/song-detail')
 
 describe('QQ fixture 快照', () => {
   it('musicu get_song_detail_yqq → mapQQTrack：固定 mid，全量快照', async () => {
-    const track = detail.response && detail.response.songinfo && detail.response.songinfo.data && detail.response.songinfo.data.track_info
+    const track =
+      detail.response &&
+      detail.response.songinfo &&
+      detail.response.songinfo.data &&
+      detail.response.songinfo.data.track_info
     expect(track, `上游形状漂移：songinfo.data.track_info 缺失（${detail.meta.endpoint}）`).toBeTruthy()
     const song = mapQQTrack(track)
     expect(song.mid).toBe('003OUlho2HcRHC')
@@ -28,15 +32,23 @@ describe('QQ fixture 快照', () => {
   })
 
   it('smartbox itemlist → mapQQSmartSong：结构不变量 + 全列表快照', async () => {
-    const items = smartbox.response && smartbox.response.data && smartbox.response.data.song && smartbox.response.data.song.itemlist
-    expect(Array.isArray(items) && items.length > 0, `上游形状漂移：data.song.itemlist 缺失或为空（${smartbox.meta.endpoint}）`).toBe(true)
+    const items =
+      smartbox.response &&
+      smartbox.response.data &&
+      smartbox.response.data.song &&
+      smartbox.response.data.song.itemlist
+    expect(
+      Array.isArray(items) && items.length > 0,
+      `上游形状漂移：data.song.itemlist 缺失或为空（${smartbox.meta.endpoint}）`,
+    ).toBe(true)
     const mapped = (items as any[]).map(mapQQSmartSong)
     for (const s of mapped) {
       // smartbox 设计上无封面无时长（duration 0 / cover ''），只保证可搜索可跳详情
       expect(s.mid, `smartbox 条目缺 mid：${JSON.stringify(s)}`).toBeTruthy()
       expect(s.name, `smartbox 条目缺 name：${JSON.stringify(s)}`).toBeTruthy()
     }
-    await expect(JSON.stringify(mapped, null, 2)).toMatchFileSnapshot('./__snapshots__/qq-smart-songs.mapped.json')
+    await expect(JSON.stringify(mapped, null, 2)).toMatchFileSnapshot(
+      './__snapshots__/qq-smart-songs.mapped.json',
+    )
   })
-
 })

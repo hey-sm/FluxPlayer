@@ -117,11 +117,7 @@ export class RecentPlaybackStore {
     return cloneEntries(entries)
   }
 
-  record(
-    identity: RecentPlaybackIdentity,
-    track: UnifiedSong,
-    playedAt = Date.now(),
-  ): RecentPlaybackEntry[] {
+  record(identity: RecentPlaybackIdentity, track: UnifiedSong, playedAt = Date.now()): RecentPlaybackEntry[] {
     if (track.provider !== identity.provider) {
       throw new Error('RECENT_TRACK_PROVIDER_MISMATCH')
     }

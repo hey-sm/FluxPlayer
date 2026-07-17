@@ -1,15 +1,14 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { buildLyricLines } from '@shared/lyrics'
 import type { LyricDoc, LyricLine, UnifiedSong } from '@shared/models'
-import { apiJson } from '../../api'
-import { lyricPath, lyricQueryKey, lyricTrackKey, type LyricTrackKey } from './paths'
+import { getLyrics } from '../../api'
+import { lyricQueryKey, lyricTrackKey, lyricsRequest, type LyricTrackKey } from './paths'
 import type { LyricsLoadState } from './state'
 
 interface LyricWireDoc extends Omit<Partial<LyricDoc>, 'lyric' | 'tlyric' | 'yrc'> {
   lyric?: unknown
   tlyric?: unknown
   yrc?: unknown
-  [key: string]: unknown
 }
 
 function rawString(value: unknown): string {
@@ -30,14 +29,11 @@ function validServerLines(value: unknown): LyricLine[] {
   })
 }
 
-/** Normalize a legacy-compatible wire response while preserving all original raw fields. */
 export function normalizeLyricDoc(raw: LyricWireDoc, song: UnifiedSong): LyricDoc {
   const lyric = rawString(raw.lyric)
   const tlyric = rawString(raw.tlyric)
   const yrc = rawString(raw.yrc)
   const builtLines = buildLyricLines({ lyric, tlyric, yrc })
-  const lines = builtLines.length > 0 ? builtLines : validServerLines(raw.lines)
-
   return {
     ...raw,
     provider: raw.provider ?? song.provider,
@@ -46,7 +42,7 @@ export function normalizeLyricDoc(raw: LyricWireDoc, song: UnifiedSong): LyricDo
     lyric,
     tlyric,
     yrc,
-    lines,
+    lines: builtLines.length > 0 ? builtLines : validServerLines(raw.lines),
     source: rawString(raw.source) || `${song.provider}-empty`,
   }
 }
@@ -57,28 +53,26 @@ export interface UseLyricsOptions {
 
 export type UseLyricsResult = UseQueryResult<LyricDoc, Error> & {
   trackKey: LyricTrackKey | null
-  path: string | null
   loadState: LyricsLoadState
 }
 
-/** Stable per-track lyric loader. Query-key changes synchronously drop the previous query's data. */
 export function useLyrics(
   song: UnifiedSong | null | undefined,
   options: UseLyricsOptions = {},
 ): UseLyricsResult {
-  const path = lyricPath(song)
+  const request = lyricsRequest(song)
   const trackKey = lyricTrackKey(song)
   const query = useQuery<LyricDoc, Error>({
     queryKey: lyricQueryKey(song),
-    enabled: options.enabled !== false && Boolean(song && path && trackKey),
-    queryFn: async () => {
-      if (!song || !path) throw new Error('歌词请求缺少歌曲标识')
-      return normalizeLyricDoc(await apiJson<LyricWireDoc>(path), song)
+    enabled: options.enabled !== false && Boolean(song && request && trackKey),
+    queryFn: async ({ signal }) => {
+      if (!song || !request) throw new Error('歌词请求缺少歌曲标识')
+      return normalizeLyricDoc(await getLyrics(request, signal), song)
     },
   })
 
   const loadState: LyricsLoadState =
-    options.enabled === false || !song || !path || !trackKey
+    options.enabled === false || !song || !request || !trackKey
       ? 'idle'
       : query.isError
         ? 'error'
@@ -86,5 +80,5 @@ export function useLyrics(
           ? 'success'
           : 'loading'
 
-  return { ...query, trackKey, path, loadState }
+  return { ...query, trackKey, loadState }
 }

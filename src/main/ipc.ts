@@ -1,8 +1,36 @@
 import { BrowserWindow, dialog, globalShortcut, ipcMain } from 'electron'
+import * as z from 'zod/mini'
 import { IPC, type HotkeyBinding, type HotkeyConfigureResult } from '@shared/ipc-contract'
+import type {
+  FluxMusicApi,
+  LikedTracksRequest,
+  LikedTracksResult,
+  LyricDocument,
+  LyricsRequest,
+  MusicAuthResult,
+  MusicSearchRequest,
+  MusicSearchResult,
+  PlaybackResolveRequest,
+  PlaybackResolveResult,
+  PlaylistListRequest,
+  PlaylistListResult,
+  PlaylistTracksRequest,
+  PlaylistTracksResult,
+} from '@shared/music-contract'
+import {
+  likedTracksRequestSchema,
+  lyricsRequestSchema,
+  musicSearchRequestSchema,
+  playbackResolveRequestSchema,
+  playlistListRequestSchema,
+  playlistTracksRequestSchema,
+  providerRequestSchema,
+} from '@shared/music-schema'
+import type { ProviderId } from '@shared/models'
 import type { UpdaterCommandResult, UpdaterState } from '@shared/updater-contract'
 import type { WallpaperEngineImportRequest } from '@shared/custom-background-contract'
 import type { CustomBackgroundService } from './background/custom-background'
+import type { AudioHandleStore } from './protocols'
 import { exitFullscreenToWindow, getWindowState, toggleFullscreen } from './windows/main-window'
 import {
   clearNeteaseMusicLoginSession,
@@ -13,9 +41,93 @@ import {
 import type { UpdaterController } from './updater'
 
 const registeredGlobalHotkeys = new Map<string, string>()
+const noInputSchema = z.undefined()
+const hotkeyBindingsSchema = z.array(
+  z.object({
+    action: z.string().check(z.minLength(1), z.maxLength(100)),
+    accelerator: z.string().check(z.minLength(1), z.maxLength(100)),
+  }),
+)
+const wallpaperImportSchema = z.object({ projectId: z.string().check(z.minLength(1), z.maxLength(200)) })
+
+export interface MainPlaybackResolution extends Omit<PlaybackResolveResult, 'url'> {
+  /** Upstream URL. It exists only in main and is exchanged for an opaque flux-media handle. */
+  upstreamUrl: string | null
+  upstreamHeaders?: Readonly<Record<string, string>>
+}
+
+/** Adapter boundary implemented by the provider/main music-service integration. */
+export interface MainMusicService extends Omit<FluxMusicApi, 'resolvePlayback' | 'login'> {
+  resolvePlayback(request: PlaybackResolveRequest): Promise<MainPlaybackResolution>
+  authenticate(provider: ProviderId, cookie: string): Promise<MusicAuthResult>
+}
+
+export interface IpcDeps {
+  getMainWindow: () => BrowserWindow | null
+  getPrimaryRendererOrigin: () => string
+  getCustomBackgroundService: () => CustomBackgroundService
+  getUpdaterController: () => UpdaterController | null
+  getUpdaterFallbackState: () => UpdaterState
+  getMusicService: () => MainMusicService
+  audioHandles: AudioHandleStore
+  requestQuit: () => void
+  restartApp: () => Promise<void>
+}
 
 function getSenderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow | null {
   return BrowserWindow.fromWebContents(event.sender)
+}
+
+export function normalizeRendererOrigin(rawUrl: string): string | null {
+  try {
+    const url = new URL(rawUrl)
+    if (url.protocol === 'flux:' && url.hostname === 'app' && !url.port && !url.username && !url.password) {
+      return 'flux://app'
+    }
+    if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin
+  } catch {
+    // Invalid renderer URLs are untrusted.
+  }
+  return null
+}
+
+export function isPrimaryRenderer(event: Electron.IpcMainInvokeEvent, deps: IpcDeps): boolean {
+  const mainWindow = deps.getMainWindow()
+  const senderWindow = getSenderWindow(event)
+  const frame = event.senderFrame
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    !senderWindow ||
+    senderWindow !== mainWindow ||
+    event.sender !== mainWindow.webContents ||
+    !frame ||
+    frame !== event.sender.mainFrame ||
+    frame.isDestroyed()
+  ) {
+    return false
+  }
+  const senderOrigin = normalizeRendererOrigin(frame.url)
+  const expectedOrigin = normalizeRendererOrigin(deps.getPrimaryRendererOrigin())
+  return senderOrigin !== null && expectedOrigin !== null && senderOrigin === expectedOrigin
+}
+
+function secureHandle<Input, Output>(
+  channel: string,
+  schema: { parse(input: unknown): Input },
+  deps: IpcDeps,
+  handler: (input: Input, event: Electron.IpcMainInvokeEvent) => Output | Promise<Output>,
+): void {
+  ipcMain.handle(channel, async (event, rawInput: unknown) => {
+    if (!isPrimaryRenderer(event, deps)) throw new Error('UNAUTHORIZED_RENDERER')
+    let input: Input
+    try {
+      input = schema.parse(rawInput)
+    } catch {
+      throw new Error('INVALID_REQUEST')
+    }
+    return handler(input, event)
+  })
 }
 
 function sendGlobalHotkeyAction(getMainWindow: () => BrowserWindow | null, action: string): void {
@@ -29,7 +141,7 @@ export function unregisterGlobalHotkeys(): void {
     try {
       globalShortcut.unregister(accelerator)
     } catch {
-      /* ignore */
+      // A shutdown race must not block application exit.
     }
   }
   registeredGlobalHotkeys.clear()
@@ -42,9 +154,9 @@ function configureGlobalHotkeys(
   unregisterGlobalHotkeys()
   const results: HotkeyConfigureResult['results'] = []
   const seen = new Set<string>()
-  for (const item of Array.isArray(bindings) ? bindings : []) {
-    const action = item && String(item.action || '').trim()
-    const accelerator = item && String(item.accelerator || '').trim()
+  for (const item of bindings) {
+    const action = item.action.trim()
+    const accelerator = item.accelerator.trim()
     if (!action || !accelerator || seen.has(accelerator)) continue
     seen.add(accelerator)
     let registered = false
@@ -72,152 +184,174 @@ function configureGlobalHotkeys(
   return { ok: true, results }
 }
 
-export interface IpcDeps {
-  getMainWindow: () => BrowserWindow | null
-  getPrimaryRendererOrigin: () => string
-  getCustomBackgroundService: () => CustomBackgroundService
-  getUpdaterController: () => UpdaterController | null
-  getUpdaterFallbackState: () => UpdaterState
-  requestQuit: () => void
-  restartApp: () => Promise<void>
-}
-
-function isPrimaryRenderer(event: Electron.IpcMainInvokeEvent, deps: IpcDeps): boolean {
-  const senderWindow = getSenderWindow(event)
-  const frame = event.senderFrame
-  if (
-    !senderWindow ||
-    senderWindow !== deps.getMainWindow() ||
-    !frame ||
-    frame !== event.sender.mainFrame ||
-    frame.isDestroyed()
-  ) {
-    return false
-  }
-  try {
-    return new URL(frame.url).origin === deps.getPrimaryRendererOrigin()
-  } catch {
-    return false
-  }
-}
-
 function unavailableUpdaterResult(deps: IpcDeps, code: string, message: string): UpdaterCommandResult {
   return { ok: false, state: deps.getUpdaterFallbackState(), error: { code, message } }
 }
 
-export function registerIpcHandlers(deps: IpcDeps): void {
-  // ---- 窗口控制 ----
-  ipcMain.handle(IPC.windowMinimize, (event) => {
-    getSenderWindow(event)?.minimize()
-  })
-  ipcMain.handle(IPC.windowToggleMaximize, (event) => {
-    toggleFullscreen(getSenderWindow(event))
-  })
-  ipcMain.handle(IPC.windowToggleFullscreen, (event) => {
-    toggleFullscreen(getSenderWindow(event))
-  })
-  ipcMain.handle(IPC.windowExitFullscreenWindowed, (event) => {
-    exitFullscreenToWindow(getSenderWindow(event))
-  })
-  ipcMain.handle(IPC.windowGetState, (event) => getWindowState(getSenderWindow(event)))
-  ipcMain.handle(IPC.windowClose, (event) => {
-    if (getSenderWindow(event) === deps.getMainWindow()) deps.requestQuit()
-  })
+async function login(
+  provider: ProviderId,
+  deps: IpcDeps,
+  event: Electron.IpcMainInvokeEvent,
+): Promise<MusicAuthResult> {
+  const owner = getSenderWindow(event)
+  const loginResult =
+    provider === 'netease' ? await openNeteaseMusicLoginWindow(owner) : await openQQMusicLoginWindow(owner)
+  if (!loginResult.ok || !loginResult.cookie) {
+    throw new Error(loginResult.cancelled ? 'AUTH_CANCELLED' : loginResult.error || 'INVALID_CREDENTIALS')
+  }
+  return deps.getMusicService().authenticate(provider, loginResult.cookie)
+}
 
-  // ---- 全局快捷键 ----
-  ipcMain.handle(IPC.configureGlobalHotkeys, (_event, bindings) =>
+async function logout(provider: ProviderId, deps: IpcDeps): Promise<void> {
+  await deps.getMusicService().logout(provider)
+  if (provider === 'netease') await clearNeteaseMusicLoginSession()
+  else await clearQQMusicLoginSession()
+}
+
+export function registerIpcHandlers(deps: IpcDeps): void {
+  secureHandle(IPC.windowMinimize, noInputSchema, deps, () => deps.getMainWindow()?.minimize())
+  secureHandle(IPC.windowToggleMaximize, noInputSchema, deps, () => toggleFullscreen(deps.getMainWindow()))
+  secureHandle(IPC.windowToggleFullscreen, noInputSchema, deps, () => toggleFullscreen(deps.getMainWindow()))
+  secureHandle(IPC.windowExitFullscreenWindowed, noInputSchema, deps, () =>
+    exitFullscreenToWindow(deps.getMainWindow()),
+  )
+  secureHandle(IPC.windowGetState, noInputSchema, deps, () => getWindowState(deps.getMainWindow()))
+  secureHandle(IPC.windowClose, noInputSchema, deps, () => deps.requestQuit())
+
+  secureHandle(IPC.configureGlobalHotkeys, hotkeyBindingsSchema, deps, (bindings) =>
     configureGlobalHotkeys(deps.getMainWindow, bindings),
   )
 
-  // ---- 登录窗口 ----
-  ipcMain.handle(IPC.neteaseOpenLogin, async (event) => openNeteaseMusicLoginWindow(getSenderWindow(event)))
-  ipcMain.handle(IPC.neteaseClearLogin, async () => clearNeteaseMusicLoginSession())
-  ipcMain.handle(IPC.qqOpenLogin, async (event) => openQQMusicLoginWindow(getSenderWindow(event)))
-  ipcMain.handle(IPC.qqClearLogin, async () => clearQQMusicLoginSession())
+  secureHandle(IPC.musicSearch, musicSearchRequestSchema, deps, (request) =>
+    deps.getMusicService().search(request as MusicSearchRequest),
+  )
+  secureHandle(IPC.musicResolvePlayback, playbackResolveRequestSchema, deps, async (request) => {
+    const resolution = await deps.getMusicService().resolvePlayback(request as PlaybackResolveRequest)
+    const { upstreamUrl, upstreamHeaders, ...result } = resolution
+    const url = upstreamUrl
+      ? `flux-media://audio/${deps.audioHandles.create({ url: upstreamUrl, headers: upstreamHeaders })}`
+      : null
+    return { ...result, url } satisfies PlaybackResolveResult
+  })
+  secureHandle(IPC.musicGetLyrics, lyricsRequestSchema, deps, (request) =>
+    deps.getMusicService().getLyrics(request as LyricsRequest),
+  )
+  secureHandle(IPC.musicGetAuthStatus, providerRequestSchema, deps, ({ provider }) =>
+    deps.getMusicService().getAuthStatus(provider),
+  )
+  secureHandle(IPC.musicLogin, providerRequestSchema, deps, ({ provider }, event) =>
+    login(provider, deps, event),
+  )
+  secureHandle(IPC.musicLogout, providerRequestSchema, deps, ({ provider }) => logout(provider, deps))
+  secureHandle(IPC.musicGetPlaylists, playlistListRequestSchema, deps, (request) =>
+    deps.getMusicService().getPlaylists(request as PlaylistListRequest),
+  )
+  secureHandle(IPC.musicGetPlaylistTracks, playlistTracksRequestSchema, deps, (request) =>
+    deps.getMusicService().getPlaylistTracks(request as PlaylistTracksRequest),
+  )
+  secureHandle(IPC.musicGetLikedTracks, likedTracksRequestSchema, deps, (request) =>
+    deps.getMusicService().getLikedTracks(request as LikedTracksRequest),
+  )
 
-  // ---- 应用 ----
-  ipcMain.handle(IPC.restartApp, async () => {
+  secureHandle(IPC.restartApp, noInputSchema, deps, async () => {
     try {
       await deps.restartApp()
       return { ok: true }
-    } catch (e: any) {
-      return { ok: false, error: e.message || 'RESTART_FAILED' }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'RESTART_FAILED' }
     }
   })
 
-  // ---- M6 explicit electron-updater workflow ----
-  ipcMain.handle(IPC.updaterGetState, (event) => {
-    if (!isPrimaryRenderer(event, deps)) return deps.getUpdaterFallbackState()
-    return deps.getUpdaterController()?.getState() ?? deps.getUpdaterFallbackState()
-  })
-  ipcMain.handle(IPC.updaterCheck, (event) => {
-    if (!isPrimaryRenderer(event, deps)) {
-      return unavailableUpdaterResult(deps, 'UNTRUSTED_UPDATER_SENDER', 'Updater command rejected.')
-    }
-    return deps.getUpdaterController()?.check() ??
-      unavailableUpdaterResult(deps, 'UPDATER_NOT_AVAILABLE', 'Updater is not available.')
-  })
-  ipcMain.handle(IPC.updaterDownload, (event) => {
-    if (!isPrimaryRenderer(event, deps)) {
-      return unavailableUpdaterResult(deps, 'UNTRUSTED_UPDATER_SENDER', 'Updater command rejected.')
-    }
-    return deps.getUpdaterController()?.download() ??
-      unavailableUpdaterResult(deps, 'UPDATER_NOT_AVAILABLE', 'Updater is not available.')
-  })
-  ipcMain.handle(IPC.updaterInstall, (event) => {
-    if (!isPrimaryRenderer(event, deps)) {
-      return unavailableUpdaterResult(deps, 'UNTRUSTED_UPDATER_SENDER', 'Updater command rejected.')
-    }
-    return deps.getUpdaterController()?.install() ??
-      unavailableUpdaterResult(deps, 'UPDATER_NOT_AVAILABLE', 'Updater is not available.')
-  })
+  secureHandle(
+    IPC.updaterGetState,
+    noInputSchema,
+    deps,
+    () => deps.getUpdaterController()?.getState() ?? deps.getUpdaterFallbackState(),
+  )
+  secureHandle(
+    IPC.updaterCheck,
+    noInputSchema,
+    deps,
+    () =>
+      deps.getUpdaterController()?.check() ??
+      unavailableUpdaterResult(deps, 'UPDATER_NOT_AVAILABLE', 'Updater is not available.'),
+  )
+  secureHandle(
+    IPC.updaterDownload,
+    noInputSchema,
+    deps,
+    () =>
+      deps.getUpdaterController()?.download() ??
+      unavailableUpdaterResult(deps, 'UPDATER_NOT_AVAILABLE', 'Updater is not available.'),
+  )
+  secureHandle(
+    IPC.updaterInstall,
+    noInputSchema,
+    deps,
+    () =>
+      deps.getUpdaterController()?.install() ??
+      unavailableUpdaterResult(deps, 'UPDATER_NOT_AVAILABLE', 'Updater is not available.'),
+  )
 
-  ipcMain.handle(IPC.customBackgroundGet, (event) => {
-    if (!isPrimaryRenderer(event, deps)) return null
-    return deps.getCustomBackgroundService().getCurrent()
-  })
-  ipcMain.handle(IPC.customBackgroundChooseFile, async (event) => {
-    if (!isPrimaryRenderer(event, deps)) return { ok: false, background: null, error: 'UNTRUSTED_BACKGROUND_SENDER' }
-    const owner = getSenderWindow(event) || undefined
+  secureHandle(IPC.customBackgroundGet, noInputSchema, deps, () =>
+    deps.getCustomBackgroundService().getCurrent(),
+  )
+  secureHandle(IPC.customBackgroundChooseFile, noInputSchema, deps, async () => {
+    const owner = deps.getMainWindow() ?? undefined
     const choice = await dialog.showOpenDialog(owner as BrowserWindow, {
-      title: '选择自定义背景', properties: ['openFile'],
+      title: '选择自定义背景',
+      properties: ['openFile'],
       filters: [
-        { name: '图片和视频', extensions: ['avif', 'bmp', 'gif', 'jpeg', 'jpg', 'png', 'webp', 'm4v', 'mov', 'mp4', 'webm'] },
+        {
+          name: '图片和视频',
+          extensions: ['avif', 'bmp', 'gif', 'jpeg', 'jpg', 'png', 'webp', 'm4v', 'mov', 'mp4', 'webm'],
+        },
       ],
     })
-    if (choice.canceled || !choice.filePaths[0]) return { ok: false, background: deps.getCustomBackgroundService().getCurrent(), canceled: true }
+    if (choice.canceled || !choice.filePaths[0]) {
+      return { ok: false, background: deps.getCustomBackgroundService().getCurrent(), canceled: true }
+    }
     const result = deps.getCustomBackgroundService().importFile(choice.filePaths[0])
     if (result.ok) deps.getMainWindow()?.webContents.send(IPC.customBackgroundChanged, result.background)
     return result
   })
-  ipcMain.handle(IPC.customBackgroundClear, (event) => {
-    if (!isPrimaryRenderer(event, deps)) return { ok: false, background: null, error: 'UNTRUSTED_BACKGROUND_SENDER' }
+  secureHandle(IPC.customBackgroundClear, noInputSchema, deps, () => {
     const result = deps.getCustomBackgroundService().clear()
     if (result.ok) deps.getMainWindow()?.webContents.send(IPC.customBackgroundChanged, null)
     return result
   })
-  ipcMain.handle(IPC.customBackgroundScanWallpaperEngine, (event) => {
-    if (!isPrimaryRenderer(event, deps)) return { ok: false, projects: [], error: 'UNTRUSTED_BACKGROUND_SENDER' }
-    return deps.getCustomBackgroundService().scanWallpaperEngine()
-  })
-  ipcMain.handle(IPC.customBackgroundImportWallpaperEngine, (event, request: WallpaperEngineImportRequest) => {
-    if (!isPrimaryRenderer(event, deps)) return { ok: false, background: null, error: 'UNTRUSTED_BACKGROUND_SENDER' }
-    const projectId = request && typeof request.projectId === 'string' ? request.projectId : ''
-    const result = deps.getCustomBackgroundService().importScannedProject(projectId)
+  secureHandle(IPC.customBackgroundScanWallpaperEngine, noInputSchema, deps, () =>
+    deps.getCustomBackgroundService().scanWallpaperEngine(),
+  )
+  secureHandle(IPC.customBackgroundImportWallpaperEngine, wallpaperImportSchema, deps, (request) => {
+    const result = deps
+      .getCustomBackgroundService()
+      .importScannedProject((request as WallpaperEngineImportRequest).projectId)
     if (result.ok) deps.getMainWindow()?.webContents.send(IPC.customBackgroundChanged, result.background)
     return result
   })
-  ipcMain.handle(IPC.customBackgroundChooseWallpaperEngine, async (event) => {
-    if (!isPrimaryRenderer(event, deps)) return { ok: false, background: null, error: 'UNTRUSTED_BACKGROUND_SENDER' }
-    const owner = getSenderWindow(event) || undefined
+  secureHandle(IPC.customBackgroundChooseWallpaperEngine, noInputSchema, deps, async () => {
+    const owner = deps.getMainWindow() ?? undefined
     const choice = await dialog.showOpenDialog(owner as BrowserWindow, {
       title: '导入 Wallpaper Engine 视频项目',
       properties: ['openFile', 'openDirectory'],
       filters: [{ name: 'Wallpaper Engine project.json', extensions: ['json'] }],
     })
-    if (choice.canceled || !choice.filePaths[0]) return { ok: false, background: deps.getCustomBackgroundService().getCurrent(), canceled: true }
+    if (choice.canceled || !choice.filePaths[0]) {
+      return { ok: false, background: deps.getCustomBackgroundService().getCurrent(), canceled: true }
+    }
     const result = deps.getCustomBackgroundService().importProjectPath(choice.filePaths[0])
     if (result.ok) deps.getMainWindow()?.webContents.send(IPC.customBackgroundChanged, result.background)
     return result
   })
+}
+
+// Exported type anchors make the provider adapter contract easy to implement without importing renderer code.
+export type MainMusicServiceMethodResults = {
+  search: MusicSearchResult
+  lyrics: LyricDocument
+  auth: MusicAuthResult
+  playlists: PlaylistListResult
+  playlistTracks: PlaylistTracksResult
+  likedTracks: LikedTracksResult
 }

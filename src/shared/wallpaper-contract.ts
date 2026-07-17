@@ -89,9 +89,7 @@ export const DEFAULT_WALLPAPER_STATE: Readonly<WallpaperState> = Object.freeze({
   revision: 0,
 })
 
-const PARAM_KEYS = Object.freeze(
-  Object.keys(DEFAULT_WALLPAPER_PARAMS) as Array<keyof WallpaperVisualParams>,
-)
+const PARAM_KEYS = Object.freeze(Object.keys(DEFAULT_WALLPAPER_PARAMS) as Array<keyof WallpaperVisualParams>)
 
 function finiteNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback

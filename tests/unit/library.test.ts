@@ -1,24 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LikedTracksResult } from '@shared/music-contract'
 import type { UnifiedSong } from '@shared/models'
-import {
-  fetchLikedTracks,
-  libraryQueryKeys,
-  normalizeLikedTracksResponse,
-  normalizePageRequest,
-  RecentPlaybackStore,
-  recentPlaybackStorageKey,
-  slicePage,
-} from '@renderer/features/library'
+import { fetchLikedTracks } from '@renderer/features/library/api'
+import { normalizePageRequest, slicePage } from '@renderer/features/library/pagination'
+import { libraryQueryKeys } from '@renderer/features/library/queries'
+import { RecentPlaybackStore, recentPlaybackStorageKey } from '@renderer/features/library/recent'
 import { calculateWindow } from '@renderer/features/library/window'
-import { NeteaseProvider } from '@server/providers/netease'
-import { QQProvider } from '@server/providers/qq'
+import { getLikedTracks } from '@renderer/api'
 
-const ncmMock = vi.hoisted(() => ({
-  likelist: vi.fn(),
-  song_detail: vi.fn(),
+const apiMock = vi.hoisted(() => ({
+  getLikedTracks: vi.fn(),
 }))
 
-vi.mock('@server/providers/netease/sdk', () => ({ ncm: ncmMock }))
+vi.mock('@renderer/api', () => ({
+  getLikedTracks: apiMock.getLikedTracks,
+}))
 
 class MemoryStorage {
   readonly values = new Map<string, string>()
@@ -32,15 +28,9 @@ class MemoryStorage {
   }
 }
 
-const credentials = {
-  get: vi.fn(() => 'cookie'),
-  set: vi.fn(),
-}
-
 function track(provider: 'netease' | 'qq', id: string | number, name = `Track ${id}`): UnifiedSong {
   return {
     provider,
-    source: provider,
     type: 'song',
     id,
     name,
@@ -54,8 +44,7 @@ function track(provider: 'netease' | 'qq', id: string | number, name = `Track ${
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  ncmMock.likelist.mockReset()
-  ncmMock.song_detail.mockReset()
+  apiMock.getLikedTracks.mockReset()
 })
 
 describe('library pagination and query contracts', () => {
@@ -76,9 +65,7 @@ describe('library pagination and query contracts', () => {
     expect(libraryQueryKeys.liked('netease', 'user:1', { offset: 0, limit: 50 })).not.toEqual(
       libraryQueryKeys.liked('qq', 'user:1', { offset: 0, limit: 50 }),
     )
-    expect(libraryQueryKeys.recent('qq', 'guest')).not.toEqual(
-      libraryQueryKeys.recent('qq', 'user:1'),
-    )
+    expect(libraryQueryKeys.recent('qq', 'guest')).not.toEqual(libraryQueryKeys.recent('qq', 'user:1'))
   })
 
   it('keeps fixed-row windowing reusable for all library track collections', () => {
@@ -91,40 +78,45 @@ describe('library pagination and query contracts', () => {
   })
 })
 
-describe('liked tracks client', () => {
-  it('normalizes platform aliases and page metadata', () => {
-    const result = normalizeLikedTracksResponse(
-      {
-        loggedIn: true,
-        userId: 9,
-        offset: 20,
-        limit: 2,
-        total: 23,
-        songs: [
-          { id: 1, name: 'N', artist: 'A', duration: 1000 },
-          { songmid: 'q2', songname: 'Q', singer: [{ name: 'Singer' }], interval: 9 },
-        ],
-      },
-      'qq',
-    )
-    expect(result).toMatchObject({ identity: '9', offset: 20, limit: 2, total: 23, hasMore: true })
-    expect(result.tracks).toHaveLength(2)
-    expect(result.tracks[1]).toMatchObject({ id: 'q2', provider: 'qq', duration: 9000 })
+describe('typed liked-tracks client', () => {
+  it('sends a bounded typed request and forwards the AbortSignal', async () => {
+    const controller = new AbortController()
+    const result: LikedTracksResult = {
+      provider: 'qq',
+      loggedIn: true,
+      identity: '9',
+      tracks: [],
+      offset: 3,
+      limit: 200,
+      total: 0,
+      hasMore: false,
+    }
+    apiMock.getLikedTracks.mockResolvedValue(result)
+
+    await expect(fetchLikedTracks('qq', { offset: 3, limit: 999 }, controller.signal)).resolves.toBe(result)
+
+    expect(getLikedTracks).toHaveBeenCalledOnce()
+    expect(getLikedTracks).toHaveBeenCalledWith({ provider: 'qq', offset: 3, limit: 200 }, controller.signal)
   })
 
-  it('calls the real provider-specific route with a bounded page', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ loggedIn: true, tracks: [], total: 0, offset: 3, limit: 200 }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    )
-    vi.stubGlobal('fetch', fetchMock)
+  it('returns the strict IPC result unchanged', async () => {
+    const result: LikedTracksResult = {
+      provider: 'netease',
+      loggedIn: true,
+      identity: '7',
+      tracks: [track('netease', 1)],
+      offset: 0,
+      limit: 50,
+      total: 1,
+      hasMore: false,
+    }
+    apiMock.getLikedTracks.mockResolvedValue(result)
 
-    await fetchLikedTracks('qq', { offset: 3, limit: 999 })
+    const received = await fetchLikedTracks('netease', { offset: 0, limit: 50 })
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/qq/user/liked/tracks?offset=3&limit=200', undefined)
-    vi.unstubAllGlobals()
+    expect(received).toBe(result)
+    expect(received).toEqual(result)
+    expect(received.tracks[0]).toEqual(track('netease', 1))
   })
 })
 
@@ -151,7 +143,7 @@ describe('recent playback persistence', () => {
     expect(recentPlaybackStorageKey(qqGuest)).not.toBe(recentPlaybackStorageKey(qqUser))
   })
 
-  it('persists at most 200 entries and restores them in a fresh store', () => {
+  it('persists at most 200 entries and restores strict tracks in a fresh store', () => {
     const storage = new MemoryStorage()
     const identity = { provider: 'netease' as const, userId: 7 }
     const writer = new RecentPlaybackStore(storage)
@@ -159,7 +151,7 @@ describe('recent playback persistence', () => {
 
     const restored = new RecentPlaybackStore(storage).read(identity)
     expect(restored).toHaveLength(200)
-    expect(restored[0]).toMatchObject({ playedAt: 204, track: { id: 204 } })
+    expect(restored[0]).toMatchObject({ playedAt: 204, track: { id: 204, provider: 'netease' } })
     expect(restored.at(-1)).toMatchObject({ playedAt: 5, track: { id: 5 } })
   })
 
@@ -188,63 +180,5 @@ describe('recent playback persistence', () => {
 
     expect(store.read(identity)).toEqual([])
     expect(() => store.record(identity, track('netease', 1))).toThrow('RECENT_TRACK_PROVIDER_MISMATCH')
-  })
-})
-
-describe('real liked-track provider adapters', () => {
-  it('loads Netease liked ids through likelist + song_detail and preserves platform order', async () => {
-    ncmMock.likelist.mockResolvedValue({ body: { ids: [3, 2, 1] } })
-    ncmMock.song_detail.mockResolvedValue({
-      body: {
-        songs: [
-          { id: 1, name: 'One', ar: [{ name: 'A' }], al: {} },
-          { id: 3, name: 'Three', ar: [{ name: 'A' }], al: {} },
-        ],
-      },
-    })
-    const provider = new NeteaseProvider(credentials)
-    vi.spyOn(provider, 'loginInfo').mockResolvedValue({
-      loggedIn: true,
-      userId: 7,
-      vipType: 0,
-      vipLevel: 'none',
-      isVip: false,
-      isSvip: false,
-      vipLabel: '无VIP',
-    })
-
-    const result = await provider.likedTracks(0, 2)
-
-    expect(ncmMock.likelist).toHaveBeenCalled()
-    expect(ncmMock.song_detail).toHaveBeenCalledWith(expect.objectContaining({ ids: '3,2' }))
-    expect(result.tracks.map((item: UnifiedSong) => item.id)).toEqual([3])
-    expect(result).toMatchObject({ total: 3, offset: 0, limit: 2, hasMore: true })
-  })
-
-  it('uses the QQ account favorite playlist and returns an explicit unavailable error when absent', async () => {
-    const provider = new QQProvider(credentials)
-    vi.spyOn(provider, 'loginInfo').mockResolvedValue({ provider: 'qq', loggedIn: true, userId: '42' })
-    vi.spyOn(provider, 'userPlaylists').mockResolvedValue({
-      loggedIn: true,
-      playlists: [{ id: 'liked', name: '我喜欢', cover: '', trackCount: 2 }],
-    })
-    vi.spyOn(provider, 'playlistTracks').mockResolvedValue({
-      playlist: { id: 'liked', name: '我喜欢' },
-      tracks: [track('qq', 'a'), track('qq', 'b')],
-    })
-
-    await expect(provider.likedTracks(1, 1)).resolves.toMatchObject({
-      total: 2,
-      offset: 1,
-      limit: 1,
-      hasMore: false,
-      tracks: [{ id: 'b' }],
-    })
-
-    vi.mocked(provider.userPlaylists).mockResolvedValue({ loggedIn: true, playlists: [] })
-    await expect(provider.likedTracks(0, 20)).resolves.toMatchObject({
-      error: 'LIKED_TRACKS_UNAVAILABLE',
-      tracks: [],
-    })
   })
 })

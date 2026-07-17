@@ -49,7 +49,9 @@ function sortLines(lines: Array<LyricLine & { order: number }>): LyricLine[] {
 
 function graphemes(text: string): string[] {
   if (typeof Intl.Segmenter === 'function') {
-    return [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map((part) => part.segment)
+    return [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(
+      (part) => part.segment,
+    )
   }
   return Array.from(text)
 }
@@ -60,12 +62,15 @@ export function estimateWordTimings(lines: readonly LyricLine[], fallbackDuratio
     const segments = graphemes(line.text)
     if (!segments.length) return { ...line }
     const nextTime = lines[index + 1]?.time
-    const duration = Math.max(0.4, Number.isFinite(nextTime) ? Number(nextTime) - line.time : fallbackDuration)
+    const duration = Math.max(
+      0.4,
+      Number.isFinite(nextTime) ? Number(nextTime) - line.time : fallbackDuration,
+    )
     const weights = segments.map((value) => (/^\s|[，。！？、,.!?]$/.test(value) ? 0.45 : 1))
     const total = weights.reduce((sum, value) => sum + value, 0)
     let cursor = line.time
     const words = segments.map((text, wordIndex): LyricWord => {
-      const wordDuration = duration * weights[wordIndex] / total
+      const wordDuration = (duration * weights[wordIndex]) / total
       const word = { text, time: cursor, duration: wordDuration, estimated: true as const }
       cursor += wordDuration
       return word
@@ -129,13 +134,20 @@ export function parseYrc(input: unknown, options: ParseLrcOptions = {}): LyricLi
       const tokenDuration = Math.max(0, Number(wordMatch[2]) / 1000)
       const characters = graphemes(text)
       const characterDuration = characters.length ? tokenDuration / characters.length : tokenDuration
-      characters.forEach((character, characterIndex) => words.push({
-        text: character,
-        time: tokenTime + characterDuration * characterIndex,
-        duration: characterDuration,
-      }))
+      characters.forEach((character, characterIndex) =>
+        words.push({
+          text: character,
+          time: tokenTime + characterDuration * characterIndex,
+          duration: characterDuration,
+        }),
+      )
     }
-    const text = words.length ? words.map((word) => word.text).join('').trim() : match[3].replace(YRC_WORD, '').trim()
+    const text = words.length
+      ? words
+          .map((word) => word.text)
+          .join('')
+          .trim()
+      : match[3].replace(YRC_WORD, '').trim()
     parsed.push({ time, text, ...(words.length ? { words } : {}), order })
     order += 1
   }

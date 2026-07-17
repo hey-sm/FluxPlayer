@@ -25,7 +25,6 @@ describe('mapQQTrack', () => {
     const song = mapQQTrack(TRACK_INFO_FIXTURE)
     expect(song).toMatchObject({
       provider: 'qq',
-      source: 'qq',
       type: 'qq',
       id: '003OUlho2HcRHC',
       qqId: 102065756,
@@ -105,6 +104,8 @@ describe('qqAlbumCover', () => {
     expect(qqAlbumCover('')).toBe('')
   })
   it('生成 y.qq.com photo_new 地址', () => {
-    expect(qqAlbumCover('ABC', 300)).toBe('https://y.qq.com/music/photo_new/T002R300x300M000ABC.jpg?max_age=2592000')
+    expect(qqAlbumCover('ABC', 300)).toBe(
+      'https://y.qq.com/music/photo_new/T002R300x300M000ABC.jpg?max_age=2592000',
+    )
   })
 })

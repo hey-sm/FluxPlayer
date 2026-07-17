@@ -1,6 +1,14 @@
 /** Cookie 解析/规范化 —— 移植自旧 server.js（行为保持一致） */
 
-const COOKIE_ATTRIBUTE_NAMES = new Set(['path', 'domain', 'expires', 'max-age', 'samesite', 'secure', 'httponly'])
+const COOKIE_ATTRIBUTE_NAMES = new Set([
+  'path',
+  'domain',
+  'expires',
+  'max-age',
+  'samesite',
+  'secure',
+  'httponly',
+])
 
 function collectCookiePair(picked: Map<string, string>, key: unknown, value: unknown): void {
   const k = String(key || '').trim()
@@ -16,7 +24,7 @@ function collectCookieInput(input: unknown, picked: Map<string, string>): void {
     return
   }
   if (typeof input === 'object') {
-    const obj = input as Record<string, any>
+    const obj = input as Record<string, unknown>
     if (obj.name && Object.prototype.hasOwnProperty.call(obj, 'value')) {
       collectCookiePair(picked, obj.name, obj.value)
       return
@@ -24,7 +32,7 @@ function collectCookieInput(input: unknown, picked: Map<string, string>): void {
     Object.keys(obj).forEach((key) => {
       const value = obj[key]
       if (value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'value')) {
-        collectCookiePair(picked, key, value.value)
+        collectCookiePair(picked, key, (value as Record<string, unknown>).value)
       } else if (typeof value !== 'object') {
         collectCookiePair(picked, key, value)
       }

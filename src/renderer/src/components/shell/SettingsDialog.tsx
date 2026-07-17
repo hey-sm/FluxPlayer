@@ -1,6 +1,11 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
-export function SettingsDialog({ open, wide, onOpenChange, children }: {
+export function SettingsDialog({
+  open,
+  wide,
+  onOpenChange,
+  children,
+}: {
   open: boolean
   wide?: boolean
   onOpenChange(open: boolean): void

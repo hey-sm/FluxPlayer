@@ -1,18 +1,32 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_THEME_PRESET_ID, THEME_CSS_VARIABLE_NAMES, THEME_PERSISTENCE_KEY,
-  THEME_PERSISTENCE_VERSION, THEME_PRESETS, THEME_PRESET_LIST, createThemeStore,
-  deserializePersistedTheme, isThemeVisualParams, type ThemeStorage, type ThemeStyleTarget,
+  DEFAULT_THEME_PRESET_ID,
+  THEME_CSS_VARIABLE_NAMES,
+  THEME_PERSISTENCE_KEY,
+  THEME_PERSISTENCE_VERSION,
+  THEME_PRESETS,
+  THEME_PRESET_LIST,
+  createThemeStore,
+  deserializePersistedTheme,
+  isThemeVisualParams,
+  type ThemeStorage,
+  type ThemeStyleTarget,
 } from '@renderer/theme'
 
 class MemoryThemeStorage implements ThemeStorage {
   readonly values = new Map<string, string>()
-  getItem(key: string): string | null { return this.values.get(key) ?? null }
-  setItem(key: string, value: string): void { this.values.set(key, value) }
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null
+  }
+  setItem(key: string, value: string): void {
+    this.values.set(key, value)
+  }
 }
 class MemoryStyle implements ThemeStyleTarget {
   readonly values = new Map<string, string>()
-  setProperty(name: string, value: string): void { this.values.set(name, value) }
+  setProperty(name: string, value: string): void {
+    this.values.set(name, value)
+  }
 }
 
 describe('classic-only theme', () => {
@@ -27,11 +41,13 @@ describe('classic-only theme', () => {
   })
 
   it('migrates old preset and customized V1 snapshots to classic defaults', () => {
-    const migrated = deserializePersistedTheme(JSON.stringify({
-      version: THEME_PERSISTENCE_VERSION,
-      selectedPresetId: 'soft-white',
-      visualParams: { accent: '#ff0000', blur: 40 },
-    }))
+    const migrated = deserializePersistedTheme(
+      JSON.stringify({
+        version: THEME_PERSISTENCE_VERSION,
+        selectedPresetId: 'soft-white',
+        visualParams: { accent: '#ff0000', blur: 40 },
+      }),
+    )
     expect(migrated).toEqual({
       selectedPresetId: 'classic-gold',
       visualParams: { ...THEME_PRESETS['classic-gold'].visualParams },
@@ -46,14 +62,20 @@ describe('classic-only theme', () => {
   it('applies classic variables and rewrites persisted state on startup', () => {
     const storage = new MemoryThemeStorage()
     const style = new MemoryStyle()
-    storage.setItem(THEME_PERSISTENCE_KEY, JSON.stringify({
-      version: 1, selectedPresetId: 'dense-fog', visualParams: { blur: 30 },
-    }))
+    storage.setItem(
+      THEME_PERSISTENCE_KEY,
+      JSON.stringify({
+        version: 1,
+        selectedPresetId: 'dense-fog',
+        visualParams: { blur: 30 },
+      }),
+    )
     const store = createThemeStore({ storage, styleTarget: style })
     expect(store.getState()).toMatchObject({ selectedPresetId: 'classic-gold', hydrated: true })
     expect(style.values.get('--flux-bg')).toBe(THEME_PRESETS['classic-gold'].visualParams.background)
     expect(JSON.parse(storage.getItem(THEME_PERSISTENCE_KEY)!)).toEqual({
-      version: 1, selectedPresetId: 'classic-gold',
+      version: 1,
+      selectedPresetId: 'classic-gold',
     })
   })
 

@@ -46,9 +46,7 @@ export function GlassSelect({
         title={title}
         className={cn('glass-select-trigger', className)}
       >
-        <span className="glass-select-value">
-          {renderValue ? renderValue(selected) : selected?.label}
-        </span>
+        <span className="glass-select-value">{renderValue ? renderValue(selected) : selected?.label}</span>
         <SelectPrimitive.Icon className="glass-select-chevron">
           <ChevronDown aria-hidden="true" />
         </SelectPrimitive.Icon>
@@ -67,7 +65,9 @@ export function GlassSelect({
                 <SelectPrimitive.Item
                   key={option.value}
                   value={option.value}
-                  textValue={option.textValue ?? (typeof option.label === 'string' ? option.label : undefined)}
+                  textValue={
+                    option.textValue ?? (typeof option.label === 'string' ? option.label : undefined)
+                  }
                   className="glass-select-item"
                 >
                   <span className="glass-select-check">

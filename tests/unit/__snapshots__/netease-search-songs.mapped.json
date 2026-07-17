@@ -1,7 +1,6 @@
 [
   {
     "provider": "netease",
-    "source": "netease",
     "type": "song",
     "id": 3339230677,
     "name": "晴天",
@@ -24,7 +23,6 @@
   },
   {
     "provider": "netease",
-    "source": "netease",
     "type": "song",
     "id": 3334653818,
     "name": "晴天",
@@ -47,7 +45,6 @@
   },
   {
     "provider": "netease",
-    "source": "netease",
     "type": "song",
     "id": 3344811140,
     "name": "晴天(正式版)",
@@ -70,7 +67,6 @@
   },
   {
     "provider": "netease",
-    "source": "netease",
     "type": "song",
     "id": 3324852509,
     "name": "晴天",
@@ -93,7 +89,6 @@
   },
   {
     "provider": "netease",
-    "source": "netease",
     "type": "song",
     "id": 3357694147,
     "name": "晴天（正式版）",

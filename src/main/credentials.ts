@@ -18,7 +18,7 @@ export interface SafeCredentialStoreOptions {
 
 /**
  * 凭据存储：safeStorage（Windows DPAPI）加密后落盘 userData/credentials/<key>.bin。
- * 旧 alpha 产生的 plain: 文件只保留读取兼容；新写入绝不再降级为明文。
+ * 凭据只接受 safeStorage 密文；不读取旧明文格式，也不降级为明文写入。
  */
 export class SafeCredentialStore implements CredentialStore {
   private readonly dir: string
@@ -49,54 +49,69 @@ export class SafeCredentialStore implements CredentialStore {
       const journal = this.replacementJournalFor(key)
       if (!fs.existsSync(journal)) continue
       try {
-        const record = JSON.parse(fs.readFileSync(journal, 'utf8')) as { temporary?: unknown; previous?: unknown }
+        const record = JSON.parse(fs.readFileSync(journal, 'utf8')) as {
+          temporary?: unknown
+          previous?: unknown
+        }
         if (typeof record.temporary !== 'string' || typeof record.previous !== 'string') {
           throw new Error('INVALID_REPLACEMENT_JOURNAL')
         }
         const temporary = path.resolve(this.dir, record.temporary)
         const previous = path.resolve(this.dir, record.previous)
-        if (path.dirname(temporary) !== path.resolve(this.dir) || path.dirname(previous) !== path.resolve(this.dir)) {
+        if (
+          path.dirname(temporary) !== path.resolve(this.dir) ||
+          path.dirname(previous) !== path.resolve(this.dir)
+        ) {
           throw new Error('REPLACEMENT_JOURNAL_PATH_ESCAPE')
         }
         const file = this.fileFor(key)
-        let finalValid = false
-        if (fs.existsSync(file)) {
-          const raw = fs.readFileSync(file)
-          if (raw.subarray(0, 6).toString('utf8') === 'plain:') finalValid = raw.byteLength > 6
-          else if (this.encryption.isEncryptionAvailable()) finalValid = Boolean(this.encryption.decryptString(raw))
-        }
+        const finalValid = this.isEncryptedCredentialFile(file)
+        const previousValid = this.isEncryptedCredentialFile(previous)
         if (finalValid) {
           if (fs.existsSync(previous)) fs.unlinkSync(previous)
-        } else if (fs.existsSync(previous)) {
+        } else if (previousValid) {
           if (fs.existsSync(file)) fs.unlinkSync(file)
           fs.renameSync(previous, file)
+        } else {
+          if (fs.existsSync(file)) fs.unlinkSync(file)
+          if (fs.existsSync(previous)) fs.unlinkSync(previous)
         }
         if (fs.existsSync(temporary)) fs.unlinkSync(temporary)
         fs.unlinkSync(journal)
-      } catch (error: any) {
-        console.warn(`[Credentials] recover ${key} replacement failed:`, error?.message || error)
+      } catch (error: unknown) {
+        console.warn(
+          `[Credentials] recover ${key} replacement failed:`,
+          error instanceof Error ? error.message : error,
+        )
       }
     }
   }
 
-  private readFromDisk(key: CredentialKey): { value: string; plaintext: boolean } {
-    const file = this.fileFor(key)
-    if (!fs.existsSync(file)) return { value: '', plaintext: false }
-    const raw = fs.readFileSync(file)
-    if (raw.subarray(0, 6).toString('utf8') === 'plain:') {
-      return { value: raw.subarray(6).toString('utf8'), plaintext: true }
+  private isEncryptedCredentialFile(file: string): boolean {
+    if (!fs.existsSync(file) || !this.encryption.isEncryptionAvailable()) return false
+    try {
+      const raw = fs.readFileSync(file)
+      return raw.subarray(0, 6).toString('utf8') !== 'plain:' && Boolean(this.encryption.decryptString(raw))
+    } catch {
+      return false
     }
-    if (!this.encryption.isEncryptionAvailable()) return { value: '', plaintext: false }
-    return { value: this.encryption.decryptString(raw), plaintext: false }
+  }
+
+  private readFromDisk(key: CredentialKey): string {
+    const file = this.fileFor(key)
+    if (!fs.existsSync(file) || !this.encryption.isEncryptionAvailable()) return ''
+    const raw = fs.readFileSync(file)
+    if (raw.subarray(0, 6).toString('utf8') === 'plain:') return ''
+    return this.encryption.decryptString(raw)
   }
 
   get(key: CredentialKey): string {
     if (this.cache.has(key)) return this.cache.get(key) || ''
     let value = ''
     try {
-      value = this.readFromDisk(key).value
-    } catch (error: any) {
-      console.warn(`[Credentials] read ${key} failed:`, error.message)
+      value = this.readFromDisk(key)
+    } catch (error: unknown) {
+      console.warn(`[Credentials] read ${key} failed:`, error instanceof Error ? error.message : error)
     }
     this.cache.set(key, value)
     return value
@@ -109,8 +124,8 @@ export class SafeCredentialStore implements CredentialStore {
         const file = this.fileFor(key)
         if (fs.existsSync(file)) fs.unlinkSync(file)
         this.cache.set(key, '')
-      } catch (error: any) {
-        console.warn(`[Credentials] clear ${key} failed:`, error.message)
+      } catch (error: unknown) {
+        console.warn(`[Credentials] clear ${key} failed:`, error instanceof Error ? error.message : error)
       }
       return
     }
@@ -147,7 +162,7 @@ export class SafeCredentialStore implements CredentialStore {
     try {
       fs.mkdirSync(this.dir, { recursive: true })
       const existing = this.readFromDisk(key)
-      if (existing.value === value && !existing.plaintext) {
+      if (existing === value) {
         this.cache.set(key, value)
         return { ok: true, verified: true, preservedExisting: true }
       }
@@ -178,11 +193,14 @@ export class SafeCredentialStore implements CredentialStore {
       if (fs.existsSync(journal)) fs.unlinkSync(journal)
       this.cache.set(key, value)
       return { ok: true, verified: true, preservedExisting: false }
-    } catch (error: any) {
+    } catch (error: unknown) {
       try {
         if (fs.existsSync(temporary)) fs.unlinkSync(temporary)
         if (installedFinal && fs.existsSync(file)) fs.unlinkSync(file)
-        if (movedPrevious && fs.existsSync(previous)) fs.renameSync(previous, file)
+        if (movedPrevious && fs.existsSync(previous)) {
+          if (this.isEncryptedCredentialFile(previous)) fs.renameSync(previous, file)
+          else fs.unlinkSync(previous)
+        }
         if (fs.existsSync(journal)) fs.unlinkSync(journal)
       } catch {
         /* Recovery is best-effort; the replacement journal is retried on the next startup. */
@@ -191,7 +209,7 @@ export class SafeCredentialStore implements CredentialStore {
         ok: false,
         verified: false,
         preservedExisting: false,
-        error: error?.message || 'CREDENTIAL_WRITE_FAILED',
+        error: error instanceof Error ? error.message : 'CREDENTIAL_WRITE_FAILED',
       }
     }
   }

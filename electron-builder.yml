@@ -8,14 +8,13 @@ directories:
   output: dist
   buildResources: resources
 files:
-  - out/**/*
+  - out/main/**/*
+  - out/preload/**/*
+  - out/renderer/**/*
   - package.json
   - resources/icon.png
+  - '!node_modules/**/*'
 asar: true
-asarUnpack:
-  - node_modules/koffi/**/*
-  - node_modules/@koromix/koffi-win32-x64/**/*
-# 主进程 externalize 的运行时依赖（dependencies）会被自动打进 app.asar 的 node_modules
 win:
   executableName: FluxPlayer
   icon: resources/icon.png

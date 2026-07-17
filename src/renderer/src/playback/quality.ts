@@ -49,7 +49,10 @@ export function nextQQRetryQuality(
  * 注意 normalizeQualityPreference 对空值/未知值回退 'hires'，因此取链失败（无 level）
  * 的重试也会记天花板——这是旧版实测行为（避免整个会话反复撞高音质 403），刻意保留。
  */
-export function qqCeilingFromResolved(resolvedLevel: unknown, nextQuality: QualityLevel): QualityLevel | null {
+export function qqCeilingFromResolved(
+  resolvedLevel: unknown,
+  nextQuality: QualityLevel,
+): QualityLevel | null {
   const resolved = normalizeQualityPreference(resolvedLevel)
   return resolved === 'hires' || resolved === 'lossless' ? nextQuality : null
 }

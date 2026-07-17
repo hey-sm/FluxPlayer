@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: ['NeteaseCloudMusicApi', 'electron-updater', 'zod'] })],
     resolve: {
       alias: {
         '@shared': resolve('src/shared'),
@@ -15,9 +15,7 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: { index: resolve('src/main/index.ts') },
-        // 显式 external 会覆盖 electron-vite 默认列表：electron 必须带上；
-        // NCM 运行时会用 fs 扫描自身 module 目录，必须保持外部依赖，不能内联
-        external: ['electron', 'NeteaseCloudMusicApi', 'koffi', 'electron-updater'],
+        external: ['electron'],
       },
     },
   },
@@ -48,14 +46,8 @@ export default defineConfig({
         '@': resolve('src/renderer/src'),
       },
     },
-    server: {
-      // 开发模式下本地 API 服务固定从 43110 起找空闲端口；主进程会把实际端口
-      // 通过 preload 暴露，renderer 优先用相对路径 + vite 代理。
-      proxy: {
-        '/api': { target: 'http://127.0.0.1:43110', changeOrigin: false },
-      },
-    },
     build: {
+      minify: 'oxc',
       rollupOptions: {
         input: { index: resolve('src/renderer/index.html') },
       },

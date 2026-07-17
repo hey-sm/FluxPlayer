@@ -40,8 +40,12 @@ export interface WallpaperEngineImportRequest {
 }
 
 export const IMAGE_BACKGROUND_EXTENSIONS = Object.freeze([
-  '.avif', '.bmp', '.gif', '.jpeg', '.jpg', '.png', '.webp',
+  '.avif',
+  '.bmp',
+  '.gif',
+  '.jpeg',
+  '.jpg',
+  '.png',
+  '.webp',
 ] as const)
-export const VIDEO_BACKGROUND_EXTENSIONS = Object.freeze([
-  '.m4v', '.mov', '.mp4', '.webm',
-] as const)
+export const VIDEO_BACKGROUND_EXTENSIONS = Object.freeze(['.m4v', '.mov', '.mp4', '.webm'] as const)

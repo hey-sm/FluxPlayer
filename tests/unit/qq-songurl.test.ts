@@ -85,16 +85,22 @@ describe('QQProvider.songUrl', () => {
     expect(out.trialDuration).toBe(30)
     expect(out.trialInfo).toEqual({ start: 0, end: 30, duration: 30, source: 'qq-legacy-vkey' })
     expect(out.reason).toBe('trial_only')
-    expect(out.restriction).toEqual(expect.objectContaining({ category: 'trial_only', action: 'upgrade', duration: 30 }))
+    expect(out.restriction).toEqual(
+      expect.objectContaining({ category: 'trial_only', action: 'upgrade', duration: 30 }),
+    )
 
     const [targetUrl, params, opts] = legacy.mock.calls[0]
     expect(targetUrl).toContain('fcg_music_express_mobile3.fcg')
-    expect(params).toEqual(expect.objectContaining({ songmid: 'SONGMID', filename: 'C400MEDIA.m4a', uin: '0' }))
+    expect(params).toEqual(
+      expect.objectContaining({ songmid: 'SONGMID', filename: 'C400MEDIA.m4a', uin: '0' }),
+    )
     expect(opts).toEqual(expect.objectContaining({ cookie: false }))
   })
 
   it('试听首候选无 vkey 时按 mediaMid → songmid 顺序兜底', async () => {
-    vi.spyOn(QQClient.prototype, 'musicuRequest').mockResolvedValue(vkeyResponse([{ filename: '', purl: '' }]))
+    vi.spyOn(QQClient.prototype, 'musicuRequest').mockResolvedValue(
+      vkeyResponse([{ filename: '', purl: '' }]),
+    )
     const legacy = vi
       .spyOn(QQClient.prototype, 'getJSON')
       .mockResolvedValueOnce({ data: { items: [{ filename: 'C400MEDIA.m4a', vkey: '' }] } })
@@ -110,20 +116,23 @@ describe('QQProvider.songUrl', () => {
     expect(out.filename).toBe('C400SONGMID.m4a')
   })
 
-  it('purl 全空 + 104003（有播放票据）：copyright_unavailable，回显 qqCode/tried，并打诊断日志', async () => {
+  it('purl 全空 + 104003（有播放票据）：copyright_unavailable，隔离 qqCode/tried 诊断并记录日志', async () => {
     vi.spyOn(QQClient.prototype, 'musicuRequest').mockResolvedValue(
       vkeyResponse([{ filename: 'RS01MEDIA.flac', purl: '', result: 104003 }]),
     )
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const out = await makeProvider('uin=123; qm_keyst=KEY').songUrl('SONGMID', 'MEDIA', 'hires')
     expect(out.playable).toBe(false)
-    expect(out.url).toBe('')
+    expect(out.url).toBeNull()
     expect(out.error).toBe('QQ_URL_UNAVAILABLE')
     expect(out.reason).toBe('copyright_unavailable')
-    expect(out.qqCode).toBe(104003)
     expect(out.playbackKeyReady).toBe(true)
-    expect(Array.isArray(out.tried)).toBe(true)
-    expect(warn).toHaveBeenCalledWith('[QQSongUrl] no purl', expect.objectContaining({ mid: 'SONGMID', qqCode: 104003 }))
+    expect(out.diagnostics).toMatchObject({ qqCode: 104003 })
+    expect(Array.isArray(out.diagnostics?.tried)).toBe(true)
+    expect(warn).toHaveBeenCalledWith(
+      '[QQPlayback] no URL',
+      expect.objectContaining({ mid: 'SONGMID', qqCode: 104003 }),
+    )
   })
 
   it('仅网页票据（p_skey）+ 104003：归类 login_required 且 missingPlaybackKey，playbackKeyReady=false', async () => {

@@ -1,89 +1,95 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Hono } from 'hono'
-import { readFileSync } from 'node:fs'
-import { createApp } from '@server/index'
-import { registerProxyRoutes } from '@server/proxy'
-import type { ServerConfig } from '@server/types'
+import { existsSync, readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+import { IPC } from '@shared/ipc-contract'
+import { APP_ENTRY_URL, APP_ORIGIN, PRODUCTION_CSP } from '../../src/main/protocols/constants'
 
-const config: ServerConfig = {
-  host: '127.0.0.1',
-  port: 0,
-  staticRoot: '.',
-  appVersion: 'test',
-  beatCacheDir: '.',
-  credentials: { get: () => '', set: () => {} },
-}
+const projectFile = (relativePath: string): string =>
+  readFileSync(new URL(`../../${relativePath}`, import.meta.url), 'utf8')
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
+const projectPathExists = (relativePath: string): boolean =>
+  existsSync(new URL(`../../${relativePath}`, import.meta.url))
 
-describe('server dev 边界', () => {
-  it('OPTIONS 预检短路并返回登录 POST 所需 CORS 头', async () => {
-    const { app } = createApp(config)
-    const response = await app.request('/api/qq/login/cookie', {
-      method: 'OPTIONS',
-      headers: {
-        Origin: 'http://localhost:5173',
-        'Access-Control-Request-Method': 'POST',
-        'Access-Control-Request-Headers': 'content-type',
-      },
-    })
+describe('Electron application boundary', () => {
+  it('has no Hono, legacy HTTP server, Vite API proxy, or local TCP listener', () => {
+    const packageJson = JSON.parse(projectFile('package.json')) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies }
+    expect(dependencies).not.toHaveProperty('hono')
+    expect(dependencies).not.toHaveProperty('@hono/node-server')
 
-    expect(response.status).toBe(204)
-    expect(response.headers.get('access-control-allow-origin')).toBe('*')
-    expect(response.headers.get('access-control-allow-methods')).toContain('POST')
-    expect(response.headers.get('access-control-allow-headers')).toContain('Content-Type')
+    for (const legacyPath of [
+      'src/server/index.ts',
+      'src/server/routes',
+      'src/server/proxy.ts',
+      'src/server/static.ts',
+    ]) {
+      expect(projectPathExists(legacyPath), `legacy server path must be absent: ${legacyPath}`).toBe(false)
+    }
+
+    const mainSource = projectFile('src/main/index.ts')
+    const viteSource = projectFile('electron.vite.config.ts')
+    expect(mainSource).not.toMatch(/createServer|\.listen\s*\(|startServer|apiBase|43110/)
+    expect(mainSource).not.toMatch(/from ['"](?:hono|@hono\/node-server)['"]/)
+    expect(viteSource).not.toMatch(/['"]\/api['"]\s*:|proxy\s*:/)
   })
 
-  it('QQ 流媒体代理不发送 Referer，透传 Range 与媒体响应头', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(new Uint8Array([1, 2, 3]), {
-        status: 206,
-        headers: {
-          'content-type': 'application/octet-stream',
-          'content-range': 'bytes 0-2/10',
-          'content-length': '3',
-        },
-      }),
-    )
-    const app = new Hono()
-    registerProxyRoutes(app)
-    const upstream = 'https://dl.stream.qqmusic.qq.com/C400MEDIA.m4a?vkey=SECRET&guid=1'
+  it('uses flux://app for renderer assets and a restrictive production CSP', () => {
+    expect(APP_ORIGIN).toBe('flux://app')
+    expect(APP_ENTRY_URL).toBe('flux://app/index.html')
+    expect(PRODUCTION_CSP).toContain("default-src 'self'")
+    expect(PRODUCTION_CSP).toContain("connect-src 'self'")
+    expect(PRODUCTION_CSP).toContain("img-src 'self' data: blob: flux-media: flux-background:")
+    expect(PRODUCTION_CSP).toContain("media-src 'self' blob: flux-media: flux-background:")
+    expect(PRODUCTION_CSP).not.toMatch(/https?:|localhost|127\.0\.0\.1|\*/)
 
-    const response = await app.request('/api/audio?url=' + encodeURIComponent(upstream), {
-      headers: { Range: 'bytes=0-2' },
-    })
+    const protocolSource = projectFile('src/main/protocols/index.ts')
+    const staticProtocolSource = projectFile('src/main/protocols/static-assets.ts')
+    expect(protocolSource).toContain('protocol.handle(APP_SCHEME')
+    expect(protocolSource).toContain('protocol.handle(MEDIA_SCHEME')
+    expect(staticProtocolSource).toContain("'Content-Security-Policy': PRODUCTION_CSP")
 
-    expect(response.status).toBe(206)
-    expect(response.headers.get('content-type')).toBe('audio/mp4')
-    expect(response.headers.get('content-range')).toBe('bytes 0-2/10')
-    const init = fetchMock.mock.calls[0][1] as RequestInit
-    const headers = init.headers as Record<string, string>
-    expect(headers.Range).toBe('bytes=0-2')
-    expect(headers.Referer).toBeUndefined()
+    const rendererHtml = projectFile('src/renderer/index.html')
+    expect(rendererHtml).toContain('flux-media:')
+    expect(rendererHtml).not.toMatch(/https?:\/\/|\/api\//)
   })
 
-  it('上游错误日志剥离 vkey/query，不泄露完整音频 URL', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('forbidden', { status: 403 }))
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const app = new Hono()
-    registerProxyRoutes(app)
-    const upstream = 'https://dl.stream.qqmusic.qq.com/C400MEDIA.m4a?vkey=TOP_SECRET&guid=123'
+  it('exposes music only through typed flux:* IPC channels', () => {
+    const musicChannels = [
+      IPC.musicSearch,
+      IPC.musicResolvePlayback,
+      IPC.musicGetLyrics,
+      IPC.musicGetAuthStatus,
+      IPC.musicLogin,
+      IPC.musicLogout,
+      IPC.musicGetPlaylists,
+      IPC.musicGetPlaylistTracks,
+      IPC.musicGetLikedTracks,
+    ]
+    expect(new Set(musicChannels).size).toBe(musicChannels.length)
+    expect(musicChannels.every((channel) => channel.startsWith('flux:music:'))).toBe(true)
 
-    const response = await app.request('/api/audio?url=' + encodeURIComponent(upstream))
-
-    expect(response.status).toBe(403)
-    const logged = JSON.stringify(error.mock.calls)
-    expect(logged).toContain('https://dl.stream.qqmusic.qq.com/C400MEDIA.m4a')
-    expect(logged).not.toContain('TOP_SECRET')
-    expect(logged).not.toContain('vkey=')
-  })
-
-  it('renderer CSP 放行受控背景协议与 QQ 头像域，远程媒体与接口仍走本地代理', () => {
-    const html = readFileSync(new URL('../../src/renderer/index.html', import.meta.url), 'utf8')
-    expect(html).toContain("img-src 'self' data: blob: flux-background: http://127.0.0.1:* https://*.qlogo.cn;")
-    expect(html).toContain("media-src 'self' blob: flux-background: http://127.0.0.1:*;")
-    expect(html).toContain("connect-src 'self' http://127.0.0.1:*")
+    const preloadSource = projectFile('src/preload/main.ts')
+    const ipcSource = projectFile('src/main/ipc.ts')
+    for (const key of [
+      'musicSearch',
+      'musicResolvePlayback',
+      'musicGetLyrics',
+      'musicGetAuthStatus',
+      'musicLogin',
+      'musicLogout',
+      'musicGetPlaylists',
+      'musicGetPlaylistTracks',
+      'musicGetLikedTracks',
+    ]) {
+      expect(preloadSource).toContain(`IPC.${key}`)
+      expect(ipcSource).toContain(`IPC.${key}`)
+    }
+    expect(preloadSource).toContain("contextBridge.exposeInMainWorld('fluxDesktop', api)")
+    expect(preloadSource).not.toMatch(/apiBase|fetch\s*\(|\/api\//)
+    expect(ipcSource).toContain('secureHandle(')
+    expect(ipcSource).toContain('musicSearchRequestSchema')
+    expect(ipcSource).toContain('playbackResolveRequestSchema')
   })
 })

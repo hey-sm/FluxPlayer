@@ -3,17 +3,28 @@ import { constants as fsConstants } from 'node:fs'
 import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { tmpdir } from 'node:os'
+import type { UnifiedSong } from '../../src/shared/models'
 import {
   _electron as electron,
   expect,
   test as base,
   type ElectronApplication,
   type Page,
-  type Request,
   type Route,
 } from '@playwright/test'
 
-export const E2E_WAV_FIXTURE_URL = 'https://e2e.music.126.net/playwright-memory.wav'
+export const E2E_AUDIO_URL = 'flux-media://audio/e2e-memory.wav'
+
+export interface E2EMusicFixture {
+  query: string
+  track: UnifiedSong
+  quality?: string
+}
+
+export interface E2EMusicCall {
+  channel: string
+  payload: unknown
+}
 
 export interface ElectronExit {
   code: number | null
@@ -25,6 +36,8 @@ export interface ElectronHarness {
   page: Page
   rendererCrashes: string[]
   sandboxPath: string
+  installMusicFixture(fixture: E2EMusicFixture): Promise<void>
+  musicCalls(): Promise<E2EMusicCall[]>
   waitForExit(timeoutMs?: number): Promise<ElectronExit>
   close(): Promise<ElectronExit>
 }
@@ -116,97 +129,167 @@ function createPcmWav(durationSeconds = 8, sampleRate = 16_000): Buffer {
 
 const E2E_WAV = createPcmWav()
 
-function requestedRange(route: Route, totalBytes: number): { start: number; end: number } | null {
+function requestedAudioRange(route: Route): { start: number; end: number } | null {
   const header = route.request().headers().range
   if (!header) return null
   const match = /^bytes=(\d*)-(\d*)$/i.exec(header.trim())
   if (!match) return null
-
   if (!match[1]) {
     const suffixLength = Number(match[2])
     if (!Number.isFinite(suffixLength) || suffixLength <= 0) return null
-    return { start: Math.max(0, totalBytes - suffixLength), end: totalBytes - 1 }
+    return { start: Math.max(0, E2E_WAV.length - suffixLength), end: E2E_WAV.length - 1 }
   }
-
   const start = Number(match[1])
-  const requestedEnd = match[2] ? Number(match[2]) : totalBytes - 1
-  if (!Number.isFinite(start) || !Number.isFinite(requestedEnd) || start >= totalBytes) return null
-  return { start, end: Math.min(totalBytes - 1, Math.max(start, requestedEnd)) }
+  const requestedEnd = match[2] ? Number(match[2]) : E2E_WAV.length - 1
+  if (!Number.isFinite(start) || !Number.isFinite(requestedEnd) || start >= E2E_WAV.length) return null
+  return { start, end: Math.min(E2E_WAV.length - 1, Math.max(start, requestedEnd)) }
 }
 
-export async function fulfillE2EWav(route: Route): Promise<void> {
+async function fulfillE2EAudio(route: Route): Promise<void> {
   const rangeHeader = route.request().headers().range
-  const range = requestedRange(route, E2E_WAV.length)
+  const range = requestedAudioRange(route)
+  const commonHeaders = {
+    'Accept-Ranges': 'bytes',
+    'Access-Control-Allow-Origin': 'flux://app',
+    'Content-Type': 'audio/wav',
+  }
   if (rangeHeader && !range) {
     await route.fulfill({
       status: 416,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Range': `bytes */${E2E_WAV.length}`,
-      },
+      headers: { ...commonHeaders, 'Content-Range': 'bytes */' + E2E_WAV.length },
       body: Buffer.alloc(0),
     })
     return
   }
-
   if (range) {
     const body = E2E_WAV.subarray(range.start, range.end + 1)
     await route.fulfill({
       status: 206,
       headers: {
-        'Accept-Ranges': 'bytes',
-        'Access-Control-Allow-Origin': '*',
+        ...commonHeaders,
         'Content-Length': String(body.length),
-        'Content-Range': `bytes ${range.start}-${range.end}/${E2E_WAV.length}`,
-        'Content-Type': 'audio/wav',
+        'Content-Range': 'bytes ' + range.start + '-' + range.end + '/' + E2E_WAV.length,
       },
       body,
     })
     return
   }
-
   await route.fulfill({
     status: 200,
-    headers: {
-      'Accept-Ranges': 'bytes',
-      'Access-Control-Allow-Origin': '*',
-      'Content-Length': String(E2E_WAV.length),
-      'Content-Type': 'audio/wav',
-    },
+    headers: { ...commonHeaders, 'Content-Length': String(E2E_WAV.length) },
     body: E2E_WAV,
   })
 }
 
-function isAllowedLocalRequest(request: Request): boolean {
-  const requestUrl = new URL(request.url())
-  if (['file:', 'data:', 'blob:', 'devtools:', 'chrome-extension:'].includes(requestUrl.protocol)) return true
-  if (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') return false
-  const hostname = requestUrl.hostname.toLowerCase()
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]'
+async function installTypedMusicFixture(app: ElectronApplication, fixture: E2EMusicFixture): Promise<void> {
+  const channels = {
+    search: 'flux:music:search',
+    resolvePlayback: 'flux:music:resolve-playback',
+    getLyrics: 'flux:music:get-lyrics',
+    getAuthStatus: 'flux:music:get-auth-status',
+  } as const
+
+  await app.evaluate(
+    ({ ipcMain }, payload) => {
+      type RecordedCall = { channel: string; payload: unknown }
+      const calls: RecordedCall[] = []
+      const mainGlobal = globalThis as typeof globalThis & {
+        __fluxE2EMusicCalls?: RecordedCall[]
+      }
+      mainGlobal.__fluxE2EMusicCalls = calls
+
+      const handle = (channel: string, responder: (input: Record<string, unknown>) => unknown): void => {
+        ipcMain.removeHandler(channel)
+        ipcMain.handle(channel, (_event, rawInput: unknown) => {
+          const input =
+            rawInput && typeof rawInput === 'object'
+              ? (rawInput as Record<string, unknown>)
+              : ({} as Record<string, unknown>)
+          calls.push({ channel, payload: rawInput })
+          return responder(input)
+        })
+      }
+
+      handle(payload.channels.search, (input) => {
+        const provider = input.provider
+        if (provider !== 'netease' && provider !== 'qq') throw new Error('E2E_INVALID_PROVIDER')
+        if (input.keywords !== payload.fixture.query) throw new Error('E2E_UNEXPECTED_SEARCH')
+        return {
+          provider,
+          songs: provider === payload.fixture.track.provider ? [payload.fixture.track] : [],
+        }
+      })
+      handle(payload.channels.resolvePlayback, (input) => {
+        const song = input.song as { id?: unknown; provider?: unknown } | undefined
+        if (
+          !song ||
+          song.id !== payload.fixture.track.id ||
+          song.provider !== payload.fixture.track.provider
+        ) {
+          throw new Error('E2E_UNEXPECTED_PLAYBACK_REQUEST')
+        }
+        return {
+          provider: payload.fixture.track.provider,
+          url: payload.audioUrl,
+          trial: false,
+          playable: true,
+          level: 'lossless',
+          quality: payload.fixture.quality ?? 'E2E WAV',
+        }
+      })
+      handle(payload.channels.getLyrics, (input) => ({
+        provider: input.provider,
+        id: input.id,
+        lyric: '',
+        tlyric: '',
+        yrc: '',
+        lines: [],
+        source: 'e2e-empty',
+      }))
+      handle(payload.channels.getAuthStatus, (input) => ({
+        provider: input.provider,
+        loggedIn: false,
+      }))
+    },
+    {
+      fixture,
+      channels,
+      audioUrl: E2E_AUDIO_URL,
+    },
+  )
+  await app.context().route(E2E_AUDIO_URL, fulfillE2EAudio)
 }
 
-function targetsMemoryWav(request: Request): boolean {
-  const requestUrl = new URL(request.url())
-  if (requestUrl.toString() === E2E_WAV_FIXTURE_URL) return true
-  return (
-    requestUrl.pathname.endsWith('/api/audio') && requestUrl.searchParams.get('url') === E2E_WAV_FIXTURE_URL
-  )
+async function readTypedMusicCalls(app: ElectronApplication): Promise<E2EMusicCall[]> {
+  return app.evaluate(() => {
+    const mainGlobal = globalThis as typeof globalThis & {
+      __fluxE2EMusicCalls?: E2EMusicCall[]
+    }
+    return mainGlobal.__fluxE2EMusicCalls ? [...mainGlobal.__fluxE2EMusicCalls] : []
+  })
+}
+
+function isAllowedAppRequest(route: Route): boolean {
+  const requestUrl = new URL(route.request().url())
+  if (['file:', 'data:', 'blob:', 'devtools:', 'chrome-extension:'].includes(requestUrl.protocol)) {
+    return true
+  }
+  if (requestUrl.protocol === 'flux:') return requestUrl.hostname === 'app'
+  if (requestUrl.protocol === 'flux-media:') {
+    return requestUrl.hostname === 'audio' || requestUrl.hostname === 'cover'
+  }
+  return requestUrl.protocol === 'flux-background:'
 }
 
 async function guardNetworkRequest(route: Route, violations: string[]): Promise<void> {
-  const request = route.request()
-  // The synthetic public-looking URL is never sent to the network. Direct requests and the local
-  // renderer proxy form both receive the same in-memory PCM fixture.
-  if (targetsMemoryWav(request)) {
-    await fulfillE2EWav(route)
-    return
-  }
-  if (isAllowedLocalRequest(request)) {
+  if (isAllowedAppRequest(route)) {
     await route.fallback()
     return
   }
 
-  const message = `Blocked unmatched external ${request.method()} ${request.url()} (${request.resourceType()})`
+  const request = route.request()
+  const message =
+    'Blocked non-protocol ' + request.method() + ' ' + request.url() + ' (' + request.resourceType() + ')'
   violations.push(message)
   await route.abort('blockedbyclient')
 }
@@ -734,6 +817,8 @@ export const test = base.extend<ElectronFixtures>({
           page,
           rendererCrashes,
           sandboxPath,
+          installMusicFixture: (fixture) => installTypedMusicFixture(app!, fixture),
+          musicCalls: () => readTypedMusicCalls(app!),
           waitForExit: (timeoutMs) => controller!.waitForExit(timeoutMs),
           close: () => controller!.close(),
         }

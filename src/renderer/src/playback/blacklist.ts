@@ -14,7 +14,11 @@ export function songFailKey(song: UnifiedSong): string {
   return `${song.provider}:${String(song.mid || song.songmid || song.id || '')}`
 }
 
-export function markPlaybackFailed(map: Map<string, number>, song: UnifiedSong | undefined, now = Date.now()): void {
+export function markPlaybackFailed(
+  map: Map<string, number>,
+  song: UnifiedSong | undefined,
+  now = Date.now(),
+): void {
   if (!song) return
   // 顺手清掉过期条目，Map 稳态只保留活跃窗口内的几条
   for (const [key, at] of map) {

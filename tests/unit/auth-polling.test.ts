@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { QQLoginInfo } from '@shared/models'
-import { apiJson } from '@renderer/api'
+import type { MusicAuthResult } from '@shared/music-contract'
+import { musicClient } from '@renderer/api'
 import { createQQPollingController, QQ_AUTH_POLL_INTERVAL_MS } from '@renderer/auth/qq-polling'
 import { useAuth } from '@renderer/stores/auth'
 
-vi.mock('@renderer/api', () => ({
-  apiJson: vi.fn(),
+const musicClientMock = vi.hoisted(() => ({
+  getAuthStatus: vi.fn(),
+  login: vi.fn(),
+  logout: vi.fn(),
 }))
 
-const apiJsonMock = vi.mocked(apiJson)
+vi.mock('@renderer/api', () => ({
+  musicClient: musicClientMock,
+}))
 
-function qqStatus(loggedIn: boolean): QQLoginInfo {
+function qqStatus(loggedIn: boolean): MusicAuthResult {
   return {
     provider: 'qq',
     loggedIn,
@@ -20,17 +24,14 @@ function qqStatus(loggedIn: boolean): QQLoginInfo {
 
 beforeEach(() => {
   vi.useFakeTimers()
-  apiJsonMock.mockReset()
+  musicClientMock.getAuthStatus.mockReset()
+  musicClientMock.login.mockReset()
+  musicClientMock.logout.mockReset().mockResolvedValue(undefined)
   useAuth.getState().stopQQPolling()
   useAuth.setState({
     qq: null,
     qqBusy: false,
     message: '',
-  })
-  vi.stubGlobal('window', {
-    fluxDesktop: {
-      clearQQLogin: vi.fn().mockResolvedValue({ ok: true }),
-    },
   })
 })
 
@@ -38,84 +39,88 @@ afterEach(() => {
   useAuth.getState().stopQQPolling()
   vi.clearAllTimers()
   vi.useRealTimers()
-  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
-describe('QQ auth polling', () => {
-  it('refreshes every 45 seconds after a logged-in status and keeps cache busting', async () => {
-    apiJsonMock.mockResolvedValue(qqStatus(true))
+describe('QQ auth polling through the typed music client', () => {
+  it('refreshes every 45 seconds after a logged-in typed status', async () => {
+    musicClientMock.getAuthStatus.mockResolvedValue(qqStatus(true))
 
     await useAuth.getState().refreshQQ()
-    expect(apiJsonMock).toHaveBeenCalledTimes(1)
-    expect(apiJsonMock.mock.calls[0]?.[0]).toMatch(/^\/api\/qq\/login\/status\?t=\d+$/)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(1)
+    expect(musicClient.getAuthStatus).toHaveBeenLastCalledWith('qq')
 
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS - 1)
-    expect(apiJsonMock).toHaveBeenCalledTimes(1)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(1)
-    expect(apiJsonMock).toHaveBeenCalledTimes(2)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(2)
 
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS)
-    expect(apiJsonMock).toHaveBeenCalledTimes(3)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(3)
   })
 
-  it('starts after a successful QQ login', async () => {
-    vi.stubGlobal('window', {
-      fluxDesktop: {
-        openQQLogin: vi.fn().mockResolvedValue({
-          ok: true,
-          cancelled: false,
-          cookie: 'uin=12345',
-        }),
-        clearQQLogin: vi.fn().mockResolvedValue({ ok: true }),
-      },
-    })
-    apiJsonMock.mockResolvedValue(qqStatus(true))
+  it('starts polling after typed QQ login succeeds', async () => {
+    musicClientMock.login.mockResolvedValue(qqStatus(true))
+    musicClientMock.getAuthStatus.mockResolvedValue(qqStatus(true))
 
     await useAuth.getState().loginQQ()
-    expect(apiJsonMock).toHaveBeenCalledTimes(2)
+    expect(musicClient.login).toHaveBeenCalledOnce()
+    expect(musicClient.login).toHaveBeenCalledWith('qq')
+    expect(useAuth.getState().qq).toEqual(qqStatus(true))
 
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS)
-    expect(apiJsonMock).toHaveBeenCalledTimes(3)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledOnce()
+    expect(musicClient.getAuthStatus).toHaveBeenCalledWith('qq')
   })
 
   it('does not start while QQ is logged out', async () => {
-    apiJsonMock.mockResolvedValue(qqStatus(false))
+    musicClientMock.getAuthStatus.mockResolvedValue(qqStatus(false))
 
     await useAuth.getState().refreshQQ()
     expect(useAuth.getState().qq?.loggedIn).toBe(false)
 
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS * 2)
-    expect(apiJsonMock).toHaveBeenCalledTimes(1)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects an auth response for the wrong provider', async () => {
+    musicClientMock.getAuthStatus.mockResolvedValue({ provider: 'netease', loggedIn: true })
+
+    await useAuth.getState().refreshQQ()
+
+    expect(useAuth.getState().qq).toBeNull()
+    await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS * 2)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(1)
   })
 
   it('stops when a scheduled refresh reports QQ logged out', async () => {
-    apiJsonMock.mockResolvedValueOnce(qqStatus(true)).mockResolvedValue(qqStatus(false))
+    musicClientMock.getAuthStatus.mockResolvedValueOnce(qqStatus(true)).mockResolvedValue(qqStatus(false))
 
     await useAuth.getState().refreshQQ()
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS)
-    expect(apiJsonMock).toHaveBeenCalledTimes(2)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(2)
     expect(useAuth.getState().qq?.loggedIn).toBe(false)
 
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS * 2)
-    expect(apiJsonMock).toHaveBeenCalledTimes(2)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(2)
   })
 
-  it('stops immediately when QQ logout starts', async () => {
-    apiJsonMock.mockResolvedValue(qqStatus(true))
+  it('stops immediately and clears state when typed logout starts', async () => {
+    musicClientMock.getAuthStatus.mockResolvedValue(qqStatus(true))
     await useAuth.getState().refreshQQ()
 
     await useAuth.getState().logoutQQ()
-    const callsAfterLogout = apiJsonMock.mock.calls.length
+    expect(musicClient.logout).toHaveBeenCalledWith('qq')
 
+    const statusCallsAfterLogout = musicClientMock.getAuthStatus.mock.calls.length
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS * 2)
-    expect(apiJsonMock).toHaveBeenCalledTimes(callsAfterLogout)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(statusCallsAfterLogout)
     expect(useAuth.getState().qq).toBeNull()
   })
 
   it('does not stack intervals when started repeatedly', async () => {
-    apiJsonMock.mockResolvedValue(qqStatus(true))
+    musicClientMock.getAuthStatus.mockResolvedValue(qqStatus(true))
     useAuth.setState({ qq: qqStatus(true) })
 
     useAuth.getState().startQQPolling()
@@ -123,17 +128,17 @@ describe('QQ auth polling', () => {
     useAuth.getState().startQQPolling()
 
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS)
-    expect(apiJsonMock).toHaveBeenCalledTimes(1)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS)
-    expect(apiJsonMock).toHaveBeenCalledTimes(2)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(2)
   })
 
   it('returns lifecycle cleanup that stops current and future polling', async () => {
-    let resolveStatus!: (status: QQLoginInfo) => void
-    apiJsonMock.mockImplementation(
+    let resolveStatus!: (status: MusicAuthResult) => void
+    musicClientMock.getAuthStatus.mockImplementation(
       () =>
-        new Promise<QQLoginInfo>((resolve) => {
+        new Promise<MusicAuthResult>((resolve) => {
           resolveStatus = resolve
         }),
     )
@@ -141,15 +146,15 @@ describe('QQ auth polling', () => {
 
     const cleanup = useAuth.getState().startQQPolling()
     vi.advanceTimersByTime(QQ_AUTH_POLL_INTERVAL_MS)
-    expect(apiJsonMock).toHaveBeenCalledTimes(1)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(1)
 
     cleanup()
     resolveStatus(qqStatus(true))
     await Promise.resolve()
-    apiJsonMock.mockResolvedValue(qqStatus(true))
+    musicClientMock.getAuthStatus.mockResolvedValue(qqStatus(true))
 
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS * 2)
-    expect(apiJsonMock).toHaveBeenCalledTimes(1)
+    expect(musicClient.getAuthStatus).toHaveBeenCalledTimes(1)
   })
 
   it('contains rejected polling work without an unhandled rejection', async () => {

@@ -1,6 +1,7 @@
 import { BrowserWindow, screen, shell } from 'electron'
 import type { DesktopWindowState, DisplayState } from '@shared/ipc-contract'
 import { IPC } from '@shared/ipc-contract'
+import { APP_ENTRY_URL } from '../protocols'
 
 const WINDOWED_ASPECT = 16 / 9
 const WINDOWED_SCALE = 3 / 4
@@ -12,7 +13,10 @@ let htmlFullscreenActive = false
 let windowFullscreenActive = false
 let stateTimer: NodeJS.Timeout | null = null
 
-function rectsOverlapOnY(a: any, b: any): boolean {
+function rectsOverlapOnY(
+  a: { y: number; height: number } | null | undefined,
+  b: { y: number; height: number } | null | undefined,
+): boolean {
   if (!a || !b) return false
   const aTop = Number(a.y) || 0
   const bTop = Number(b.y) || 0
@@ -48,9 +52,7 @@ function getDisplayState(win: BrowserWindow | null): DisplayState {
     isPrimaryDisplay: !!(display && primary && display.id === primary.id),
     hasDisplayOnLeft,
     hasDisplayOnRight,
-    displayBounds: bounds
-      ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
-      : null,
+    displayBounds: bounds ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height } : null,
   }
 }
 
@@ -175,7 +177,6 @@ export function toggleFullscreen(win: BrowserWindow | null): void {
 }
 
 export interface MainWindowOptions {
-  serverPort: number
   preloadPath: string
   iconPath?: string
   /** 开发模式下 electron-vite 提供的 renderer dev server 地址 */
@@ -201,7 +202,7 @@ export function didWindowLoad(win: BrowserWindow | null): boolean {
 
 async function buildAndLoad(options: MainWindowOptions): Promise<BrowserWindow> {
   const win = buildWindow(options)
-  const target = options.devRendererUrl || `http://127.0.0.1:${options.serverPort}`
+  const target = options.devRendererUrl || APP_ENTRY_URL
   try {
     // 某些环境下渲染进程崩溃会让 loadURL 永不 settle，必须加超时竞速
     await Promise.race([
@@ -209,8 +210,8 @@ async function buildAndLoad(options: MainWindowOptions): Promise<BrowserWindow> 
       new Promise((_, reject) => setTimeout(() => reject(new Error('LOAD_TIMEOUT')), 15000)),
     ])
     loadedWindows.add(win)
-  } catch (e: any) {
-    console.error('Main window load failed:', e.message)
+  } catch (error: unknown) {
+    console.error('Main window load failed:', error instanceof Error ? error.message : String(error))
   }
   return win
 }
@@ -233,9 +234,8 @@ function buildWindow(options: MainWindowOptions): BrowserWindow {
       preload: options.preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
-      backgroundThrottling: false,
-      additionalArguments: [`--flux-api-base=http://127.0.0.1:${options.serverPort}`],
+      sandbox: true,
+      backgroundThrottling: true,
     },
   })
   options.onCreated?.(win)
@@ -244,7 +244,18 @@ function buildWindow(options: MainWindowOptions): BrowserWindow {
     console.warn('[FluxPlayer] renderer gone:', details.reason, details.exitCode)
   })
 
-  const allowedOrigin = new URL(options.devRendererUrl || `http://127.0.0.1:${options.serverPort}`).origin
+  const allowedUrl = new URL(options.devRendererUrl || APP_ENTRY_URL)
+  const isAllowedNavigation = (rawUrl: string): boolean => {
+    try {
+      const target = new URL(rawUrl)
+      if (allowedUrl.protocol === 'flux:') {
+        return target.protocol === 'flux:' && target.hostname === 'app' && !target.port
+      }
+      return target.origin === allowedUrl.origin
+    } catch {
+      return false
+    }
+  }
   win.webContents.setWindowOpenHandler(({ url }) => {
     try {
       const target = new URL(url)
@@ -255,11 +266,7 @@ function buildWindow(options: MainWindowOptions): BrowserWindow {
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (event, url) => {
-    try {
-      if (new URL(url).origin === allowedOrigin) return
-    } catch {
-      // Invalid URLs are always blocked.
-    }
+    if (isAllowedNavigation(url)) return
     event.preventDefault()
     try {
       const target = new URL(url)
@@ -270,7 +277,11 @@ function buildWindow(options: MainWindowOptions): BrowserWindow {
   })
 
   win.webContents.on('before-input-event', (event, input) => {
-    if (input.type === 'keyDown' && (input.key === 'Escape' || input.code === 'Escape') && win.isFullScreen()) {
+    if (
+      input.type === 'keyDown' &&
+      (input.key === 'Escape' || input.code === 'Escape') &&
+      win.isFullScreen()
+    ) {
       event.preventDefault()
       exitFullscreenToWindow(win)
     }
@@ -290,9 +301,14 @@ function buildWindow(options: MainWindowOptions): BrowserWindow {
     win.show()
     notify()
   })
-  for (const event of ['maximize', 'unmaximize', 'minimize', 'restore', 'show', 'hide', 'focus', 'blur'] as const) {
-    win.on(event as any, notify)
-  }
+  win.on('maximize', notify)
+  win.on('unmaximize', notify)
+  win.on('minimize', notify)
+  win.on('restore', notify)
+  win.on('show', notify)
+  win.on('hide', notify)
+  win.on('focus', notify)
+  win.on('blur', notify)
   win.on('move', notifyDebounced)
   win.on('resize', notifyDebounced)
   win.on('enter-full-screen', () => {

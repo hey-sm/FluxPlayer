@@ -1,10 +1,25 @@
-import type { CredentialStore } from '../../types'
-import type { LyricDoc, PlaybackRestriction, QQLoginInfo, SongUrlResult, UnifiedSong } from '@shared/models'
-import { QQ_QUALITY_CANDIDATE_TEMPLATES, normalizeQualityPreference, qualityCandidatesFrom } from '@shared/models'
+import type { MusicAuthResult, PlaylistListResult, PlaylistTracksResult } from '@shared/music-contract'
+import type { LyricDoc, PlaybackRestriction, QQLoginInfo, UnifiedPlaylist, UnifiedSong } from '@shared/models'
+import {
+  QQ_QUALITY_CANDIDATE_TEMPLATES,
+  normalizeQualityPreference,
+  qualityCandidatesFrom,
+} from '@shared/models'
 import { buildLyricLines } from '@shared/lyrics'
+import type { CredentialStore, ProviderLikedTracksResult, UpstreamPlaybackResource } from '../../types'
 import { normalizeCookieHeader, rawCookieFallback } from '../../util/cookies'
+import { parseJSONText, requestText } from '../../util/http'
+import {
+  asArray,
+  asRecord,
+  at,
+  booleanValue,
+  errorMessage,
+  field,
+  numberValue,
+  stringValue,
+} from '../../util/unknown'
 import { QQClient, QQ_HEADERS, QQ_SMARTBOX_URL } from './client'
-import { QQSession, normalizeQQCookieInput } from './session'
 import {
   decodeQQLyricText,
   isQQFavoritePlaylist,
@@ -15,11 +30,20 @@ import {
   mapQQTrack,
   normalizeQQSongId,
 } from './mappers'
-import { parseJSONText, requestText } from '../../util/http'
+import { QQSession, normalizeQQCookieInput } from './session'
 
 const QQ_LEGACY_VKEY_URL = 'https://c.y.qq.com/base/fcgi-bin/fcg_music_express_mobile3.fcg'
 const QQ_TRIAL_DURATION_SECONDS = 30
 const QQ_TRIAL_STREAM_ORIGIN = 'https://dl.stream.qqmusic.qq.com'
+
+interface FileCandidate {
+  prefix: string
+  ext: string
+  level: string
+  label: string
+  mediaId: string
+  filename: string
+}
 
 function playbackRestriction(
   category: PlaybackRestriction['category'],
@@ -27,30 +51,29 @@ function playbackRestriction(
   action: string,
   extra?: Record<string, unknown>,
 ): PlaybackRestriction {
-  return { provider: 'qq', category, action, message, ...(extra || {}) }
+  return { provider: 'qq', category, action, message, ...(extra ?? {}) }
 }
 
 export function classifyQQPlaybackRestriction(
-  info: any,
+  rawInfo: unknown,
   session: { hasSession: boolean; hasPlaybackKey: boolean },
 ): PlaybackRestriction {
-  const hasSession = !!session.hasSession
-  const hasPlaybackKey = !!session.hasPlaybackKey
-  const rawMsg = String((info && (info.msg || info.tips || info.errmsg || info.message)) || '').trim()
-  const code = Number((info && (info.result || info.code || info.errtype)) || 0)
-  const lower = rawMsg.toLowerCase()
-  if (!hasSession) {
+  const info = asRecord(rawInfo)
+  const rawMessage = stringValue(info.msg ?? info.tips ?? info.errmsg ?? info.message).trim()
+  const code = numberValue(info.result ?? info.code ?? info.errtype)
+  const lower = rawMessage.toLowerCase()
+  if (!session.hasSession) {
     return playbackRestriction('login_required', 'QQ 音乐需要登录或授权后才能获取播放地址', 'login', {
       code,
-      rawMessage: rawMsg,
+      rawMessage,
     })
   }
-  if (!hasPlaybackKey && code === 104003) {
+  if (!session.hasPlaybackKey && code === 104003) {
     return playbackRestriction(
       'login_required',
       'QQ 音乐当前只拿到了网页登录状态，还缺少播放授权，请重新打开官方 QQ 音乐登录窗口完成授权',
       'login',
-      { code, rawMessage: rawMsg, missingPlaybackKey: true },
+      { code, rawMessage, missingPlaybackKey: true },
     )
   }
   if (code === 104003) {
@@ -58,25 +81,51 @@ export function classifyQQPlaybackRestriction(
       'copyright_unavailable',
       'QQ 音乐没有给当前版本返回播放地址，通常是版权、会员或官方版本限制，可以换一个搜索结果或切到网易云源',
       'switch_source',
-      { code, rawMessage: rawMsg },
+      { code, rawMessage },
     )
   }
-  if (/vip|会员|付费|购买|数字专辑|专辑|pay/.test(lower + rawMsg)) {
+  if (/vip|会员|付费|购买|数字专辑|专辑|pay/.test(lower + rawMessage)) {
     return playbackRestriction('paid_required', 'QQ 音乐歌曲需要会员、购买或数字专辑权限', 'upgrade', {
       code,
-      rawMessage: rawMsg,
+      rawMessage,
     })
   }
-  if (code && code !== 0) {
-    return playbackRestriction('copyright_unavailable', rawMsg || 'QQ 音乐版权暂不可播或仅官方客户端可播', 'switch_source', {
+  if (code !== 0) {
+    return playbackRestriction(
+      'copyright_unavailable',
+      rawMessage || 'QQ 音乐版权暂不可播或仅官方客户端可播',
+      'switch_source',
+      {
+        code,
+        rawMessage,
+      },
+    )
+  }
+  return playbackRestriction(
+    'url_unavailable',
+    'QQ 音乐没有返回播放地址，可能受版权、会员或官方客户端限制',
+    'switch_source',
+    {
       code,
-      rawMessage: rawMsg,
-    })
+      rawMessage,
+    },
+  )
+}
+
+function toAuthResult(info: QQLoginInfo): MusicAuthResult {
+  return {
+    provider: 'qq',
+    loggedIn: info.loggedIn,
+    preview: info.preview,
+    userId: info.userId,
+    nickname: info.nickname,
+    avatar: info.avatar,
+    vipType: info.vipType,
+    hasCookie: info.hasCookie,
+    playbackKeyReady: info.playbackKeyReady,
+    profileSource: info.profileSource,
+    profileUnavailable: info.profileUnavailable,
   }
-  return playbackRestriction('url_unavailable', 'QQ 音乐没有返回播放地址，可能受版权、会员或官方客户端限制', 'switch_source', {
-    code,
-    rawMessage: rawMsg,
-  })
 }
 
 export class QQProvider {
@@ -99,7 +148,6 @@ export class QQProvider {
     this.credentials.set('qq', normalizeCookieHeader(raw) || rawCookieFallback(raw))
   }
 
-  /** 校验并保存前端/登录窗口回填的 cookie；返回是否有效 */
   acceptCookieInput(raw: unknown): { ok: boolean; normalized: string } {
     const normalized = normalizeQQCookieInput(String(raw || ''))
     const session = new QQSession(normalized)
@@ -108,118 +156,126 @@ export class QQProvider {
     return { ok: true, normalized }
   }
 
-  private profileFromBody(body: any, session: QQSession): QQLoginInfo {
-    const uin = session.uin
-    const data = (body && (body.data || body.profile || body.creator || body.result)) || {}
-    const creator = data.creator || data.user || data.profile || data || {}
-    const vipInfo = data.vipInfo || data.vipinfo || data.vip || creator.vipInfo || creator.vipinfo || {}
-    const profileNick = creator.nick || creator.nickname || creator.name || creator.hostname || creator.title || ''
-    const profileAvatar = creator.headpic || creator.avatar || creator.avatarUrl || creator.logo || ''
-    const cookieNick = session.nickname()
-    const nick = profileNick || cookieNick || ''
+  acceptCredential(raw: unknown): boolean {
+    return this.acceptCookieInput(raw).ok
+  }
+
+  private profileFromBody(rawBody: unknown, session: QQSession): QQLoginInfo {
+    const body = asRecord(rawBody)
+    const data = asRecord(body.data ?? body.profile ?? body.creator ?? body.result)
+    const creator = asRecord(data.creator ?? data.user ?? data.profile ?? data)
+    const vipInfo = asRecord(data.vipInfo ?? data.vipinfo ?? data.vip ?? creator.vipInfo ?? creator.vipinfo)
+    const profileNickname = stringValue(
+      creator.nick ?? creator.nickname ?? creator.name ?? creator.hostname ?? creator.title,
+    )
+    const profileAvatar = stringValue(creator.headpic ?? creator.avatar ?? creator.avatarUrl ?? creator.logo)
+    const cookieNickname = session.nickname()
+    const nickname = profileNickname || cookieNickname
     const avatar = profileAvatar || session.avatar()
-    let vipType =
-      Number(
-        session.obj.vipType ||
-          session.obj.vip_type ||
-          data.vipType ||
-          data.vip_type ||
-          data.viptype ||
-          data.music_vip_level ||
-          data.green_vip_level ||
-          data.luxury_vip_level ||
-          creator.vipType ||
-          creator.vip_type ||
-          creator.music_vip_level ||
-          creator.green_vip_level ||
-          creator.luxury_vip_level ||
-          vipInfo.vipType ||
-          vipInfo.vip_type ||
-          vipInfo.music_vip_level ||
-          vipInfo.green_vip_level ||
-          vipInfo.luxury_vip_level ||
-          0,
-      ) || 0
+    let vipType = numberValue(
+      session.obj.vip_type ??
+        session.obj.viptype ??
+        session.obj.vip_level ??
+        session.obj.vipLevel ??
+        data.vipType ??
+        data.vip_type ??
+        vipInfo.vipType ??
+        vipInfo.vip_type ??
+        creator.vipType ??
+        creator.vip_type,
+    )
     if (!vipType) {
       const vipFlag =
-        data.isVip ||
-        data.is_vip ||
-        data.vipFlag ||
-        data.vipflag ||
-        creator.isVip ||
-        creator.is_vip ||
-        vipInfo.isVip ||
-        vipInfo.is_vip ||
+        data.isVip ??
+        data.is_vip ??
+        data.vipFlag ??
+        data.vipflag ??
+        creator.isVip ??
+        creator.is_vip ??
+        vipInfo.isVip ??
+        vipInfo.is_vip ??
         vipInfo.vipFlag
-      if (vipFlag === true || Number(vipFlag) > 0 || String(vipFlag || '').toLowerCase() === 'true') vipType = 1
+      if (booleanValue(vipFlag) || numberValue(vipFlag) > 0) vipType = 1
     }
+    const uin = session.uin
     return {
       provider: 'qq',
-      loggedIn: !!(uin && session.musicKey),
+      loggedIn: Boolean(uin && session.musicKey),
       preview: false,
       userId: uin,
-      nickname: nick || (uin ? 'QQ ' + uin : 'QQ 音乐'),
+      nickname: nickname || (uin ? `QQ ${uin}` : 'QQ 音乐'),
       avatar,
       vipType,
-      hasCookie: !!this.cookie,
+      hasCookie: Boolean(this.cookie),
       playbackKeyReady: session.playbackReady,
-      profileSource: profileNick || profileAvatar ? 'qq-profile' : cookieNick || avatar ? 'cookie' : 'fallback',
+      profileSource:
+        profileNickname || profileAvatar ? 'qq-profile' : cookieNickname || avatar ? 'cookie' : 'fallback',
     }
   }
 
   async loginInfo(): Promise<QQLoginInfo> {
     const session = this.session
-    if (!session.uin || !session.musicKey) return { provider: 'qq', loggedIn: false, hasCookie: !!this.cookie }
+    if (!session.uin || !session.musicKey) {
+      return { provider: 'qq', loggedIn: false, hasCookie: Boolean(this.cookie) }
+    }
     const fallback = this.profileFromBody(null, session)
     try {
-      const body = await this.client.getJSON(
-        'https://c.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg',
-        {
-          cid: '205360838',
-          userid: session.uin,
-          reqfrom: '1',
-          g_tk: '5381',
-          loginUin: session.uin,
-          hostUin: '0',
-          format: 'json',
-          inCharset: 'utf8',
-          outCharset: 'utf-8',
-          notice: '0',
-          platform: 'yqq.json',
-          needNewCode: '0',
-        },
-      )
+      const body = await this.client.getJSON('https://c.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg', {
+        cid: '205360838',
+        userid: session.uin,
+        reqfrom: '1',
+        g_tk: '5381',
+        loginUin: session.uin,
+        hostUin: '0',
+        format: 'json',
+        inCharset: 'utf8',
+        outCharset: 'utf-8',
+        notice: '0',
+        platform: 'yqq.json',
+        needNewCode: '0',
+      })
       const info = this.profileFromBody(body, session)
-      if (body && (body.code === 1000 || body.result === 301)) {
+      if (numberValue(field(body, 'code')) === 1000 || numberValue(field(body, 'result')) === 301) {
         return { ...fallback, profileUnavailable: true }
       }
       return info
-    } catch (e: any) {
-      console.warn('[QQLogin] profile check failed:', e.message)
+    } catch (error) {
+      console.warn('[QQAuth] profile check failed:', errorMessage(error))
       return { ...fallback, profileUnavailable: true }
     }
   }
 
+  async authStatus(): Promise<MusicAuthResult> {
+    return toAuthResult(await this.loginInfo())
+  }
+
   async smartboxSearch(keywords: string, limit: number): Promise<UnifiedSong[]> {
-    const u = new URL(QQ_SMARTBOX_URL)
-    u.searchParams.set('format', 'json')
-    u.searchParams.set('key', keywords)
-    u.searchParams.set('g_tk', '5381')
-    u.searchParams.set('loginUin', '0')
-    u.searchParams.set('hostUin', '0')
-    u.searchParams.set('inCharset', 'utf8')
-    u.searchParams.set('outCharset', 'utf-8')
-    u.searchParams.set('notice', '0')
-    u.searchParams.set('platform', 'yqq.json')
-    u.searchParams.set('needNewCode', '0')
-    const text = await requestText(u.toString(), { headers: QQ_HEADERS })
-    const json = parseJSONText(text)
-    const items = json && json.data && json.data.song && json.data.song.itemlist
-    return (Array.isArray(items) ? items : []).slice(0, Math.max(1, Math.min(limit || 6, 10))).map(mapQQSmartSong)
+    const url = new URL(QQ_SMARTBOX_URL)
+    const params = {
+      format: 'json',
+      key: keywords,
+      g_tk: '5381',
+      loginUin: '0',
+      hostUin: '0',
+      inCharset: 'utf8',
+      outCharset: 'utf-8',
+      notice: '0',
+      platform: 'yqq.json',
+      needNewCode: '0',
+    }
+    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
+    const json = parseJSONText(await requestText(url.toString(), { headers: QQ_HEADERS }))
+    return asArray(at(json, 'data', 'song', 'itemlist'))
+      .slice(0, Math.max(1, Math.min(limit || 6, 10)))
+      .map(mapQQSmartSong)
+      .filter((song) => Boolean(song.mid && song.name))
   }
 
   async songDetail(mid: string, fallback?: Partial<UnifiedSong>): Promise<UnifiedSong> {
-    if (!mid) return fallback as UnifiedSong
+    if (!mid) {
+      if (fallback) return mapQQTrack({}, fallback)
+      return mapQQTrack({})
+    }
     const json = await this.client.musicuRequest({
       comm: { ct: 24, cv: 0 },
       songinfo: {
@@ -228,44 +284,38 @@ export class QQProvider {
         param: { song_mid: mid },
       },
     })
-    const data = json && json.songinfo && json.songinfo.data
-    return mapQQTrack(data && data.track_info, fallback)
+    return mapQQTrack(at(json, 'songinfo', 'data', 'track_info'), fallback)
   }
 
   async search(keywords: string, limit: number): Promise<UnifiedSong[]> {
-    const kw = String(keywords || '').trim()
-    if (!kw) return []
-    const base = await this.smartboxSearch(kw, limit)
+    const normalized = String(keywords || '').trim()
+    if (!normalized) return []
+    const base = await this.smartboxSearch(normalized, limit)
     const detailed = await Promise.all(
       base.map(async (item) => {
         try {
           return await this.songDetail(item.mid || '', item)
-        } catch (e: any) {
-          console.warn('[QQSearch] detail failed:', item.mid, e.message)
+        } catch (error) {
+          console.warn('[QQSearch] detail failed:', item.mid, errorMessage(error))
           return item
         }
       }),
     )
     const seen = new Set<string>()
     return detailed.filter((song) => {
-      const key = song && String(song.mid || song.id || song.name + '|' + song.artist)
-      if (!key || seen.has(key)) return false
+      const key = String(song.mid || song.id || `${song.name}|${song.artist}`)
+      if (!key || seen.has(key) || !song.name) return false
       seen.add(key)
-      return !!song.name
+      return true
     })
   }
 
-  /**
-   * QQ 新式批量 vkey 在会员/版权受限时可能不给 purl；旧 mobile3 接口仍可能
-   * 为 C400 AAC 返回服务端限制为 30 秒的试听 vkey。该请求固定以游客身份执行，
-   * 只在完整地址失败后作为最后兜底，避免把试听误判为完整播放。
-   */
   private async legacyTrialUrl(
     songmid: string,
     mediaIds: string[],
     guid: string,
     requestedQuality: string,
-  ): Promise<SongUrlResult | null> {
+  ): Promise<UpstreamPlaybackResource | null> {
     for (const mediaId of mediaIds) {
       const filename = `C400${mediaId}.m4a`
       try {
@@ -289,12 +339,13 @@ export class QQProvider {
           },
           { cookie: false, headers: { Referer: 'https://y.qq.com/' } },
         )
-        const items: any[] = body && body.data && Array.isArray(body.data.items) ? body.data.items : []
-        const item = items.find((candidate) => candidate && candidate.vkey)
-        const vkey = String((item && item.vkey) || '').trim()
+        const item = asArray(at(body, 'data', 'items')).find((candidate) =>
+          Boolean(stringValue(field(candidate, 'vkey'))),
+        )
+        const vkey = stringValue(field(item, 'vkey')).trim()
         if (!vkey) continue
 
-        const upstreamFilename = String((item && item.filename) || filename)
+        const upstreamFilename = stringValue(field(item, 'filename'), filename)
         const safeFilename = /^[A-Za-z0-9._-]+$/.test(upstreamFilename) ? upstreamFilename : filename
         const query = new URLSearchParams({ vkey, guid, uin: '0', fromtag: '66' })
         const restriction = playbackRestriction(
@@ -306,6 +357,7 @@ export class QQProvider {
         return {
           provider: 'qq',
           url: `${QQ_TRIAL_STREAM_ORIGIN}/${safeFilename}?${query.toString()}`,
+          headers: {},
           trial: true,
           playable: true,
           level: 'aac',
@@ -323,40 +375,49 @@ export class QQProvider {
           reason: restriction.category,
           message: restriction.message,
         }
-      } catch (err: any) {
-        // 不记录请求 URL 或 vkey；只保留不敏感的候选名和错误摘要。
-        console.warn('[QQSongUrl] trial vkey failed', {
+      } catch (error) {
+        console.warn('[QQPlayback] trial vkey failed', {
           mid: songmid,
           filename,
-          error: String((err && err.message) || err || 'UNKNOWN_ERROR'),
+          error: errorMessage(error),
         })
       }
     }
     return null
   }
 
-  async songUrl(mid: string, mediaMid: string, qualityPreference: string): Promise<SongUrlResult> {
+  async songUrl(mid: string, mediaMid: string, qualityPreference: string): Promise<UpstreamPlaybackResource> {
     const songmid = String(mid || '').trim()
-    if (!songmid) return { provider: 'qq', url: '', trial: false, playable: false, error: 'MISSING_MID', message: 'Missing QQ song mid' }
-    const guid = String(10000000 + Math.floor(Math.random() * 90000000))
+    if (!songmid) {
+      return {
+        provider: 'qq',
+        url: null,
+        headers: {},
+        trial: false,
+        playable: false,
+        error: 'MISSING_MID',
+        message: 'Missing QQ song mid',
+      }
+    }
+
+    const guid = String(10_000_000 + Math.floor(Math.random() * 90_000_000))
     const session = this.session
     const uin = session.uin || '0'
     const musicKey = session.musicKey
     const playbackKey = session.playbackKey
-    const fileMediaMid = String(mediaMid || '').trim()
     const requestedQuality = normalizeQualityPreference(qualityPreference)
-    const mediaIds: string[] = []
-    if (fileMediaMid) mediaIds.push(fileMediaMid)
-    if (songmid && !mediaIds.includes(songmid)) mediaIds.push(songmid)
-    const fileCandidates = mediaIds.flatMap((mediaId) =>
-      qualityCandidatesFrom(requestedQuality, QQ_QUALITY_CANDIDATE_TEMPLATES).map((item: any) => ({
-        ...item,
+    const mediaIds = [String(mediaMid || '').trim(), songmid].filter(
+      (value, index, values) => Boolean(value) && values.indexOf(value) === index,
+    )
+    const fileCandidates: FileCandidate[] = mediaIds.flatMap((mediaId) =>
+      qualityCandidatesFrom(requestedQuality, QQ_QUALITY_CANDIDATE_TEMPLATES).map((candidate) => ({
+        ...candidate,
         mediaId,
-        filename: item.prefix + mediaId + item.ext,
+        filename: `${candidate.prefix}${mediaId}${candidate.ext}`,
       })),
     )
-    const filenames = fileCandidates.map((item) => item.filename)
-    const param: Record<string, any> = {
+    const filenames = fileCandidates.map((candidate) => candidate.filename)
+    const param: Record<string, unknown> = {
       guid,
       songmid: filenames.length ? filenames.map(() => songmid) : [songmid],
       songtype: filenames.length ? filenames.map(() => 0) : [0],
@@ -365,92 +426,109 @@ export class QQProvider {
       platform: '20',
     }
     if (filenames.length) param.filename = filenames
-    const comm: Record<string, any> = { uin, format: 'json', ct: musicKey ? 19 : 24, cv: 0 }
+    const comm: Record<string, unknown> = { uin, format: 'json', ct: musicKey ? 19 : 24, cv: 0 }
     if (musicKey) comm.authst = musicKey
+
     const json = await this.client.musicuRequest(
       {
         comm,
-        req_0: {
-          module: 'vkey.GetVkeyServer',
-          method: 'CgiGetVkey',
-          param,
-        },
+        req_0: { module: 'vkey.GetVkeyServer', method: 'CgiGetVkey', param },
       },
       { cookie: true },
     )
-    const data = json && json.req_0 && json.req_0.data
-    const infos: any[] = data && Array.isArray(data.midurlinfo) ? data.midurlinfo : []
-    const info = infos.find((item) => item && item.purl) || infos[0]
-    const purl = info && info.purl
+    const data = at(json, 'req_0', 'data')
+    const infos = asArray(field(data, 'midurlinfo'))
+    const info = infos.find((candidate) => Boolean(stringValue(field(candidate, 'purl')))) ?? infos[0]
+    const purl = stringValue(field(info, 'purl'))
     if (purl) {
-      const sip = (data.sip && data.sip[0]) || 'https://ws.stream.qqmusic.qq.com/'
-      const fileMeta: any = fileCandidates.find((item) => item.filename === info.filename) || {}
+      const sip = stringValue(asArray(field(data, 'sip'))[0], 'https://ws.stream.qqmusic.qq.com/')
+      const returnedFilename = stringValue(field(info, 'filename'))
+      const fileMeta = fileCandidates.find((candidate) => candidate.filename === returnedFilename)
       return {
         provider: 'qq',
-        url: sip + purl,
+        url: `${sip}${purl}`,
+        headers: {},
         trial: false,
         playable: true,
-        level: fileMeta.level || info.filename || '',
-        quality: fileMeta.label || info.filename || '',
-        filename: info.filename || '',
+        level: fileMeta?.level || returnedFilename,
+        quality: fileMeta?.label || returnedFilename,
+        filename: returnedFilename,
         requestedQuality,
       }
     }
+
     const trialFallback = await this.legacyTrialUrl(songmid, mediaIds, guid, requestedQuality)
     if (trialFallback) {
       return {
         ...trialFallback,
-        loggedIn: !!(uin !== '0' && musicKey),
-        playbackKeyReady: !!(uin !== '0' && playbackKey),
+        loggedIn: Boolean(uin !== '0' && musicKey),
+        playbackKeyReady: Boolean(uin !== '0' && playbackKey),
       }
     }
 
     const restriction = classifyQQPlaybackRestriction(info, {
-      hasSession: !!(uin !== '0' && musicKey),
-      hasPlaybackKey: !!(uin !== '0' && playbackKey),
+      hasSession: Boolean(uin !== '0' && musicKey),
+      hasPlaybackKey: Boolean(uin !== '0' && playbackKey),
     })
-    // 取链失败是排障核心路径：把 QQ 返回码/原始消息/候选清单打到服务端控制台。
-    // code/rawMessage 直接取 classifier 归一化结果（Number 归一保住合法的 0，链路含 info.message）
-    console.warn('[QQSongUrl] no purl', {
+    const diagnostics = {
+      qqCode: numberValue(field(info, 'result') ?? field(info, 'code') ?? field(info, 'errtype')),
+      rawMessage: stringValue(field(info, 'msg') ?? field(info, 'tips') ?? field(info, 'errmsg')),
+      tried: fileCandidates.map((candidate) => `${candidate.label} · ${candidate.filename}`),
+    }
+    console.warn('[QQPlayback] no URL', {
       mid: songmid,
       requestedQuality,
-      qqCode: restriction.code,
-      rawMessage: restriction.rawMessage,
       category: restriction.category,
-      playbackKeyReady: !!(uin !== '0' && playbackKey),
-      tried: filenames.join(','),
+      playbackKeyReady: Boolean(uin !== '0' && playbackKey),
+      ...diagnostics,
     })
     return {
       provider: 'qq',
-      url: '',
+      url: null,
+      headers: {},
       trial: false,
       playable: false,
       error: 'QQ_URL_UNAVAILABLE',
-      loggedIn: !!(uin !== '0' && musicKey),
-      playbackKeyReady: !!(uin !== '0' && playbackKey),
+      loggedIn: Boolean(uin !== '0' && musicKey),
+      playbackKeyReady: Boolean(uin !== '0' && playbackKey),
+      requestedQuality,
       restriction,
       reason: restriction.category,
       message: restriction.message,
-      qqCode: info && (info.result || info.code || info.errtype),
-      rawMessage: info && (info.msg || info.tips || info.errmsg || ''),
-      tried: fileCandidates.map((item: any) => item.label + ' · ' + item.filename),
-      requestedQuality,
+      diagnostics,
     }
+  }
+
+  async resolvePlayback(song: UnifiedSong, quality: string): Promise<UpstreamPlaybackResource> {
+    return this.songUrl(song.mid || song.songmid || String(song.id), song.mediaMid || '', quality)
+  }
+
+  async getLyrics(id: string | number, mid?: string): Promise<LyricDoc> {
+    return this.lyric(mid || '', String(id))
   }
 
   async lyric(mid: string, id: string): Promise<LyricDoc> {
     const songMID = String(mid || '').trim()
     const songID = normalizeQQSongId(id)
-    if (!songMID && !songID) return { provider: 'qq', error: 'Missing QQ song mid or id', lyric: '', tlyric: '', yrc: '', lines: [], source: 'qq-empty' }
+    if (!songMID && !songID) {
+      return {
+        provider: 'qq',
+        error: 'Missing QQ song mid or id',
+        lyric: '',
+        tlyric: '',
+        yrc: '',
+        lines: [],
+        source: 'qq-empty',
+      }
+    }
 
-    let lyricText = ''
-    let transText = ''
-    let qrcText = ''
-    let romaText = ''
+    let lyric = ''
+    let tlyric = ''
+    let qrc = ''
+    let roma = ''
     let source = 'qq-musicu'
-
     try {
-      const param: Record<string, any> = {}
+      const param: Record<string, unknown> = {}
       if (songMID) param.songMID = songMID
       if (songID) param.songID = songID
       const json = await this.client.musicuRequest(
@@ -464,16 +542,16 @@ export class QQProvider {
         },
         { cookie: true },
       )
-      const data = json && json.lyric && json.lyric.data
-      lyricText = decodeQQLyricText(data && data.lyric)
-      transText = decodeQQLyricText(data && data.trans)
-      qrcText = decodeQQLyricText(data && data.qrc)
-      romaText = decodeQQLyricText(data && data.roma)
-    } catch (e: any) {
-      console.warn('[QQLyric] musicu failed:', e.message)
+      const data = at(json, 'lyric', 'data')
+      lyric = decodeQQLyricText(field(data, 'lyric'))
+      tlyric = decodeQQLyricText(field(data, 'trans'))
+      qrc = decodeQQLyricText(field(data, 'qrc'))
+      roma = decodeQQLyricText(field(data, 'roma'))
+    } catch (error) {
+      console.warn('[QQLyrics] musicu failed:', errorMessage(error))
     }
 
-    if (!lyricText && songMID) {
+    if (!lyric && songMID) {
       try {
         const body = await this.client.getJSON(
           'https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg',
@@ -493,11 +571,11 @@ export class QQProvider {
           },
           { headers: { Referer: 'https://y.qq.com/portal/player.html' } },
         )
-        lyricText = decodeQQLyricText(body && body.lyric)
-        transText = decodeQQLyricText(body && (body.trans || body.tlyric)) || transText
+        lyric = decodeQQLyricText(field(body, 'lyric'))
+        tlyric = decodeQQLyricText(field(body, 'trans') ?? field(body, 'tlyric')) || tlyric
         source = 'qq-legacy'
-      } catch (e: any) {
-        console.warn('[QQLyric] legacy failed:', e.message)
+      } catch (error) {
+        console.warn('[QQLyrics] legacy failed:', errorMessage(error))
       }
     }
 
@@ -505,21 +583,21 @@ export class QQProvider {
       provider: 'qq',
       id: songID || '',
       mid: songMID,
-      lyric: lyricText,
-      tlyric: transText,
+      lyric,
+      tlyric,
       yrc: '',
-      lines: buildLyricLines({ lyric: lyricText, tlyric: transText, yrc: '' }),
-      qrc: qrcText,
-      roma: romaText,
-      source: lyricText ? source : 'qq-empty',
+      lines: buildLyricLines({ lyric, tlyric, yrc: '' }),
+      qrc,
+      roma,
+      source: lyric ? source : 'qq-empty',
     }
   }
 
-  async userPlaylists(): Promise<any> {
+  async userPlaylists(_limit = 200): Promise<PlaylistListResult> {
     const info = await this.loginInfo()
-    if (!info.loggedIn || !info.userId) return { loggedIn: false, provider: 'qq', playlists: [] }
-    const uin = info.userId
-    const createdReq = this.client.getJSON(
+    if (!info.loggedIn || !info.userId) return { provider: 'qq', loggedIn: false, playlists: [] }
+    const uin = String(info.userId)
+    const createdRequest = this.client.getJSON(
       'https://c.y.qq.com/rsc/fcgi-bin/fcg_user_created_diss',
       {
         hostUin: 0,
@@ -537,105 +615,97 @@ export class QQProvider {
       },
       { headers: { Referer: 'https://y.qq.com/portal/profile.html' } },
     )
-    const collectReq = this.client.getJSON(
+    const collectedRequest = this.client.getJSON(
       'https://c.y.qq.com/fav/fcgi-bin/fcg_get_profile_order_asset.fcg',
-      {
-        ct: 20,
-        cid: 205360956,
-        userid: uin,
-        reqtype: 3,
-        sin: 0,
-        ein: 80,
-      },
+      { ct: 20, cid: 205360956, userid: uin, reqtype: 3, sin: 0, ein: 80 },
       { headers: { Referer: 'https://y.qq.com/portal/profile.html' } },
     )
-    const [createdRaw, collectRaw] = await Promise.allSettled([createdReq, collectReq])
+    const [createdResult, collectedResult] = await Promise.allSettled([createdRequest, collectedRequest])
     const created =
-      createdRaw.status === 'fulfilled' && createdRaw.value && createdRaw.value.data && Array.isArray(createdRaw.value.data.disslist)
-        ? createdRaw.value.data.disslist.map((pl: any) => mapQQPlaylist(pl, 'created'))
+      createdResult.status === 'fulfilled'
+        ? asArray(at(createdResult.value, 'data', 'disslist')).map((playlist) =>
+            mapQQPlaylist(playlist, 'created'),
+          )
         : []
     const collected =
-      collectRaw.status === 'fulfilled' && collectRaw.value && collectRaw.value.data && Array.isArray(collectRaw.value.data.cdlist)
-        ? collectRaw.value.data.cdlist.map((pl: any) => mapQQPlaylist(pl, 'collect'))
+      collectedResult.status === 'fulfilled'
+        ? asArray(at(collectedResult.value, 'data', 'cdlist')).map((playlist) =>
+            mapQQPlaylist(playlist, 'collect'),
+          )
         : []
     const seen = new Set<string>()
     const playlists = created
       .concat(collected)
-      .filter((pl: any) => {
-        if (!pl.id || !pl.name || seen.has(pl.id)) return false
-        if (isQzoneBackgroundPlaylist(pl)) return false
-        seen.add(pl.id)
+      .filter((playlist) => {
+        const id = String(playlist.id)
+        if (!id || !playlist.name || seen.has(id) || isQzoneBackgroundPlaylist(playlist)) return false
+        seen.add(id)
         return true
       })
-      .sort((a: any, b: any) => Number(isQQFavoritePlaylist(b)) - Number(isQQFavoritePlaylist(a)))
-    return { loggedIn: true, provider: 'qq', userId: uin, playlists }
+      .sort((left, right) => Number(isQQFavoritePlaylist(right)) - Number(isQQFavoritePlaylist(left)))
+    return { provider: 'qq', loggedIn: true, identity: uin, playlists }
   }
 
-  async likedTracks(offset: number, limit: number): Promise<any> {
+  async likedTracks(offset: number, limit: number): Promise<ProviderLikedTracksResult> {
+    const safeOffset = Math.max(0, Math.floor(offset || 0))
+    const safeLimit = Math.max(1, Math.min(200, Math.floor(limit || 100)))
     const info = await this.loginInfo()
     if (!info.loggedIn || !info.userId) {
       return {
         provider: 'qq',
         loggedIn: false,
+        tracks: [],
+        offset: safeOffset,
+        limit: safeLimit,
+        total: 0,
+        hasMore: false,
         error: 'LOGIN_REQUIRED',
         message: '登录 QQ 音乐账号后才能读取喜欢的音乐',
-        tracks: [],
       }
     }
 
-    const playlistsResult = await this.userPlaylists()
-    const likedPlaylist = ((playlistsResult && playlistsResult.playlists) || []).find(isQQFavoritePlaylist)
-    if (!likedPlaylist || !likedPlaylist.id) {
+    const playlists = await this.userPlaylists()
+    const likedPlaylist = playlists.playlists.find(isQQFavoritePlaylist)
+    if (!likedPlaylist?.id) {
       return {
         provider: 'qq',
         loggedIn: true,
-        userId: info.userId,
-        error: 'LIKED_TRACKS_UNAVAILABLE',
-        message: 'QQ 音乐账号接口未返回“我喜欢”歌单，无法读取喜欢的音乐',
+        identity: String(info.userId),
         tracks: [],
+        offset: safeOffset,
+        limit: safeLimit,
+        total: 0,
+        hasMore: false,
+        error: 'LIKED_TRACKS_UNAVAILABLE',
       }
     }
 
     const detail = await this.playlistTracks(String(likedPlaylist.id))
-    if (detail && detail.error) {
-      return {
-        provider: 'qq',
-        loggedIn: true,
-        userId: info.userId,
-        error: 'LIKED_TRACKS_UNAVAILABLE',
-        message: String(detail.message || detail.error),
-        tracks: [],
-      }
-    }
-
-    const allTracks = Array.isArray(detail && detail.tracks) ? (detail.tracks as UnifiedSong[]) : []
-    const safeOffset = Math.max(0, Math.floor(offset || 0))
-    const safeLimit = Math.max(1, Math.min(200, Math.floor(limit || 100)))
+    const allTracks = detail.tracks
     const tracks = allTracks.slice(safeOffset, safeOffset + safeLimit)
     return {
       provider: 'qq',
       loggedIn: true,
-      userId: info.userId,
-      playlist: detail.playlist || likedPlaylist,
+      identity: String(info.userId),
+      tracks,
       offset: safeOffset,
       limit: safeLimit,
       total: allTracks.length,
       hasMore: safeOffset + tracks.length < allTracks.length,
-      tracks,
     }
   }
 
-  async playlistTracks(id: string): Promise<any> {
+  async playlistTracks(id: string): Promise<PlaylistTracksResult> {
     const info = await this.loginInfo()
-    if (!info.loggedIn || !info.userId) return { loggedIn: false, provider: 'qq', tracks: [] }
-    const pid = String(id || '').trim()
-    if (!pid) return { loggedIn: true, provider: 'qq', error: 'Missing QQ playlist id', tracks: [] }
+    if (!info.loggedIn || !info.userId) return { provider: 'qq', loggedIn: false, playlist: null, tracks: [] }
+    const playlistId = String(id || '').trim()
+    if (!playlistId) return { provider: 'qq', loggedIn: true, playlist: null, tracks: [] }
     const result = await this.client.getJSON(
       'https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg',
       {
         type: 1,
         utf8: 1,
-        disstid: pid,
+        disstid: playlistId,
         loginUin: info.userId,
         format: 'json',
         inCharset: 'utf8',
@@ -646,17 +716,19 @@ export class QQProvider {
       },
       { headers: { Referer: 'https://y.qq.com/n/yqq/playlist' } },
     )
-    const detail = result && result.cdlist && result.cdlist[0] ? result.cdlist[0] : {}
-    const rawTracks = Array.isArray(detail.songlist) ? detail.songlist : []
-    const tracks = rawTracks.map(mapQQPlaylistTrack).filter((s: UnifiedSong) => s.name && (s.mid || s.id))
-    const playlist = {
+    const detail = asArray(field(result, 'cdlist'))[0]
+    const tracks = asArray(field(detail, 'songlist'))
+      .map(mapQQPlaylistTrack)
+      .filter((song) => Boolean(song.name && (song.mid || song.id)))
+    const playlist: UnifiedPlaylist = {
       provider: 'qq',
-      id: pid,
-      name: detail.dissname || detail.diss_name || detail.name || '',
-      cover: detail.logo || detail.diss_cover || '',
+      type: 'playlist',
+      id: playlistId,
+      name: stringValue(field(detail, 'dissname') ?? field(detail, 'diss_name') ?? field(detail, 'name')),
+      cover: stringValue(field(detail, 'logo') ?? field(detail, 'diss_cover')),
       trackCount: tracks.length,
     }
-    return { loggedIn: true, provider: 'qq', playlist, tracks }
+    return { provider: 'qq', loggedIn: true, playlist, tracks }
   }
 
   logout(): void {

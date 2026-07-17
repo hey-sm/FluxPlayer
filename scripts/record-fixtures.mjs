@@ -222,11 +222,11 @@ async function recordQQ() {
       headers: { ...QQ_HEADERS, Referer: 'https://y.qq.com/n/yqq/playlist' },
     })
     const songlist = json && json.cdlist && json.cdlist[0] && json.cdlist[0].songlist
-    if (!Array.isArray(songlist) || !songlist.length) throw new Error('响应缺 cdlist[0].songlist（歌单私有/失效？换 FLUX_FIXTURE_QQ_DISSID 重试）')
+    if (!Array.isArray(songlist) || !songlist.length)
+      throw new Error('响应缺 cdlist[0].songlist（歌单私有/失效？换 FLUX_FIXTURE_QQ_DISSID 重试）')
     const trimmed = trimAt(json, 'cdlist.0.songlist', 5)
     writeFixture(rel, { endpoint: QQ_CDLIST_URL, method: 'GET', params, trimmed }, json)
   })
-
 }
 
 // ===== 网易云（与服务端同一 SDK，保证 fixture 与 mapper 输入同构）=====
@@ -258,9 +258,12 @@ async function recordNetease() {
     const songs = r && r.body && (r.body.songs || r.body.tracks)
     if (!Array.isArray(songs) || !songs.length) throw new Error('响应缺 songs')
     const trimmed = trimAt(r.body, 'songs', 5)
-    writeFixture(rel, { endpoint: 'NeteaseCloudMusicApi#playlist_track_all', method: 'POST', params, trimmed }, r.body)
+    writeFixture(
+      rel,
+      { endpoint: 'NeteaseCloudMusicApi#playlist_track_all', method: 'POST', params, trimmed },
+      r.body,
+    )
   })
-
 }
 
 // ===== main =====

@@ -36,14 +36,26 @@ export interface CustomBackgroundServiceOptions {
 const IMAGE_EXTENSIONS = new Set<string>(IMAGE_BACKGROUND_EXTENSIONS)
 const VIDEO_EXTENSIONS = new Set<string>(VIDEO_BACKGROUND_EXTENSIONS)
 const MIME_TYPES: Record<string, string> = {
-  '.avif': 'image/avif', '.bmp': 'image/bmp', '.gif': 'image/gif', '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.m4v': 'video/x-m4v',
-  '.mov': 'video/quicktime', '.mp4': 'video/mp4', '.webm': 'video/webm',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.m4v': 'video/x-m4v',
+  '.mov': 'video/quicktime',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
 }
 
 function uniqueExistingDirectories(items: readonly string[]): string[] {
   return [...new Set(items.map((item) => path.resolve(item)))].filter((item) => {
-    try { return fs.statSync(item).isDirectory() } catch { return false }
+    try {
+      return fs.statSync(item).isDirectory()
+    } catch {
+      return false
+    }
   })
 }
 
@@ -55,10 +67,15 @@ function windowsSteamRegistryRoots(): string[] {
     ['HKLM\\SOFTWARE\\WOW6432Node\\Valve\\Steam', 'InstallPath'],
   ] as const) {
     try {
-      const output = execFileSync('reg.exe', ['query', key, '/v', value], { encoding: 'utf8', windowsHide: true })
+      const output = execFileSync('reg.exe', ['query', key, '/v', value], {
+        encoding: 'utf8',
+        windowsHide: true,
+      })
       const match = output.match(new RegExp(`${value}\\s+REG_\\w+\\s+(.+)$`, 'im'))
       if (match?.[1]) roots.push(match[1].trim())
-    } catch { /* Registry key is optional. */ }
+    } catch {
+      /* Registry key is optional. */
+    }
   }
   return roots
 }
@@ -86,7 +103,12 @@ export function parseSteamLibraryFoldersVdf(text: string): string[] {
 
 function isInside(parent: string, child: string): boolean {
   const relative = path.relative(path.resolve(parent), path.resolve(child))
-  return relative !== '' && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative)
+  return (
+    relative !== '' &&
+    !relative.startsWith(`..${path.sep}`) &&
+    relative !== '..' &&
+    !path.isAbsolute(relative)
+  )
 }
 
 export function parseWallpaperEngineProject(projectJsonPath: string): ParsedWallpaperEngineProject | null {
@@ -98,14 +120,18 @@ export function parseWallpaperEngineProject(projectJsonPath: string): ParsedWall
     const mediaPath = path.resolve(projectDirectory, raw.file)
     if (!isInside(projectDirectory, mediaPath) || !fs.statSync(mediaPath).isFile()) return null
     if (!VIDEO_EXTENSIONS.has(path.extname(mediaPath).toLowerCase())) return null
-    const title = typeof raw.title === 'string' && raw.title.trim()
-      ? raw.title.trim().slice(0, 200)
-      : path.basename(projectDirectory)
+    const title =
+      typeof raw.title === 'string' && raw.title.trim()
+        ? raw.title.trim().slice(0, 200)
+        : path.basename(projectDirectory)
     const previewValue = typeof raw.preview === 'string' ? raw.preview.trim() : ''
     const previewCandidate = previewValue ? path.resolve(projectDirectory, previewValue) : ''
-    const previewPath = previewCandidate && isInside(projectDirectory, previewCandidate) && fs.statSync(previewCandidate).isFile()
-      ? previewCandidate
-      : null
+    const previewPath =
+      previewCandidate &&
+      isInside(projectDirectory, previewCandidate) &&
+      fs.statSync(previewCandidate).isFile()
+        ? previewCandidate
+        : null
     return { title, mediaPath, previewPath }
   } catch {
     return null
@@ -135,11 +161,16 @@ export class CustomBackgroundService {
     return this.current ? this.toPublic(this.current) : null
   }
 
-  importFile(sourcePath: string, source: CustomBackgroundSource = 'file', displayName?: string): CustomBackgroundResult {
+  importFile(
+    sourcePath: string,
+    source: CustomBackgroundSource = 'file',
+    displayName?: string,
+  ): CustomBackgroundResult {
     try {
       const absoluteSource = path.resolve(sourcePath)
       const stat = fs.statSync(absoluteSource)
-      if (!stat.isFile()) return { ok: false, background: this.getCurrent(), error: 'BACKGROUND_FILE_REQUIRED' }
+      if (!stat.isFile())
+        return { ok: false, background: this.getCurrent(), error: 'BACKGROUND_FILE_REQUIRED' }
       const extension = path.extname(absoluteSource).toLowerCase()
       const kind = this.kindForExtension(extension)
       if (!kind) return { ok: false, background: this.getCurrent(), error: 'UNSUPPORTED_BACKGROUND_FORMAT' }
@@ -169,7 +200,11 @@ export class CustomBackgroundService {
       }
       return { ok: true, background: this.toPublic(stored) }
     } catch (error) {
-      return { ok: false, background: this.getCurrent(), error: error instanceof Error ? error.message : 'BACKGROUND_IMPORT_FAILED' }
+      return {
+        ok: false,
+        background: this.getCurrent(),
+        error: error instanceof Error ? error.message : 'BACKGROUND_IMPORT_FAILED',
+      }
     }
   }
 
@@ -181,7 +216,11 @@ export class CustomBackgroundService {
       this.removeManagedFile(previous)
       return { ok: true, background: null }
     } catch (error) {
-      return { ok: false, background: this.getCurrent(), error: error instanceof Error ? error.message : 'BACKGROUND_CLEAR_FAILED' }
+      return {
+        ok: false,
+        background: this.getCurrent(),
+        error: error instanceof Error ? error.message : 'BACKGROUND_CLEAR_FAILED',
+      }
     }
   }
 
@@ -191,7 +230,11 @@ export class CustomBackgroundService {
       for (const library of this.findSteamLibraries()) {
         const contentDirectory = path.join(library, 'steamapps', 'workshop', 'content', '431960')
         let entries: fs.Dirent[]
-        try { entries = fs.readdirSync(contentDirectory, { withFileTypes: true }) } catch { continue }
+        try {
+          entries = fs.readdirSync(contentDirectory, { withFileTypes: true })
+        } catch {
+          continue
+        }
         for (const entry of entries) {
           if (!entry.isDirectory()) continue
           const projectPath = path.join(contentDirectory, entry.name, 'project.json')
@@ -202,32 +245,45 @@ export class CustomBackgroundService {
         }
       }
       this.projects = found
-      const projects: WallpaperEngineProject[] = [...found].map(([id, project]) => ({
-        id, title: project.title, kind: 'video' as const,
-        previewUrl: project.previewPath ? `${CUSTOM_BACKGROUND_SCHEME}://preview/${encodeURIComponent(id)}` : '',
-      })).sort((a, b) => a.title.localeCompare(b.title))
+      const projects: WallpaperEngineProject[] = [...found]
+        .map(([id, project]) => ({
+          id,
+          title: project.title,
+          kind: 'video' as const,
+          previewUrl: project.previewPath
+            ? `${CUSTOM_BACKGROUND_SCHEME}://preview/${encodeURIComponent(id)}`
+            : '',
+        }))
+        .sort((a, b) => a.title.localeCompare(b.title))
       return { ok: true, projects }
     } catch (error) {
       this.projects.clear()
-      return { ok: false, projects: [], error: error instanceof Error ? error.message : 'WALLPAPER_ENGINE_SCAN_FAILED' }
+      return {
+        ok: false,
+        projects: [],
+        error: error instanceof Error ? error.message : 'WALLPAPER_ENGINE_SCAN_FAILED',
+      }
     }
   }
 
   importScannedProject(projectId: string): CustomBackgroundResult {
     const project = this.projects.get(projectId)
-    if (!project) return { ok: false, background: this.getCurrent(), error: 'WALLPAPER_ENGINE_PROJECT_NOT_FOUND' }
+    if (!project)
+      return { ok: false, background: this.getCurrent(), error: 'WALLPAPER_ENGINE_PROJECT_NOT_FOUND' }
     return this.importFile(project.mediaPath, 'wallpaper-engine', project.title)
   }
 
   importProjectPath(selectedPath: string): CustomBackgroundResult {
     let projectJsonPath = path.resolve(selectedPath)
     try {
-      if (fs.statSync(projectJsonPath).isDirectory()) projectJsonPath = path.join(projectJsonPath, 'project.json')
+      if (fs.statSync(projectJsonPath).isDirectory())
+        projectJsonPath = path.join(projectJsonPath, 'project.json')
     } catch {
       return { ok: false, background: this.getCurrent(), error: 'WALLPAPER_ENGINE_PROJECT_NOT_FOUND' }
     }
     const project = parseWallpaperEngineProject(projectJsonPath)
-    if (!project) return { ok: false, background: this.getCurrent(), error: 'UNSUPPORTED_WALLPAPER_ENGINE_PROJECT' }
+    if (!project)
+      return { ok: false, background: this.getCurrent(), error: 'UNSUPPORTED_WALLPAPER_ENGINE_PROJECT' }
     return this.importFile(project.mediaPath, 'wallpaper-engine', project.title)
   }
 
@@ -256,7 +312,9 @@ export class CustomBackgroundService {
       try {
         const text = fs.readFileSync(path.join(root, 'steamapps', 'libraryfolders.vdf'), 'utf8')
         for (const library of parseSteamLibraryFoldersVdf(text)) libraries.add(library)
-      } catch { /* Steam may not be installed in this root. */ }
+      } catch {
+        /* Steam may not be installed in this root. */
+      }
     }
     return [...libraries]
   }
@@ -276,12 +334,19 @@ export class CustomBackgroundService {
   private readState(): StoredBackground | null {
     try {
       const value = JSON.parse(fs.readFileSync(this.statePath, 'utf8')) as StoredBackground
-      if (value.version !== CUSTOM_BACKGROUND_VERSION || typeof value.id !== 'string' || typeof value.fileName !== 'string') return null
+      if (
+        value.version !== CUSTOM_BACKGROUND_VERSION ||
+        typeof value.id !== 'string' ||
+        typeof value.fileName !== 'string'
+      )
+        return null
       const filePath = path.join(this.backgroundsDirectory, value.fileName)
       if (!isInside(this.backgroundsDirectory, filePath) || !fs.statSync(filePath).isFile()) return null
       if (!this.kindForExtension(path.extname(filePath).toLowerCase())) return null
       return value
-    } catch { return null }
+    } catch {
+      return null
+    }
   }
 
   private writeState(value: StoredBackground): void {

@@ -1,8 +1,7 @@
-import { E2E_WAV_FIXTURE_URL, expect, fulfillE2EWav, test } from './electron.fixture'
+import { E2E_AUDIO_URL, expect, test } from './electron.fixture'
 
 const TRACK = {
   provider: 'netease',
-  source: 'netease',
   type: 'song',
   id: 61_000_001,
   name: 'Playwright 内存音轨',
@@ -14,8 +13,6 @@ const TRACK = {
   fee: 0,
   playable: true,
 } as const
-
-const UPSTREAM_AUDIO_URL = E2E_WAV_FIXTURE_URL
 
 async function inspectTrackedAudio(page: import('@playwright/test').Page) {
   return page.evaluate(() => {
@@ -37,52 +34,13 @@ async function inspectTrackedAudio(page: import('@playwright/test').Page) {
 
 test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({ electronHarness }) => {
   const { app, page, rendererCrashes } = electronHarness
-  const intercepted = { search: [] as string[], songUrl: [] as string[], audio: [] as string[] }
-
-  await page.route('**/api/search**', async (route) => {
-    const url = new URL(route.request().url())
-    intercepted.search.push(url.toString())
-    expect(url.searchParams.get('keywords')).toBe('M6 E2E')
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ songs: [TRACK] }),
-    })
+  await electronHarness.installMusicFixture({
+    query: 'M6 E2E',
+    track: TRACK,
+    quality: 'E2E WAV',
   })
 
-  await page.route('**/api/song/url**', async (route) => {
-    const url = new URL(route.request().url())
-    intercepted.songUrl.push(url.toString())
-    expect(url.searchParams.get('id')).toBe(String(TRACK.id))
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        provider: 'netease',
-        url: UPSTREAM_AUDIO_URL,
-        trial: false,
-        playable: true,
-        level: 'lossless',
-        quality: 'E2E WAV',
-      }),
-    })
-  })
-
-  await page.route('**/api/audio**', async (route) => {
-    const url = new URL(route.request().url())
-    intercepted.audio.push(url.toString())
-    expect(url.searchParams.get('url')).toBe(UPSTREAM_AUDIO_URL)
-    await fulfillE2EWav(route)
-  })
-
-  await page.route('**/api/lyric**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ lyric: '', tlyric: '', yrc: '', lines: [] }),
-    }),
-  )
-
+  await expect(page).toHaveURL(/^flux:\/\/app\//)
   await expect(page).toHaveTitle(/FluxPlayer/i)
   await expect(page.locator('.stage-bg')).toBeVisible()
   await expect(page.locator('.stage-bg canvas')).toHaveCount(1)
@@ -136,7 +94,12 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   const searchResults = page.getByRole('region', { name: '搜索结果' })
   const song = searchResults.getByText(TRACK.name, { exact: true })
   await expect(song).toBeVisible()
-  expect(intercepted.search).toHaveLength(1)
+  await expect
+    .poll(async () => {
+      const calls = await electronHarness.musicCalls()
+      return calls.filter((call) => call.channel === 'flux:music:search').length
+    })
+    .toBe(2)
 
   await song.click()
   await expect(page.getByText(`${TRACK.name} — ${TRACK.artist}`, { exact: true })).toBeVisible()
@@ -171,9 +134,23 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   )
   expect(audioState.readyState).toBeGreaterThanOrEqual(2)
   expect(audioState.duration).toBeGreaterThan(7)
-  expect(audioState.src).toContain('/api/audio?url=')
-  expect(intercepted.songUrl).toHaveLength(1)
-  expect(intercepted.audio.length).toBeGreaterThanOrEqual(1)
+  expect(audioState.src).toBe(E2E_AUDIO_URL)
+  const musicCalls = await electronHarness.musicCalls()
+  expect(
+    musicCalls.filter((call) => call.channel === 'flux:music:search').map((call) => call.payload),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ provider: 'netease', keywords: 'M6 E2E' }),
+      expect.objectContaining({ provider: 'qq', keywords: 'M6 E2E' }),
+    ]),
+  )
+  expect(musicCalls.filter((call) => call.channel === 'flux:music:resolve-playback')).toEqual([
+    expect.objectContaining({
+      payload: expect.objectContaining({
+        song: expect.objectContaining({ provider: 'netease', id: TRACK.id }),
+      }),
+    }),
+  ])
   expect(rendererCrashes).toEqual([])
 
   await page.getByRole('button', { name: '关闭', exact: true }).click()

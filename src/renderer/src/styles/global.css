@@ -406,9 +406,37 @@ body {
 }
 
 /* Prevent accidental selection/HTML drag ghosts while preserving explicit editing areas. */
-.app, .stage-bg, .playerbar, .music-shelf, .shelf-detail-panel, button, img { user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
-input, textarea, [contenteditable='true'], [data-allow-text-selection] { user-select: text; -webkit-user-select: text; }
-html[data-pointer-dragging], html[data-pointer-dragging] * { cursor: grabbing !important; user-select: none !important; -webkit-user-select: none !important; }
-[data-scroll-region] { overscroll-behavior: contain; scrollbar-width: none; }
-[data-scroll-region]::-webkit-scrollbar { display: none; }
-.stage-bg { pointer-events: auto; }
+.app,
+.stage-bg,
+.playerbar,
+.music-shelf,
+.shelf-detail-panel,
+button,
+img {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+input,
+textarea,
+[contenteditable='true'],
+[data-allow-text-selection] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+html[data-pointer-dragging],
+html[data-pointer-dragging] * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+[data-scroll-region] {
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+[data-scroll-region]::-webkit-scrollbar {
+  display: none;
+}
+.stage-bg {
+  pointer-events: auto;
+}

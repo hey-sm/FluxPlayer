@@ -39,12 +39,26 @@ export function deserializePersistedTheme(raw: string | null | undefined): Theme
   }
 }
 
-export function loadPersistedTheme(storage: ThemeStorage | null = getBrowserThemeStorage()): ThemeSnapshot | null {
+export function loadPersistedTheme(
+  storage: ThemeStorage | null = getBrowserThemeStorage(),
+): ThemeSnapshot | null {
   if (!storage) return null
-  try { return deserializePersistedTheme(storage.getItem(THEME_PERSISTENCE_KEY)) } catch { return null }
+  try {
+    return deserializePersistedTheme(storage.getItem(THEME_PERSISTENCE_KEY))
+  } catch {
+    return null
+  }
 }
 
-export function savePersistedTheme(snapshot: ThemeSnapshot, storage: ThemeStorage | null = getBrowserThemeStorage()): boolean {
+export function savePersistedTheme(
+  snapshot: ThemeSnapshot,
+  storage: ThemeStorage | null = getBrowserThemeStorage(),
+): boolean {
   if (!storage) return false
-  try { storage.setItem(THEME_PERSISTENCE_KEY, serializePersistedTheme(snapshot)); return true } catch { return false }
+  try {
+    storage.setItem(THEME_PERSISTENCE_KEY, serializePersistedTheme(snapshot))
+    return true
+  } catch {
+    return false
+  }
 }

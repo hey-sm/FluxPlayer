@@ -91,7 +91,7 @@ describe('SafeCredentialStore', () => {
     expect(reloaded.get('netease')).toBe(value)
   })
 
-  it('atomically upgrades an old plain: file when it contains the same value', () => {
+  it('atomically replaces an ignored old plain: file with a new encrypted value', () => {
     const directory = createTemporaryDirectory()
     const file = credentialFile(directory)
     const value = 'MUSIC_U=legacy-cookie'
@@ -114,7 +114,7 @@ describe('SafeCredentialStore', () => {
     expect(fs.readdirSync(directory)).toEqual(['netease.bin'])
   })
 
-  it('restores the old plaintext when final encrypted-file readback fails', () => {
+  it('deletes ignored old plaintext when final encrypted-file readback fails', () => {
     const directory = createTemporaryDirectory()
     const file = credentialFile(directory)
     const value = 'MUSIC_U=must-survive'
@@ -132,9 +132,9 @@ describe('SafeCredentialStore', () => {
       preservedExisting: false,
       error: 'FINAL_READBACK_MISMATCH',
     })
-    expect(fs.readFileSync(file).toString('utf8')).toBe(`plain:${value}`)
-    expect(fs.readdirSync(directory)).toEqual(['netease.bin'])
-    expect(store.get('netease')).toBe(value)
+    expect(fs.existsSync(file)).toBe(false)
+    expect(fs.readdirSync(directory)).toEqual([])
+    expect(store.get('netease')).toBe('')
   })
 
   it('allows normal credential refresh to replace a different encrypted value', () => {
@@ -185,5 +185,4 @@ describe('SafeCredentialStore', () => {
     expect(recovered.get('netease')).toBe('old')
     expect(fs.readdirSync(directory)).toEqual(['netease.bin'])
   })
-
 })

@@ -1,7 +1,6 @@
 [
   {
     "provider": "netease",
-    "source": "netease",
     "type": "song",
     "id": 1973665667,
     "name": "海屿你",
@@ -20,7 +19,6 @@
   },
   {
     "provider": "netease",
-    "source": "netease",
     "type": "song",
     "id": 3382908505,
     "name": "玻璃",
@@ -39,7 +37,6 @@
   },
   {
     "provider": "netease",
-    "source": "netease",
     "type": "song",
     "id": 1456890009,
     "name": "罗生门（Follow）",
@@ -62,7 +59,6 @@
   },
   {
     "provider": "netease",
-    "source": "netease",
     "type": "song",
     "id": 2145353565,
     "name": "Баллада",
@@ -85,7 +81,6 @@
   },
   {
     "provider": "netease",
-    "source": "netease",
     "type": "song",
     "id": 2600493765,
     "name": "恋人",

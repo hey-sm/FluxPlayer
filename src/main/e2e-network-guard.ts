@@ -3,8 +3,13 @@ import https from 'node:https'
 
 function isLoopback(hostname: string): boolean {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '')
-  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1' ||
-    normalized.startsWith('127.') || normalized.startsWith('::ffff:127.')
+  return (
+    normalized === 'localhost' ||
+    normalized === '127.0.0.1' ||
+    normalized === '::1' ||
+    normalized.startsWith('127.') ||
+    normalized.startsWith('::ffff:127.')
+  )
 }
 
 function hostnameFromRequest(input: string | URL | http.RequestOptions): string {
@@ -20,7 +25,11 @@ function blocked(hostname: string): never {
 }
 
 function guardRequest<T extends typeof http.request>(request: T): T {
-  return function guardedRequest(this: unknown, input: string | URL | http.RequestOptions, ...args: unknown[]) {
+  return function guardedRequest(
+    this: unknown,
+    input: string | URL | http.RequestOptions,
+    ...args: unknown[]
+  ) {
     const hostname = hostnameFromRequest(input)
     if (!isLoopback(hostname)) blocked(hostname)
     return Reflect.apply(request, this, [input, ...args])

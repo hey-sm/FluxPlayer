@@ -19,5 +19,11 @@
       "@server/*": ["src/server/*"]
     }
   },
-  "include": ["src/main/**/*", "src/preload/**/*", "src/server/**/*", "src/shared/**/*", "electron.vite.config.ts"]
+  "include": [
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/server/**/*",
+    "src/shared/**/*",
+    "electron.vite.config.ts"
+  ]
 }

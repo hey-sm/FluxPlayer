@@ -6,11 +6,14 @@
   "trailingComma": "all",
   "sortPackageJson": false,
   "ignorePatterns": [
-    "src/renderer/src/visual/stage.ts",
-    "src/renderer/src/visual/shaders.ts",
-    "src/renderer/src/visual/lyrics3d/**",
+    "src/renderer/src/visual/**",
     "src/renderer/src/theme/classic/**",
     "tests/fixtures/**",
-    "tests/unit/__snapshots__/**"
+    "tests/unit/__snapshots__/**",
+    ".agents/**",
+    ".claude/**",
+    "out/**",
+    "dist/**",
+    "coverage/**"
   ]
 }

@@ -1,38 +1,37 @@
-/** IPC 通道名的单一事实源。 */
+/** IPC channels shared by the trusted renderer, preload, and main process. */
 export const IPC = {
-  // 窗口控制
-  windowMinimize: 'desktop-window-minimize',
-  windowToggleMaximize: 'desktop-window-toggle-maximize',
-  windowToggleFullscreen: 'desktop-window-toggle-fullscreen',
-  windowExitFullscreenWindowed: 'desktop-window-exit-fullscreen-windowed',
-  windowGetState: 'desktop-window-get-state',
-  windowClose: 'desktop-window-close',
-  windowStateChanged: 'desktop-window-state', // main -> renderer
-  // 性能状态机（新增）
-  perfStateChanged: 'flux-perf-state', // main -> renderer
-  // 登录
-  neteaseOpenLogin: 'netease-music-open-login',
-  neteaseClearLogin: 'netease-music-clear-login',
-  qqOpenLogin: 'qq-music-open-login',
-  qqClearLogin: 'qq-music-clear-login',
-  // 应用
-  restartApp: 'mineradio-restart-app',
-  configureGlobalHotkeys: 'mineradio-hotkeys-configure-global',
-  globalHotkey: 'mineradio-global-hotkey', // main -> renderer
-  // M6 更新状态机
-  updaterGetState: 'flux-updater-get-state',
-  updaterCheck: 'flux-updater-check',
-  updaterDownload: 'flux-updater-download',
-  updaterInstall: 'flux-updater-install',
-  updaterStateChanged: 'flux-updater-state-changed', // main -> renderer
-  // 受控自定义背景
-  customBackgroundGet: 'flux-custom-background-get',
-  customBackgroundChooseFile: 'flux-custom-background-choose-file',
-  customBackgroundClear: 'flux-custom-background-clear',
-  customBackgroundScanWallpaperEngine: 'flux-custom-background-scan-wallpaper-engine',
-  customBackgroundImportWallpaperEngine: 'flux-custom-background-import-wallpaper-engine',
-  customBackgroundChooseWallpaperEngine: 'flux-custom-background-choose-wallpaper-engine',
-  customBackgroundChanged: 'flux-custom-background-changed', // main -> renderer
+  windowMinimize: 'flux:window:minimize',
+  windowToggleMaximize: 'flux:window:toggle-maximize',
+  windowToggleFullscreen: 'flux:window:toggle-fullscreen',
+  windowExitFullscreenWindowed: 'flux:window:exit-fullscreen-windowed',
+  windowGetState: 'flux:window:get-state',
+  windowClose: 'flux:window:close',
+  windowStateChanged: 'flux:window:state-changed',
+  perfStateChanged: 'flux:performance:state-changed',
+  musicSearch: 'flux:music:search',
+  musicResolvePlayback: 'flux:music:resolve-playback',
+  musicGetLyrics: 'flux:music:get-lyrics',
+  musicGetAuthStatus: 'flux:music:get-auth-status',
+  musicLogin: 'flux:music:login',
+  musicLogout: 'flux:music:logout',
+  musicGetPlaylists: 'flux:music:get-playlists',
+  musicGetPlaylistTracks: 'flux:music:get-playlist-tracks',
+  musicGetLikedTracks: 'flux:music:get-liked-tracks',
+  restartApp: 'flux:app:restart',
+  configureGlobalHotkeys: 'flux:hotkeys:configure-global',
+  globalHotkey: 'flux:hotkeys:triggered',
+  updaterGetState: 'flux:updater:get-state',
+  updaterCheck: 'flux:updater:check',
+  updaterDownload: 'flux:updater:download',
+  updaterInstall: 'flux:updater:install',
+  updaterStateChanged: 'flux:updater:state-changed',
+  customBackgroundGet: 'flux:background:get',
+  customBackgroundChooseFile: 'flux:background:choose-file',
+  customBackgroundClear: 'flux:background:clear',
+  customBackgroundScanWallpaperEngine: 'flux:background:scan-wallpaper-engine',
+  customBackgroundImportWallpaperEngine: 'flux:background:import-wallpaper-engine',
+  customBackgroundChooseWallpaperEngine: 'flux:background:choose-wallpaper-engine',
+  customBackgroundChanged: 'flux:background:changed',
 } as const
 
 export interface DisplayState {

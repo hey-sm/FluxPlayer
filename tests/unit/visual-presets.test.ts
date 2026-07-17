@@ -16,7 +16,12 @@ const closeTo = (value: number, expected: number): void => {
 describe('visual preset runtime', () => {
   it('keeps legacy labels, descriptions, and shader ABI order', () => {
     expect(
-      VISUAL_PRESETS.slice(0, 6).map(({ id, name, label, description }) => ({ id, name, label, description })),
+      VISUAL_PRESETS.slice(0, 6).map(({ id, name, label, description }) => ({
+        id,
+        name,
+        label,
+        description,
+      })),
     ).toEqual([
       { id: 0, name: 'SILK', label: 'emily专辑封面', description: '封面粒子 · 快速入场' },
       { id: 1, name: 'TUNNEL', label: '滚筒', description: '隧道 · 沉浸感' },

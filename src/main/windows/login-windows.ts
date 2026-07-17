@@ -12,6 +12,10 @@ const NETEASE_LOGIN_URL = 'https://music.163.com/#/login'
 const QQ_LOGIN_PARTITION = 'persist:fluxplayer-qqmusic-login'
 const QQ_LOGIN_URL = 'https://y.qq.com/n/ryqq/profile'
 
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
 const QQ_LOGIN_COOKIE_PRIORITY = [
   'uin',
   'qqmusic_uin',
@@ -97,12 +101,16 @@ function neteaseCookieHasLogin(cookieText: string): boolean {
 }
 
 function isQQCookieDomain(domain: string | undefined): boolean {
-  const normalized = String(domain || '').replace(/^\./, '').toLowerCase()
+  const normalized = String(domain || '')
+    .replace(/^\./, '')
+    .toLowerCase()
   return normalized === 'qq.com' || normalized.endsWith('.qq.com') || normalized.endsWith('qqmusic.qq.com')
 }
 
 function isNeteaseCookieDomain(domain: string | undefined): boolean {
-  const normalized = String(domain || '').replace(/^\./, '').toLowerCase()
+  const normalized = String(domain || '')
+    .replace(/^\./, '')
+    .toLowerCase()
   return (
     normalized === '163.com' ||
     normalized.endsWith('.163.com') ||
@@ -187,14 +195,16 @@ export async function openNeteaseMusicLoginWindow(owner?: BrowserWindow | null):
       try {
         const cookie = await readNeteaseLoginCookieHeader(cookieSession)
         if (neteaseCookieHasLogin(cookie)) finish({ ok: true, cookie })
-      } catch (e: any) {
-        console.warn('Netease login cookie check failed:', e.message)
+      } catch (error: unknown) {
+        console.warn('Netease login cookie check failed:', errorMessage(error, 'unknown error'))
       }
     }
 
     loginWindow.webContents.setWindowOpenHandler(({ url }) => {
       if (/^https?:\/\/([^/]+\.)?(163|music\.163|netease)\.com/i.test(url)) {
-        loginWindow.loadURL(url).catch((e) => console.warn('Netease login popup navigation failed:', e.message))
+        loginWindow
+          .loadURL(url)
+          .catch((e) => console.warn('Netease login popup navigation failed:', e.message))
       } else if (/^https?:\/\//i.test(url)) {
         shell.openExternal(url).catch(() => {})
       }
@@ -213,8 +223,8 @@ export async function openNeteaseMusicLoginWindow(owner?: BrowserWindow | null):
             ? { ok: true, cookie }
             : { ok: false, cancelled: true, message: '网易云登录窗口已关闭' },
         )
-      } catch (e: any) {
-        resolve({ ok: false, error: e.message || '网易云登录窗口已关闭' })
+      } catch (error: unknown) {
+        resolve({ ok: false, error: errorMessage(error, '网易云登录窗口已关闭') })
       }
     })
 
@@ -276,8 +286,8 @@ export async function openQQMusicLoginWindow(owner?: BrowserWindow | null): Prom
             }
           }, 900)
         }
-      } catch (e: any) {
-        console.warn('QQ login cookie check failed:', e.message)
+      } catch (error: unknown) {
+        console.warn('QQ login cookie check failed:', errorMessage(error, 'unknown error'))
       }
     }
 
@@ -302,8 +312,8 @@ export async function openQQMusicLoginWindow(owner?: BrowserWindow | null): Prom
             ? { ok: true, cookie, partial: !qqCookieHasPlaybackLogin(cookie) }
             : { ok: false, cancelled: true, message: 'QQ 登录窗口已关闭' },
         )
-      } catch (e: any) {
-        resolve({ ok: false, error: e.message || 'QQ 登录窗口已关闭' })
+      } catch (error: unknown) {
+        resolve({ ok: false, error: errorMessage(error, 'QQ 登录窗口已关闭') })
       }
     })
 

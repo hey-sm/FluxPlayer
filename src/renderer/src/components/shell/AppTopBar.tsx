@@ -1,9 +1,4 @@
-import {
-  Maximize2,
-  Minus,
-  Settings,
-  X,
-} from 'lucide-react'
+import { Maximize2, Minus, Settings, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -14,7 +9,14 @@ interface AppTopBarProps {
   onToggleSettings(): void
 }
 
-function TopBarButton({ label, active, className, disabled, onClick, children }: {
+function TopBarButton({
+  label,
+  active,
+  className,
+  disabled,
+  onClick,
+  children,
+}: {
   label: string
   active?: boolean
   className?: string
@@ -43,10 +45,7 @@ function TopBarButton({ label, active, className, disabled, onClick, children }:
   )
 }
 
-export function AppTopBar({
-  settingsOpen,
-  onToggleSettings,
-}: AppTopBarProps): React.JSX.Element {
+export function AppTopBar({ settingsOpen, onToggleSettings }: AppTopBarProps): React.JSX.Element {
   const desktop = window.fluxDesktop
   return (
     <TooltipProvider delayDuration={350}>
@@ -57,12 +56,22 @@ export function AppTopBar({
         </div>
         <div className="spacer" />
         <nav className="topbar-actions" aria-label="窗口与面板控制">
-          <TopBarButton label="设置" active={settingsOpen} onClick={onToggleSettings}><Settings /></TopBarButton>
-          {desktop ? <>
-            <TopBarButton label="最小化" onClick={() => desktop.minimize()}><Minus /></TopBarButton>
-            <TopBarButton label="全屏" onClick={() => desktop.toggleFullscreen()}><Maximize2 /></TopBarButton>
-            <TopBarButton label="关闭" className="close" onClick={() => desktop.close()}><X /></TopBarButton>
-          </> : null}
+          <TopBarButton label="设置" active={settingsOpen} onClick={onToggleSettings}>
+            <Settings />
+          </TopBarButton>
+          {desktop ? (
+            <>
+              <TopBarButton label="最小化" onClick={() => desktop.minimize()}>
+                <Minus />
+              </TopBarButton>
+              <TopBarButton label="全屏" onClick={() => desktop.toggleFullscreen()}>
+                <Maximize2 />
+              </TopBarButton>
+              <TopBarButton label="关闭" className="close" onClick={() => desktop.close()}>
+                <X />
+              </TopBarButton>
+            </>
+          ) : null}
         </nav>
       </header>
     </TooltipProvider>

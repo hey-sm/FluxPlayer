@@ -1,55 +1,72 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC } from '@shared/ipc-contract'
+import {
+  IPC,
+  type DesktopWindowState,
+  type HotkeyBinding,
+  type HotkeyConfigureResult,
+} from '@shared/ipc-contract'
+import type { FluxMusicApi } from '@shared/music-contract'
+import type { PerfState } from '@shared/perf-state'
+import type {
+  CustomBackground,
+  CustomBackgroundResult,
+  WallpaperEngineScanResult,
+} from '@shared/custom-background-contract'
+import type { UpdaterCommandResult, UpdaterState } from '@shared/updater-contract'
 
-function readApiBase(): string {
-  const arg = process.argv.find((item) => item.startsWith('--flux-api-base='))
-  return arg ? arg.slice('--flux-api-base='.length) : ''
-}
-
-function bind(channel: string, callback: (payload: any) => void): () => void {
-  if (typeof callback !== 'function') return () => {}
-  const listener = (_event: unknown, payload: any) => callback(payload ?? {})
+function bind<Payload>(channel: string, callback: (payload: Payload) => void): () => void {
+  if (typeof callback !== 'function') return () => undefined
+  const listener = (_event: Electron.IpcRendererEvent, payload: Payload) => callback(payload)
   ipcRenderer.on(channel, listener)
   return () => ipcRenderer.removeListener(channel, listener)
 }
 
+const music: FluxMusicApi = {
+  search: (request) => ipcRenderer.invoke(IPC.musicSearch, request),
+  resolvePlayback: (request) => ipcRenderer.invoke(IPC.musicResolvePlayback, request),
+  getLyrics: (request) => ipcRenderer.invoke(IPC.musicGetLyrics, request),
+  getAuthStatus: (provider) => ipcRenderer.invoke(IPC.musicGetAuthStatus, { provider }),
+  login: (provider) => ipcRenderer.invoke(IPC.musicLogin, { provider }),
+  logout: (provider) => ipcRenderer.invoke(IPC.musicLogout, { provider }),
+  getPlaylists: (request) => ipcRenderer.invoke(IPC.musicGetPlaylists, request),
+  getPlaylistTracks: (request) => ipcRenderer.invoke(IPC.musicGetPlaylistTracks, request),
+  getLikedTracks: (request) => ipcRenderer.invoke(IPC.musicGetLikedTracks, request),
+}
+
 const api = {
-  isDesktop: true,
-  apiBase: readApiBase(),
-  // 窗口
-  minimize: () => ipcRenderer.invoke(IPC.windowMinimize),
-  toggleMaximize: () => ipcRenderer.invoke(IPC.windowToggleMaximize),
-  toggleFullscreen: () => ipcRenderer.invoke(IPC.windowToggleFullscreen),
-  exitFullscreenWindowed: () => ipcRenderer.invoke(IPC.windowExitFullscreenWindowed),
-  getWindowState: () => ipcRenderer.invoke(IPC.windowGetState),
-  close: () => ipcRenderer.invoke(IPC.windowClose),
-  onWindowState: (callback: (state: any) => void) => bind(IPC.windowStateChanged, callback),
-  // 性能状态机
-  onPerfState: (callback: (state: any) => void) => bind(IPC.perfStateChanged, callback),
-  // 登录
-  openNeteaseLogin: () => ipcRenderer.invoke(IPC.neteaseOpenLogin),
-  clearNeteaseLogin: () => ipcRenderer.invoke(IPC.neteaseClearLogin),
-  openQQLogin: () => ipcRenderer.invoke(IPC.qqOpenLogin),
-  clearQQLogin: () => ipcRenderer.invoke(IPC.qqClearLogin),
-  // 应用
-  restartApp: () => ipcRenderer.invoke(IPC.restartApp),
-  configureGlobalHotkeys: (bindings: any[]) => ipcRenderer.invoke(IPC.configureGlobalHotkeys, bindings || []),
-  onGlobalHotkey: (callback: (payload: any) => void) => bind(IPC.globalHotkey, callback),
-  // M6 updater: no automatic check/download; every transition is an explicit renderer command.
-  getUpdaterState: () => ipcRenderer.invoke(IPC.updaterGetState),
-  checkForUpdates: () => ipcRenderer.invoke(IPC.updaterCheck),
-  downloadUpdate: () => ipcRenderer.invoke(IPC.updaterDownload),
-  installUpdate: () => ipcRenderer.invoke(IPC.updaterInstall),
-  onUpdaterState: (callback: (payload: any) => void) => bind(IPC.updaterStateChanged, callback),
-  // 自定义背景：路径只在主进程内解析，renderer 仅接收受控协议 URL。
-  getCustomBackground: () => ipcRenderer.invoke(IPC.customBackgroundGet),
-  chooseCustomBackgroundFile: () => ipcRenderer.invoke(IPC.customBackgroundChooseFile),
-  clearCustomBackground: () => ipcRenderer.invoke(IPC.customBackgroundClear),
-  scanWallpaperEngineProjects: () => ipcRenderer.invoke(IPC.customBackgroundScanWallpaperEngine),
-  importWallpaperEngineProject: (projectId: string) =>
+  isDesktop: true as const,
+  music,
+  minimize: (): Promise<void> => ipcRenderer.invoke(IPC.windowMinimize),
+  toggleMaximize: (): Promise<void> => ipcRenderer.invoke(IPC.windowToggleMaximize),
+  toggleFullscreen: (): Promise<void> => ipcRenderer.invoke(IPC.windowToggleFullscreen),
+  exitFullscreenWindowed: (): Promise<void> => ipcRenderer.invoke(IPC.windowExitFullscreenWindowed),
+  getWindowState: (): Promise<DesktopWindowState> => ipcRenderer.invoke(IPC.windowGetState),
+  close: (): Promise<void> => ipcRenderer.invoke(IPC.windowClose),
+  onWindowState: (callback: (state: DesktopWindowState) => void): (() => void) =>
+    bind(IPC.windowStateChanged, callback),
+  onPerfState: (callback: (state: PerfState) => void): (() => void) => bind(IPC.perfStateChanged, callback),
+  restartApp: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(IPC.restartApp),
+  configureGlobalHotkeys: (bindings: HotkeyBinding[]): Promise<HotkeyConfigureResult> =>
+    ipcRenderer.invoke(IPC.configureGlobalHotkeys, bindings),
+  onGlobalHotkey: (callback: (payload: { action: string }) => void): (() => void) =>
+    bind(IPC.globalHotkey, callback),
+  getUpdaterState: (): Promise<UpdaterState> => ipcRenderer.invoke(IPC.updaterGetState),
+  checkForUpdates: (): Promise<UpdaterCommandResult> => ipcRenderer.invoke(IPC.updaterCheck),
+  downloadUpdate: (): Promise<UpdaterCommandResult> => ipcRenderer.invoke(IPC.updaterDownload),
+  installUpdate: (): Promise<UpdaterCommandResult> => ipcRenderer.invoke(IPC.updaterInstall),
+  onUpdaterState: (callback: (payload: UpdaterState) => void): (() => void) =>
+    bind(IPC.updaterStateChanged, callback),
+  getCustomBackground: (): Promise<CustomBackground | null> => ipcRenderer.invoke(IPC.customBackgroundGet),
+  chooseCustomBackgroundFile: (): Promise<CustomBackgroundResult> =>
+    ipcRenderer.invoke(IPC.customBackgroundChooseFile),
+  clearCustomBackground: (): Promise<CustomBackgroundResult> => ipcRenderer.invoke(IPC.customBackgroundClear),
+  scanWallpaperEngineProjects: (): Promise<WallpaperEngineScanResult> =>
+    ipcRenderer.invoke(IPC.customBackgroundScanWallpaperEngine),
+  importWallpaperEngineProject: (projectId: string): Promise<CustomBackgroundResult> =>
     ipcRenderer.invoke(IPC.customBackgroundImportWallpaperEngine, { projectId }),
-  chooseWallpaperEngineProject: () => ipcRenderer.invoke(IPC.customBackgroundChooseWallpaperEngine),
-  onCustomBackgroundChanged: (callback: (payload: any) => void) =>
+  chooseWallpaperEngineProject: (): Promise<CustomBackgroundResult> =>
+    ipcRenderer.invoke(IPC.customBackgroundChooseWallpaperEngine),
+  onCustomBackgroundChanged: (callback: (payload: CustomBackground | null) => void): (() => void) =>
     bind(IPC.customBackgroundChanged, callback),
 }
 

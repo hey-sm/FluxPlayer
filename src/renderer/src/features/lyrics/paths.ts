@@ -1,11 +1,12 @@
 import type { UnifiedSong } from '@shared/models'
+import type { LyricsRequest } from '@shared/music-contract'
 
 export const LYRICS_QUERY_SCOPE = 'lyrics' as const
 export type LyricTrackKey = string
 export type LyricsQueryKey = readonly [typeof LYRICS_QUERY_SCOPE, LyricTrackKey | 'none']
 
-function value(value: unknown): string {
-  return String(value ?? '').trim()
+function value(input: unknown): string {
+  return String(input ?? '').trim()
 }
 
 export function lyricTrackKey(song: UnifiedSong | null | undefined): LyricTrackKey | null {
@@ -21,18 +22,15 @@ export function lyricTrackKey(song: UnifiedSong | null | undefined): LyricTrackK
   return id ? `netease:${id}` : null
 }
 
-/** Existing server route only; this module never invents or rewrites provider APIs. */
-export function lyricPath(song: UnifiedSong | null | undefined): string | null {
+export function lyricsRequest(song: UnifiedSong | null | undefined): LyricsRequest | null {
   if (!song) return null
   if (song.provider === 'qq') {
     const mid = value(song.mid || song.songmid || song.id)
-    const id = value(song.qqId || (/^\d+$/.test(value(song.id)) ? song.id : ''))
-    if (!mid && !id) return null
-    return `/api/qq/lyric?mid=${encodeURIComponent(mid)}&id=${encodeURIComponent(id)}`
+    const id = song.qqId ?? song.id
+    return mid || value(id) ? { provider: 'qq', id, mid: mid || undefined } : null
   }
 
-  const id = value(song.id)
-  return id ? `/api/lyric?id=${encodeURIComponent(id)}` : null
+  return value(song.id) ? { provider: 'netease', id: song.id } : null
 }
 
 export function lyricQueryKey(song: UnifiedSong | null | undefined): LyricsQueryKey {
