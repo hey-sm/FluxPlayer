@@ -88,11 +88,42 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(page.getByRole('option', { name: '弹性浮现' })).toBeVisible()
   await expect(page.locator('.glass-select-content .flux-liquid-glass')).toBeVisible()
   await page.keyboard.press('Escape')
+
+  const visualSelect = page.getByRole('combobox', { name: '音乐视觉' })
+  await visualSelect.click()
+
+  const cinematicOption = page.getByRole('option', { name: '电影远景' })
+  await expect(cinematicOption).toBeVisible()
+  await cinematicOption.click()
+  await expect(visualSelect).toContainText('电影远景')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('fluxplayer-visual-preset-v1'))).toBe('10')
+  await expect(page.locator('.stage-bg canvas')).toHaveCount(1)
+
   await page.getByRole('button', { name: '关闭' }).click()
 
-  await page.getByPlaceholder(/搜索歌曲/).fill('M6 E2E')
+  const searchSensor = page.locator('.search-hover-sensor')
+  const searchShell = page.locator('.search-shell')
+  const searchInput = page.getByPlaceholder(/搜索歌曲/)
+  await expect(searchInput).not.toBeVisible()
+
+  await searchSensor.hover()
+  await expect(searchShell).toHaveClass(/is-visible/)
+  await expect(searchInput).toBeVisible()
+  await searchInput.fill('M6 E2E')
   const searchResults = page.getByRole('region', { name: '搜索结果' })
   const song = searchResults.getByText(TRACK.name, { exact: true })
+  await expect(song).toBeVisible()
+
+  await searchResults.hover()
+  await expect(searchShell).toHaveClass(/is-visible/)
+  await expect(searchResults).toBeVisible()
+
+  await searchInput.evaluate((input) => input.blur())
+  await page.mouse.move(1, Math.floor((page.viewportSize()?.height ?? 720) / 2))
+  await expect(searchShell).not.toHaveClass(/is-visible/)
+  await expect(searchInput).not.toBeVisible()
+
+  await searchSensor.hover()
   await expect(song).toBeVisible()
   await expect
     .poll(async () => {

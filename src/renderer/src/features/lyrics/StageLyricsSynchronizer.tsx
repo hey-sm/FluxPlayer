@@ -1,12 +1,12 @@
 import { useEffect, useMemo } from 'react'
-import { usePlayer } from '../../stores/player'
+import { usePlaybackProgress, usePlayer } from '../../stores/player'
 import { useThemeStore } from '../../theme'
 import { stageLyricsChannel } from '../../visual/scene'
 import { useLyrics } from './query'
 
 export function StageLyricsSynchronizer(): null {
   const current = usePlayer((state) => state.current)
-  const position = usePlayer((state) => state.position)
+  const position = usePlaybackProgress((state) => state.position)
   const accentColor = useThemeStore((state) => state.visualParams.accent)
   const lyrics = useLyrics(current)
   const lines = useMemo(() => lyrics.data?.lines ?? [], [lyrics.data?.lines])

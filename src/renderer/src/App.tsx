@@ -12,6 +12,7 @@ import { usePlayer } from './stores/player'
 import { useThemeStore } from './theme'
 import { visualBus, type VisualPreset } from './visual/bus'
 import { VISUAL_PRESET_BY_ID } from './visual/presets/registry'
+import type { LyricsOffset } from './visual/StageCanvas'
 import {
   attach as attachVisualAudio,
   resume as resumeVisualAudio,
@@ -25,14 +26,37 @@ const StageCanvas = lazy(() =>
 )
 
 const VISUAL_PRESET_KEY = 'fluxplayer-visual-preset-v1'
+const LYRICS_DRAG_KEY = 'flux-lyrics-drag-enabled'
+const LYRICS_OFFSET_KEY = 'flux-lyrics-offset'
 type BackgroundMode = 'visual' | 'wallpaper'
+
+function initialLyricsDragEnabled(): boolean {
+  try {
+    return localStorage.getItem(LYRICS_DRAG_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function initialLyricsOffset(): LyricsOffset {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(LYRICS_OFFSET_KEY) ?? 'null',
+    ) as Partial<LyricsOffset> | null
+    return parsed && Number.isFinite(parsed.x) && Number.isFinite(parsed.y)
+      ? { x: Number(parsed.x), y: Number(parsed.y) }
+      : { x: 0, y: 0 }
+  } catch {
+    return { x: 0, y: 0 }
+  }
+}
 
 function initialVisualPreset(): VisualPreset {
   try {
     const raw = localStorage.getItem(VISUAL_PRESET_KEY)
-    if (raw === null) return 2
+    if (raw === null) return 10
     const value = Number(raw)
-    return VISUAL_PRESET_BY_ID.has(value as VisualPreset) ? (value as VisualPreset) : 2
+    return VISUAL_PRESET_BY_ID.has(value as VisualPreset) ? (value as VisualPreset) : 10
   } catch {
     return 2
   }
@@ -134,6 +158,8 @@ export default function App(): React.JSX.Element {
   const [visualPreset, setVisualPreset] = useState<VisualPreset>(initialVisualPreset)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [motionStyle, setMotionStyle] = useState(() => localStorage.getItem('flux-ui-motion') || 'glide')
+  const [lyricsDragEnabled, setLyricsDragEnabled] = useState(initialLyricsDragEnabled)
+  const [lyricsOffset, setLyricsOffset] = useState<LyricsOffset>(initialLyricsOffset)
   const [customBackground, setCustomBackground] = useState<CustomBackground | null>(null)
   const [backgroundMediaFailed, setBackgroundMediaFailed] = useState(false)
   const [backgroundBusy, setBackgroundBusy] = useState(false)
@@ -160,6 +186,22 @@ export default function App(): React.JSX.Element {
       // Keep the selected preset for this session when persistence is unavailable.
     }
   }, [visualPreset])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LYRICS_DRAG_KEY, lyricsDragEnabled ? '1' : '0')
+    } catch {
+      // Keep the setting for this session when persistence is unavailable.
+    }
+  }, [lyricsDragEnabled])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LYRICS_OFFSET_KEY, JSON.stringify(lyricsOffset))
+    } catch {
+      // Keep the position for this session when persistence is unavailable.
+    }
+  }, [lyricsOffset])
 
   const runBackgroundCommand = useCallback(
     async (
@@ -239,6 +281,9 @@ export default function App(): React.JSX.Element {
           className="stage-bg"
           preset={visualPreset}
           backgroundEnabled={backgroundMode === 'visual'}
+          lyricsDragEnabled={lyricsDragEnabled}
+          lyricsOffset={lyricsOffset}
+          onLyricsOffsetChange={setLyricsOffset}
         />
       </Suspense>
       <AppTopBar settingsOpen={settingsOpen} onToggleSettings={() => setSettingsOpen((open) => !open)} />
@@ -271,6 +316,9 @@ export default function App(): React.JSX.Element {
               setMotionStyle(style)
               localStorage.setItem('flux-ui-motion', style)
             }}
+            lyricsDragEnabled={lyricsDragEnabled}
+            onLyricsDragEnabledChange={setLyricsDragEnabled}
+            onResetLyricsPosition={() => setLyricsOffset({ x: 0, y: 0 })}
           />
         </Suspense>
       ) : null}

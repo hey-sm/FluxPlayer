@@ -3,3 +3,6 @@ out/
 dist/
 *.local
 .eslintcache
+
+# Local third-party visual research mirror (never package or commit)
+cineshader-mirror/

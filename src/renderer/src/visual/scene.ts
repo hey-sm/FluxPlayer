@@ -1,4 +1,4 @@
-import type { StageLyricsFrame } from './lyrics3d'
+import type { StageLyricsFrame } from './lyrics3d-mesh/state'
 
 export type VisualSceneListener<T> = (snapshot: Readonly<T>) => void
 

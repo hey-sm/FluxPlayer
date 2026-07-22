@@ -3,7 +3,7 @@ import { constants as fsConstants } from 'node:fs'
 import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { tmpdir } from 'node:os'
-import type { UnifiedSong } from '../../src/shared/models'
+import type { LyricLine, UnifiedSong } from '../../src/shared/models'
 import {
   _electron as electron,
   expect,
@@ -19,6 +19,7 @@ export interface E2EMusicFixture {
   query: string
   track: UnifiedSong
   quality?: string
+  lyrics?: readonly LyricLine[]
 }
 
 export interface E2EMusicCall {
@@ -243,8 +244,8 @@ async function installTypedMusicFixture(app: ElectronApplication, fixture: E2EMu
         lyric: '',
         tlyric: '',
         yrc: '',
-        lines: [],
-        source: 'e2e-empty',
+        lines: payload.fixture.lyrics ?? [],
+        source: payload.fixture.lyrics ? 'e2e-lines' : 'e2e-empty',
       }))
       handle(payload.channels.getAuthStatus, (input) => ({
         provider: input.provider,

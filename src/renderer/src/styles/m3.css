@@ -115,6 +115,85 @@ body {
   margin-bottom: 13px;
 }
 
+.lyrics-position-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+
+.lyrics-position-status {
+  margin-right: auto;
+  color: var(--flux-text-muted);
+  font-size: 10px;
+}
+
+.settings-switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  padding: 2px;
+  border: 1px solid var(--flux-glass-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--flux-panel-surface) 78%, transparent);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.settings-switch[data-state='checked'] {
+  border-color: color-mix(in srgb, var(--flux-accent) 58%, var(--flux-glass-border));
+  background: color-mix(in srgb, var(--flux-accent) 38%, var(--flux-panel-surface));
+}
+
+.settings-switch-thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--flux-text-muted);
+  transition:
+    transform 160ms ease,
+    background 160ms ease;
+}
+
+.settings-switch[data-state='checked'] .settings-switch-thumb {
+  transform: translateX(14px);
+  background: var(--flux-text);
+}
+
+.settings-switch:focus-visible,
+.lyrics-reset-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--flux-accent) 58%, transparent);
+  outline-offset: 2px;
+}
+
+.lyrics-reset-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--flux-glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--flux-text-muted);
+  cursor: pointer;
+}
+
+.lyrics-reset-button:hover {
+  color: var(--flux-text);
+  background: color-mix(in srgb, var(--flux-accent) 10%, transparent);
+}
+
+.stage-bg[data-lyrics-interaction] canvas {
+  cursor: grab;
+}
+
+html[data-pointer-dragging] .stage-bg canvas {
+  cursor: grabbing;
+}
+
 .theme-field > span,
 .theme-range > span {
   justify-content: space-between;
@@ -1242,17 +1321,24 @@ html.classic-control-glass-svg-ok .playerbar.classic-control-glass {
   padding-top: 8px;
   transform: translateY(calc(-100% - 12px));
   opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
   transition:
     transform var(--flux-reveal-duration) var(--flux-reveal-easing),
     opacity var(--flux-reveal-fade-duration) ease;
 }
+.search-shell.is-visible .searchbar,
 .search-shell:hover .searchbar,
 .search-shell:focus-within .searchbar {
   transform: translateY(0);
   opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 .search-shell .search-popover {
   top: 62px;
+  z-index: 2;
+  pointer-events: auto;
   transition:
     opacity var(--flux-reveal-fade-duration) ease,
     transform var(--flux-reveal-duration) var(--flux-reveal-easing);
@@ -1341,9 +1427,19 @@ html.classic-search-glass-svg-ok .searchbar.classic-search-glass {
   flex: none;
 }
 
+/* Search must escape the root-level topbar stacking context to receive hover input. */
+.app > .content {
+  z-index: 71;
+}
+
 /* Final search geometry. */
 .search-shell {
+  z-index: 81;
   padding-top: 15px !important;
+}
+.search-shell.is-visible,
+.search-shell:focus-within {
+  z-index: 83;
 }
 .search-shell .searchbar,
 .search-shell .searchbar input {
@@ -1530,10 +1626,26 @@ html.classic-search-glass-svg-ok .searchbar.classic-search-glass {
   }
 }
 .glass-select-surface {
+  display: flex;
   width: 100%;
+  max-height: min(280px, var(--radix-select-content-available-height));
+  flex-direction: column;
+  overflow: hidden;
 }
 .glass-select-viewport {
   width: 100%;
+  min-height: 0;
+  max-height: min(280px, var(--radix-select-content-available-height));
+  overflow-y: auto !important;
+  scrollbar-color: color-mix(in srgb, var(--flux-accent) 45%, transparent) transparent;
+  scrollbar-width: thin;
+}
+.glass-select-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+.glass-select-viewport::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--flux-accent) 45%, transparent);
 }
 .glass-select-item {
   display: grid;
@@ -1603,9 +1715,10 @@ html.classic-search-glass-svg-ok .searchbar.classic-search-glass {
   z-index: 82;
   top: 0;
   left: 50%;
-  width: min(420px, 42vw);
-  height: 30px;
+  width: min(620px, calc(100vw - 180px));
+  height: 32px;
   transform: translateX(-50%);
+  pointer-events: auto;
   -webkit-app-region: no-drag;
 }
 .flux-hover-panel {

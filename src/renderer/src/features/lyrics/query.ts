@@ -1,6 +1,6 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { buildLyricLines } from '@shared/lyrics'
-import type { LyricDoc, LyricLine, UnifiedSong } from '@shared/models'
+import type { LyricDoc, LyricLine, LyricWord, UnifiedSong } from '@shared/models'
 import { getLyrics } from '../../api'
 import { lyricQueryKey, lyricTrackKey, lyricsRequest, type LyricTrackKey } from './paths'
 import type { LyricsLoadState } from './state'
@@ -21,10 +21,34 @@ function validServerLines(value: unknown): LyricLine[] {
     if (!line || typeof line !== 'object') return []
     const candidate = line as Partial<LyricLine>
     if (!Number.isFinite(candidate.time) || typeof candidate.text !== 'string') return []
+    const words: LyricWord[] | undefined = Array.isArray(candidate.words)
+      ? candidate.words.flatMap((word) => {
+          if (
+            !word ||
+            typeof word !== 'object' ||
+            typeof word.text !== 'string' ||
+            !Number.isFinite(word.time) ||
+            !Number.isFinite(word.duration)
+          ) {
+            return []
+          }
+          return [
+            {
+              text: word.text,
+              time: Number(word.time),
+              duration: Math.max(0, Number(word.duration)),
+              ...(word.estimated === true ? { estimated: true } : {}),
+            },
+          ]
+        })
+      : undefined
     return [
-      candidate.ttext === undefined
-        ? { time: Number(candidate.time), text: candidate.text }
-        : { time: Number(candidate.time), text: candidate.text, ttext: String(candidate.ttext) },
+      {
+        time: Number(candidate.time),
+        text: candidate.text,
+        ...(candidate.ttext === undefined ? {} : { ttext: String(candidate.ttext) }),
+        ...(words?.length ? { words } : {}),
+      },
     ]
   })
 }

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from 'react'
+import { RotateCcw } from 'lucide-react'
 import type { CustomBackground, WallpaperEngineProject } from '@shared/custom-background-contract'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Card } from '../../components/ui/card'
@@ -30,6 +31,9 @@ export interface SettingsPanelProps {
   onImportWallpaperEngine(projectId: string): void
   motionStyle: string
   onMotionStyleChange(style: string): void
+  lyricsDragEnabled: boolean
+  onLyricsDragEnabledChange(enabled: boolean): void
+  onResetLyricsPosition(): void
 }
 
 export default function SettingsPanel({
@@ -48,6 +52,9 @@ export default function SettingsPanel({
   onImportWallpaperEngine,
   motionStyle,
   onMotionStyleChange,
+  lyricsDragEnabled,
+  onLyricsDragEnabledChange,
+  onResetLyricsPosition,
 }: SettingsPanelProps): React.JSX.Element | null {
   const [activeTab, setActiveTab] = useState<'appearance' | 'system'>('appearance')
   if (!open) return null
@@ -108,6 +115,33 @@ export default function SettingsPanel({
                   onValueChange={(value) => onVisualPresetChange(Number(value) as VisualPreset)}
                 />
                 <small>{activeVisualPreset?.description}</small>
+              </div>
+
+              <div className="theme-field lyrics-position-field">
+                <span>歌词位置</span>
+                <div className="lyrics-position-controls">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={lyricsDragEnabled}
+                    aria-label="允许拖拽歌词"
+                    className="settings-switch"
+                    data-state={lyricsDragEnabled ? 'checked' : 'unchecked'}
+                    onClick={() => onLyricsDragEnabledChange(!lyricsDragEnabled)}
+                  >
+                    <span className="settings-switch-thumb" />
+                  </button>
+                  <span className="lyrics-position-status">{lyricsDragEnabled ? '移动位置' : '3D 旋转'}</span>
+                  <button
+                    type="button"
+                    className="lyrics-reset-button"
+                    aria-label="重置歌词位置"
+                    title="重置歌词位置"
+                    onClick={onResetLyricsPosition}
+                  >
+                    <RotateCcw size={14} strokeWidth={1.8} />
+                  </button>
+                </div>
               </div>
 
               <section className="custom-background-settings" aria-label="自定义背景">

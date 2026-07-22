@@ -14,26 +14,10 @@ const closeTo = (value: number, expected: number): void => {
 }
 
 describe('visual preset runtime', () => {
-  it('keeps legacy labels, descriptions, and shader ABI order', () => {
-    expect(
-      VISUAL_PRESETS.slice(0, 6).map(({ id, name, label, description }) => ({
-        id,
-        name,
-        label,
-        description,
-      })),
-    ).toEqual([
-      { id: 0, name: 'SILK', label: 'emily专辑封面', description: '封面粒子 · 快速入场' },
-      { id: 1, name: 'TUNNEL', label: '滚筒', description: '隧道 · 沉浸感' },
-      { id: 2, name: 'ORBIT', label: '星球', description: '星球 · 雕塑感' },
-      { id: 3, name: 'VOID', label: '虚空', description: '无粒子 · 自定义背景' },
-      { id: 4, name: 'VINYL', label: '唱片', description: '唱片 · 圆形封面' },
-      { id: 5, name: 'WALLPAPER', label: '星河', description: '壁纸粒子 · 音乐律动' },
-    ])
-    expect(VISUAL_PRESETS.slice(6).map(({ id, name, label }) => ({ id, name, label }))).toEqual([
-      { id: 7, name: 'NEBULA', label: '星云隧道' },
-      { id: 8, name: 'CRYSTAL', label: '晶体波场' },
-      { id: 9, name: 'SKYLINE', label: '几何天际线' },
+  it('exposes only Star River and Cinematic Vista', () => {
+    expect(VISUAL_PRESETS.map(({ id, name, label }) => ({ id, name, label }))).toEqual([
+      { id: 5, name: 'WALLPAPER', label: '星河' },
+      { id: 10, name: 'CINEMATIC_VISTA', label: '电影远景' },
     ])
   })
 

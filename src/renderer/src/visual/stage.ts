@@ -12,10 +12,10 @@ import {
   type PresetTransitionState,
 } from './presets/runtime'
 import type { VisualCameraBaseline } from './presets/types'
-import { Lyrics3DLayer } from './lyrics3d'
+import { Lyrics3DMeshLayer } from './lyrics3d-mesh'
 import { stageLyricsChannel } from './scene'
 import { vs, fs, bloomVs, bloomFs } from './shaders'
-import { ModernBackgrounds } from './backgrounds'
+import { MusicBackgroundManager } from './backgrounds'
 
 const PLANE_SIZE = 4.8
 const RIPPLE_MAX = 12
@@ -86,7 +86,7 @@ function makePlaceholderTexture(css: string, size = 4): THREE.Texture {
 }
 
 function isVisualPreset(value: number): value is VisualPreset {
-  return Number.isInteger(value) && ((value >= 0 && value <= 5) || (value >= 7 && value <= 9))
+  return Number.isInteger(value) && ((value >= 0 && value <= 5) || (value >= 7 && value <= 10))
 }
 
 /** Three stage. All external state arrives through one VisualBus snapshot. */
@@ -94,6 +94,8 @@ export class VisualStage {
   private readonly resources = new ResourceRegistry()
   private readonly scene: THREE.Scene
   private readonly camera: THREE.PerspectiveCamera
+  private readonly lyricsScene: THREE.Scene
+  private readonly lyricsCamera: THREE.PerspectiveCamera
   private readonly renderer: THREE.WebGLRenderer
   private readonly geometry: THREE.BufferGeometry
   private readonly material: THREE.ShaderMaterial
@@ -103,19 +105,14 @@ export class VisualStage {
   private readonly uniforms: Record<string, THREE.IUniform>
   private readonly textureLoader = new THREE.TextureLoader()
   private readonly placeholderCover: THREE.Texture
-  private readonly lyricsLayer: Lyrics3DLayer
-  private readonly modernBackgrounds: ModernBackgrounds
+  private readonly lyricsLayer: Lyrics3DMeshLayer
+  private readonly backgrounds: MusicBackgroundManager
 
   private container: HTMLElement | null = null
   private stopTick: (() => void) | null = null
   private disposed = false
   private backgroundEnabled = true
-  private pointerTarget = new THREE.Vector2()
-  private pointerRotation = new THREE.Vector2()
-  private lyricsRotationTarget = new THREE.Vector2()
-  private lyricsRotation = new THREE.Vector2()
-  private lyricsDepthTarget = 1.46
-  private lyricsDepth = 1.46
+  private lyricsDragEnabled = false
 
   private coverGeneration = 0
   private coverUrl: string | null = null
@@ -135,9 +132,14 @@ export class VisualStage {
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
     this.camera.position.set(0, 0, 6.6)
     this.camera.lookAt(0, 0, 0)
+    this.lyricsScene = new THREE.Scene()
+    this.lyricsCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
+    this.lyricsCamera.position.set(0, 0, 10.8)
+    this.lyricsCamera.lookAt(0, 0, 0)
 
     // Renderer teardown is explicit in dispose(); scene resources must be released first.
-    this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' })
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
+    this.renderer.autoClear = false
     this.renderer.setClearColor(0x000000, 0)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35))
     const canvas = this.renderer.domElement
@@ -253,18 +255,18 @@ export class VisualStage {
     this.scene.add(this.particles)
     this.resources.add(() => this.scene.remove(this.particles))
 
-    this.modernBackgrounds = new ModernBackgrounds()
-    this.scene.add(this.modernBackgrounds.group)
+    this.backgrounds = new MusicBackgroundManager()
+    this.scene.add(this.backgrounds.group)
     this.resources.add(() => {
-      this.scene.remove(this.modernBackgrounds.group)
-      this.modernBackgrounds.dispose()
+      this.scene.remove(this.backgrounds.group)
+      this.backgrounds.dispose()
     })
 
-    // Scene overlays share this Stage/Ticker and never create their own animation clocks.
-    this.lyricsLayer = new Lyrics3DLayer()
-    this.scene.add(this.lyricsLayer.group)
+    // Lyrics share the stage ticker but render after a depth clear in their own transparent scene.
+    this.lyricsLayer = new Lyrics3DMeshLayer()
+    this.lyricsScene.add(this.lyricsLayer.group)
     this.resources.add(() => {
-      this.scene.remove(this.lyricsLayer.group)
+      this.lyricsScene.remove(this.lyricsLayer.group)
       this.lyricsLayer.dispose()
     })
     this.lyricsLayer.setFrame(stageLyricsChannel.getSnapshot())
@@ -297,18 +299,19 @@ export class VisualStage {
   start(): () => void {
     if (this.stopTick) return this.stopTick
     const unregister = ticker.add((deltaTime) => {
+      // One orbit camera drives the background and lyrics, matching the original interaction.
+      this.updateCamera(deltaTime)
+      this.syncLyricsCamera()
       if (this.backgroundEnabled) {
         this.uniforms.uTime.value += deltaTime
         this.tickVinylSpin(deltaTime)
         this.tickPresetTransition(deltaTime)
-        this.updateCamera(deltaTime)
-        const pointerEase = 1 - Math.exp(-3.4 * Math.max(0, deltaTime))
-        this.pointerRotation.lerp(this.pointerTarget, pointerEase)
-        this.particles.rotation.set(this.pointerRotation.y, this.pointerRotation.x, 0)
-        this.bloomParticles.rotation.copy(this.particles.rotation)
-        this.modernBackgrounds.group.rotation.set(this.pointerRotation.y, this.pointerRotation.x, 0)
         const snapshot = this.bus.getSnapshot()
-        this.modernBackgrounds.update(deltaTime, snapshot.analyserFrame, snapshot.beatPulse)
+        this.backgrounds.update(deltaTime, {
+          analyserFrame: snapshot.analyserFrame,
+          beatPulse: snapshot.beatPulse,
+          accentColor: snapshot.accentColor,
+        })
         if (this.uniforms.uColorMixT.value < 1) {
           this.uniforms.uColorMixT.value = Math.min(
             1,
@@ -317,13 +320,11 @@ export class VisualStage {
           if (this.uniforms.uColorMixT.value >= 1) this.finishCoverTransition()
         }
       }
-      const lyricsEase = 1 - Math.exp(-7 * Math.max(0, deltaTime))
-      this.lyricsRotation.lerp(this.lyricsRotationTarget, lyricsEase)
-      this.lyricsDepth += (this.lyricsDepthTarget - this.lyricsDepth) * lyricsEase
-      this.lyricsLayer.group.rotation.set(this.lyricsRotation.y, this.lyricsRotation.x, 0)
-      this.lyricsLayer.group.position.z = this.lyricsDepth
       this.lyricsLayer.update(deltaTime)
+      this.renderer.clear()
       this.renderer.render(this.scene, this.camera)
+      this.renderer.clearDepth()
+      this.renderer.render(this.lyricsScene, this.lyricsCamera)
     })
     let active = true
     const stop = (): void => {
@@ -345,14 +346,14 @@ export class VisualStage {
     if (this.backgroundEnabled === enabled) return
     this.backgroundEnabled = enabled
     const preset = this.bus.getSnapshot().preset
-    const modern = ModernBackgrounds.supports(preset)
-    this.particles.visible = enabled && !modern
-    this.bloomParticles.visible = enabled && !modern && this.bus.getSnapshot().params.bloomStrength > 0.01
-    this.modernBackgrounds.group.visible = enabled && modern
+    const managedBackground = MusicBackgroundManager.supports(preset)
+    this.particles.visible = enabled && !managedBackground
+    this.bloomParticles.visible = enabled && !managedBackground && this.bus.getSnapshot().params.bloomStrength > 0.01
+    this.backgrounds.group.visible = enabled && managedBackground
+    if (!enabled) this.backgrounds.setPreset(0)
     if (enabled) {
       this.applySnapshot(this.bus.getSnapshot(), null)
     } else {
-      this.stopCoverRotation()
       this.coverGeneration += 1
       this.releaseDynamicCovers()
       this.uniforms.uCoverTex.value = this.placeholderCover
@@ -362,33 +363,53 @@ export class VisualStage {
     }
   }
 
-  rotateCoverBy(deltaX: number, deltaY: number): void {
-    this.pointerTarget.x += deltaX * 0.008
-    this.pointerTarget.y += deltaY * 0.008
+  setLyricsDragEnabled(enabled: boolean): void {
+    this.lyricsDragEnabled = enabled
   }
 
-  stopCoverRotation(): void {
-    // Drop the remaining eased delta so releasing the button stops rotation immediately.
-    this.pointerTarget.copy(this.pointerRotation)
+  setLyricsOffset(x: number, y: number): void {
+    const bounds = this.lyricsOffsetBounds()
+    this.lyricsLayer.setOffset(
+      THREE.MathUtils.clamp(x, -bounds.x, bounds.x),
+      THREE.MathUtils.clamp(y, -bounds.y, bounds.y),
+    )
+  }
+
+  moveLyricsBy(deltaX: number, deltaY: number): Readonly<{ x: number; y: number }> {
+    if (!this.lyricsDragEnabled) return this.lyricsLayer.getOffset()
+    const height = Math.max(1, this.container?.clientHeight ?? 1)
+    const visibleHeight =
+      2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)) * this.cameraState.radius
+    const unitsPerPixel = visibleHeight / height
+    const current = this.lyricsLayer.getOffset()
+    this.setLyricsOffset(current.x + deltaX * unitsPerPixel, current.y - deltaY * unitsPerPixel)
+    return this.lyricsLayer.getOffset()
   }
 
   rotateLyricsBy(deltaX: number, deltaY: number): void {
-    this.lyricsRotationTarget.x = THREE.MathUtils.clamp(this.lyricsRotationTarget.x + deltaX * 0.006, -0.75, 0.75)
-    this.lyricsRotationTarget.y = THREE.MathUtils.clamp(this.lyricsRotationTarget.y + deltaY * 0.006, -0.55, 0.55)
+    this.cameraTarget.theta -= deltaX * 0.006
+    this.cameraTarget.phi = THREE.MathUtils.clamp(
+      this.cameraTarget.phi + deltaY * 0.006,
+      -1.4,
+      1.4,
+    )
   }
 
   stopLyricsRotation(): void {
-    this.lyricsRotationTarget.copy(this.lyricsRotation)
+    // Orbit eases to the pointer's final target after release.
   }
 
   zoomLyrics(deltaY: number): void {
-    this.lyricsDepthTarget = THREE.MathUtils.clamp(this.lyricsDepthTarget + deltaY * 0.0025, 0.2, 3.4)
+    this.cameraTarget.radius = THREE.MathUtils.clamp(
+      this.cameraTarget.radius + deltaY * 0.005,
+      3.2,
+      12,
+    )
   }
 
-  zoomCover(deltaY: number): void {
-    this.cameraTarget.radius = THREE.MathUtils.clamp(this.cameraTarget.radius + deltaY * 0.005, 3.2, 12)
+  getLyricsOffset(): Readonly<{ x: number; y: number }> {
+    return this.lyricsLayer.getOffset()
   }
-
 
   dispose(): void {
     if (this.disposed) return
@@ -401,6 +422,7 @@ export class VisualStage {
     this.renderer.renderLists.dispose()
     this.renderer.dispose()
     this.scene.clear()
+    this.lyricsScene.clear()
     this.container = null
   }
 
@@ -409,9 +431,27 @@ export class VisualStage {
     const width = Math.max(1, this.container.clientWidth)
     const height = Math.max(1, this.container.clientHeight)
     this.renderer.setSize(width, height, false)
+    this.lyricsLayer.setViewport(width, height)
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
+    this.lyricsCamera.aspect = width / height
+    this.lyricsCamera.updateProjectionMatrix()
+    const offset = this.lyricsLayer.getOffset()
+    this.setLyricsOffset(offset.x, offset.y)
     this.uniforms.uPixel.value = this.renderer.getPixelRatio()
+  }
+
+  private lyricsOffsetBounds(): THREE.Vector2 {
+    const visibleHeight =
+      2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)) * this.cameraState.radius
+    return new THREE.Vector2(visibleHeight * this.lyricsCamera.aspect * 0.34, visibleHeight * 0.28)
+  }
+
+  private syncLyricsCamera(): void {
+    this.lyricsCamera.position.copy(this.camera.position)
+    this.lyricsCamera.quaternion.copy(this.camera.quaternion)
+    this.lyricsCamera.fov = this.camera.fov
+    this.lyricsCamera.updateProjectionMatrix()
   }
 
   private applySnapshot(snapshot: Readonly<VisualSnapshot>, previous: Readonly<VisualSnapshot> | null): void {
@@ -424,11 +464,11 @@ export class VisualStage {
     this.uniforms.uTreble.value = mappedAudio.treble
     this.uniforms.uEnergy.value = frame.energy
     this.uniforms.uBeat.value = mappedAudio.beat
-    const modern = ModernBackgrounds.supports(snapshot.preset)
-    this.uniforms.uPreset.value = modern ? 2 : snapshot.preset
-    this.modernBackgrounds.setPreset(snapshot.preset)
-    this.modernBackgrounds.group.visible = this.backgroundEnabled && modern
-    this.particles.visible = this.backgroundEnabled && !modern
+    const managedBackground = MusicBackgroundManager.supports(snapshot.preset)
+    this.uniforms.uPreset.value = managedBackground ? 2 : snapshot.preset
+    this.backgrounds.setPreset(this.backgroundEnabled ? snapshot.preset : 0)
+    this.backgrounds.group.visible = this.backgroundEnabled && managedBackground
+    this.particles.visible = this.backgroundEnabled && !managedBackground
     this.uniforms.uIntensity.value = params.intensity
     this.uniforms.uDepth.value = params.depth
     this.uniforms.uPointScale.value = params.pointScale
@@ -448,7 +488,7 @@ export class VisualStage {
     if (!previous || snapshot.preset !== previous.preset) {
       this.applyPresetProfile(snapshot.preset, Boolean(previous))
     }
-    this.bloomParticles.visible = !modern && params.bloomStrength > 0.01
+    this.bloomParticles.visible = !managedBackground && params.bloomStrength > 0.01
     if (!previous || snapshot.coverUrl !== previous.coverUrl) this.loadCover(snapshot.coverUrl)
   }
 
@@ -535,6 +575,9 @@ export class VisualStage {
       return
     }
 
+    // A new track must never display the previous track cover while its texture is pending.
+    this.backgrounds.setCoverTexture(null)
+
     this.textureLoader.load(
       url,
       (texture) => {
@@ -546,6 +589,7 @@ export class VisualStage {
         texture.magFilter = THREE.LinearFilter
         texture.wrapS = THREE.ClampToEdgeWrapping
         texture.wrapT = THREE.ClampToEdgeWrapping
+        texture.colorSpace = THREE.SRGBColorSpace
 
         this.transitionCoverRelease?.()
         this.transitionCover = this.activeCover
@@ -557,12 +601,14 @@ export class VisualStage {
         this.uniforms.uCoverTex.value = texture
         this.uniforms.uColorMixT.value = 0
         this.uniforms.uHasCover.value = 1
+        this.backgrounds.setCoverTexture(texture)
       },
       undefined,
       () => {
-        if (generation === this.coverGeneration && this.activeCover === this.placeholderCover) {
-          this.uniforms.uHasCover.value = 0
-        }
+        if (generation !== this.coverGeneration) return
+        if (this.activeCover === this.placeholderCover) this.uniforms.uHasCover.value = 0
+        // Keep the legacy particle cover transition, but never show a previous track in managed backgrounds.
+        this.backgrounds.setCoverTexture(null)
       },
     )
   }
@@ -575,6 +621,7 @@ export class VisualStage {
   }
 
   private releaseDynamicCovers(): void {
+    this.backgrounds.setCoverTexture(null)
     this.transitionCoverRelease?.()
     this.activeCoverRelease?.()
     this.transitionCoverRelease = null

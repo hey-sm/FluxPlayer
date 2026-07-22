@@ -46,6 +46,13 @@ export default defineConfig({
         '@': resolve('src/renderer/src'),
       },
     },
+    // three-text inlines harfbuzzjs' emscripten glue, whose Node branch references __dirname and
+    // whose pattern loader uses `new URL('.', import.meta.url)`. Both are dead code in the Chromium
+    // renderer (process.type === 'renderer'), but Vite's static commonjs→ESM translation still trips
+    // on the bare __dirname. Defining it to an empty string satisfies the transform harmlessly.
+    define: {
+      __dirname: '""',
+    },
     build: {
       minify: 'oxc',
       rollupOptions: {

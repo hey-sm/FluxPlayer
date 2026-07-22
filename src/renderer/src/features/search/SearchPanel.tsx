@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { ProviderId } from '@shared/models'
 import { coverProxyUrl, musicErrorMessage } from '../../api'
@@ -11,6 +11,7 @@ import {
   CLASSIC_GLASS_MAP_ID,
   useThemeStore,
 } from '../../theme'
+import { createSearchDismissScheduler, isSearchDismissKey } from './interaction'
 import { createSearchQuery } from './queries'
 import { useDebounced } from './useDebounced'
 
@@ -39,11 +40,14 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
   const setQueue = usePlayer((state) => state.setQueue)
   const [keyword, setKeyword] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [searchVisible, setSearchVisible] = useState(false)
   const [providerOrder, setProviderOrder] = useState<ProviderId[]>(readProviderOrder)
   const [draggedProvider, setDraggedProvider] = useState<ProviderId | null>(null)
   const debouncedKeyword = useDebounced(keyword.trim(), 320)
   const inputRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
+  const sensorRef = useRef<HTMLDivElement>(null)
+  const closeScheduler = useMemo(() => createSearchDismissScheduler(), [])
   const previousKeywordEmpty = useRef(true)
   const searchGlassRef = useClassicControlGlass(
     classicTheme,
@@ -77,20 +81,46 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
     }
   }, [providerOrder])
 
+  const revealSearch = useCallback((): void => {
+    closeScheduler.cancel()
+    setSearchVisible(true)
+    if (keyword.trim()) setSearchOpen(true)
+  }, [closeScheduler, keyword])
+
+  const dismissSearch = useCallback((): void => {
+    closeScheduler.cancel()
+    setSearchOpen(false)
+    setSearchVisible(false)
+  }, [closeScheduler])
+
+  const scheduleSearchDismiss = useCallback((): void => {
+    closeScheduler.schedule(() => {
+      if (searchRef.current?.contains(document.activeElement)) return
+      setSearchOpen(false)
+      setSearchVisible(false)
+    })
+  }, [closeScheduler])
+
   useEffect(() => {
     const close = (event: PointerEvent): void => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) setSearchOpen(false)
+      const target = event.target as Node
+      if (!searchRef.current?.contains(target) && !sensorRef.current?.contains(target)) dismissSearch()
     }
     const escape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setSearchOpen(false)
+      if (!isSearchDismissKey(event.key)) return
+      dismissSearch()
+      if (searchRef.current?.contains(document.activeElement)) {
+        inputRef.current?.blur()
+      }
     }
     window.addEventListener('pointerdown', close, true)
     window.addEventListener('keydown', escape, true)
     return () => {
+      closeScheduler.dispose()
       window.removeEventListener('pointerdown', close, true)
       window.removeEventListener('keydown', escape, true)
     }
-  }, [])
+  }, [closeScheduler, dismissSearch])
 
   const dropProvider = (target: ProviderId): void => {
     if (!draggedProvider || draggedProvider === target) return
@@ -101,14 +131,22 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
   return (
     <>
       <div
+        ref={sensorRef}
         className="search-hover-sensor"
         aria-hidden="true"
-        onPointerEnter={() => {
-          setSearchOpen(Boolean(keyword.trim()))
-          inputRef.current?.focus()
-        }}
+        onPointerEnter={revealSearch}
+        onPointerLeave={scheduleSearchDismiss}
       />
-      <div className="search-shell" ref={searchRef}>
+      <div
+        className={`search-shell${searchVisible ? ' is-visible' : ''}`}
+        ref={searchRef}
+        onPointerEnter={revealSearch}
+        onPointerLeave={scheduleSearchDismiss}
+        onFocusCapture={revealSearch}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) scheduleSearchDismiss()
+        }}
+      >
         <div ref={searchGlassRef} className={`searchbar${classicTheme ? ' classic-search-glass' : ''}`}>
           {classicTheme ? (
             <svg className="control-glass-filter-svg" aria-hidden="true" focusable="false">
@@ -126,12 +164,12 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
             ref={inputRef}
             value={keyword}
             placeholder="搜索歌曲 / 歌手"
-            onFocus={() => {
-              if (keyword.trim()) setSearchOpen(true)
-            }}
+            onFocus={revealSearch}
             onChange={(event) => {
-              setKeyword(event.target.value)
-              setSearchOpen(Boolean(event.target.value.trim()))
+              const nextKeyword = event.target.value
+              setKeyword(nextKeyword)
+              setSearchVisible(true)
+              setSearchOpen(Boolean(nextKeyword.trim()))
             }}
             aria-expanded={searchOpen && Boolean(keyword.trim())}
             aria-controls="search-results-popover"
@@ -185,7 +223,7 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
                       key={`${key}-${index}`}
                       className={`result-row${active ? ' active' : ''}`}
                       onClick={() => {
-                        setSearchOpen(false)
+                        dismissSearch()
                         setKeyword('')
                         void setQueue([...songs], index)
                       }}
