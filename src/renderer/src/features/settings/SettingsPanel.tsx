@@ -3,11 +3,12 @@ import { RotateCcw } from 'lucide-react'
 import type { CustomBackground, WallpaperEngineProject } from '@shared/custom-background-contract'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Card } from '../../components/ui/card'
+import { ColorPicker } from '../../components/ui/color-picker'
 import { GlassSelect } from '../../components/ui/glass-select'
 import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { SettingsDialog } from '../../components/shell/SettingsDialog'
-import type { VisualPreset } from '../../visual/bus'
-import { VISUAL_PRESETS, VISUAL_PRESET_BY_ID } from '../../visual/presets/registry'
+import { useThemeStore } from '../../theme'
+import { DYNAMIC_BACKGROUND_OPTIONS, type DynamicBackgroundEffect } from '../../visual/backgrounds'
 
 const SystemMaintenancePanel = lazy(() =>
   import('../system/SystemMaintenancePanel').then((module) => ({
@@ -18,8 +19,8 @@ const SystemMaintenancePanel = lazy(() =>
 export interface SettingsPanelProps {
   open: boolean
   onClose(): void
-  visualPreset: VisualPreset
-  onVisualPresetChange(preset: VisualPreset): void
+  dynamicBackground: DynamicBackgroundEffect
+  onDynamicBackgroundChange(effect: DynamicBackgroundEffect): void
   customBackground: CustomBackground | null
   backgroundBusy: boolean
   backgroundError: string
@@ -29,8 +30,6 @@ export interface SettingsPanelProps {
   onScanWallpaperEngine(): void
   onChooseWallpaperEngine(): void
   onImportWallpaperEngine(projectId: string): void
-  motionStyle: string
-  onMotionStyleChange(style: string): void
   lyricsDragEnabled: boolean
   onLyricsDragEnabledChange(enabled: boolean): void
   onResetLyricsPosition(): void
@@ -39,8 +38,8 @@ export interface SettingsPanelProps {
 export default function SettingsPanel({
   open,
   onClose,
-  visualPreset,
-  onVisualPresetChange,
+  dynamicBackground,
+  onDynamicBackgroundChange,
   customBackground,
   backgroundBusy,
   backgroundError,
@@ -50,16 +49,22 @@ export default function SettingsPanel({
   onScanWallpaperEngine,
   onChooseWallpaperEngine,
   onImportWallpaperEngine,
-  motionStyle,
-  onMotionStyleChange,
   lyricsDragEnabled,
   onLyricsDragEnabledChange,
   onResetLyricsPosition,
 }: SettingsPanelProps): React.JSX.Element | null {
   const [activeTab, setActiveTab] = useState<'appearance' | 'system'>('appearance')
+  const accent = useThemeStore((state) => state.visualParams.accent)
+  const lyricsColor = useThemeStore((state) => state.lyricsColor)
+  const lyricsColorLinked = useThemeStore((state) => state.lyricsColorLinked)
+  const setAccent = useThemeStore((state) => state.setAccent)
+  const setLyricsColor = useThemeStore((state) => state.setLyricsColor)
+  const setLyricsColorLinked = useThemeStore((state) => state.setLyricsColorLinked)
   if (!open) return null
 
-  const activeVisualPreset = VISUAL_PRESET_BY_ID.get(visualPreset)
+  const activeDynamicBackground = DYNAMIC_BACKGROUND_OPTIONS.find(
+    (option) => option.value === dynamicBackground,
+  )
   return (
     <SettingsDialog
       open={open}
@@ -83,38 +88,56 @@ export default function SettingsPanel({
 
           {activeTab === 'appearance' ? (
             <>
-              <div className="theme-field">
-                <span>界面动效</span>
-                <GlassSelect
-                  value={motionStyle}
-                  ariaLabel="界面动效"
-                  className="theme-select-trigger"
-                  contentClassName="theme-select-menu"
-                  options={[
-                    { value: 'glide', label: '丝滑滑入' },
-                    { value: 'spring', label: '弹性浮现' },
-                    { value: 'fade', label: '柔和淡入' },
-                    { value: 'scale', label: '景深缩放' },
-                  ]}
-                  onValueChange={onMotionStyleChange}
+              <section className="appearance-color-settings" aria-label="主题颜色">
+                <ColorPicker
+                  value={accent}
+                  label="主题与灯光色"
+                  description="用于界面强调、播放进度和动态背景灯光；本地壁纸保持原色。"
+                  onChange={setAccent}
                 />
-                <small>统一应用于搜索、歌单、歌曲列表和列表项目。</small>
-              </div>
+                <div className="lyrics-color-link">
+                  <span>
+                    <strong>歌词高亮色</strong>
+                    <small>默认跟随主题；分开后可针对背景提升可读性。</small>
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={lyricsColorLinked}
+                    aria-label="歌词高亮色跟随主题"
+                    className="settings-switch"
+                    data-state={lyricsColorLinked ? 'checked' : 'unchecked'}
+                    onClick={() => setLyricsColorLinked(!lyricsColorLinked)}
+                  >
+                    <span className="settings-switch-thumb" />
+                  </button>
+                  <em>{lyricsColorLinked ? '跟随' : '独立'}</em>
+                </div>
+                {!lyricsColorLinked ? (
+                  <ColorPicker
+                    className="lyrics-color-picker"
+                    value={lyricsColor}
+                    label="歌词颜色"
+                    swatches={[]}
+                    onChange={setLyricsColor}
+                  />
+                ) : null}
+              </section>
 
               <div className="theme-field">
-                <span>音乐视觉</span>
+                <span>动态背景</span>
                 <GlassSelect
-                  value={String(visualPreset)}
-                  ariaLabel="音乐视觉"
+                  value={dynamicBackground}
+                  ariaLabel="动态背景"
                   className="theme-select-trigger"
                   contentClassName="theme-select-menu"
-                  options={VISUAL_PRESETS.map((preset) => ({
-                    value: String(preset.id),
-                    label: preset.label,
+                  options={DYNAMIC_BACKGROUND_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
                   }))}
-                  onValueChange={(value) => onVisualPresetChange(Number(value) as VisualPreset)}
+                  onValueChange={(value) => onDynamicBackgroundChange(value as DynamicBackgroundEffect)}
                 />
-                <small>{activeVisualPreset?.description}</small>
+                <small>{activeDynamicBackground?.description}</small>
               </div>
 
               <div className="theme-field lyrics-position-field">
@@ -148,7 +171,7 @@ export default function SettingsPanel({
                 <div className="custom-background-heading">
                   <span>
                     <strong>自定义背景</strong>
-                    <small>图片或静音循环视频；启用后替换音乐视觉并保留 3D 歌词</small>
+                    <small>图片或静音循环视频；启用后替换动态背景并保留 3D 歌词</small>
                   </span>
                   {customBackground ? (
                     <em>
@@ -157,7 +180,7 @@ export default function SettingsPanel({
                   ) : null}
                 </div>
                 <div className="custom-background-current">
-                  {customBackground ? customBackground.name : '当前使用主题视觉背景'}
+                  {customBackground ? customBackground.name : '当前使用动态背景'}
                 </div>
                 <div className="custom-background-actions">
                   <button type="button" disabled={backgroundBusy} onClick={onChooseBackground}>

@@ -9,6 +9,7 @@ import {
   lastPlaylistStorageKey,
   playlistQueryKeys,
   prefetchLastPlaylist,
+  prefetchPlaylistWindow,
 } from '@renderer/features/playlist/queries'
 import { calculateWindow } from '@renderer/features/playlist/window'
 import { getPlaylists, getPlaylistTracks } from '@renderer/api'
@@ -153,6 +154,30 @@ describe('typed playlist data flow', () => {
     })
 
     expect(getPlaylistTracks).not.toHaveBeenCalled()
+    queryClient.clear()
+  })
+
+  it('warms only the visible playlist window with bounded requests', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const playlists = Array.from({ length: 20 }, (_, index) => ({
+      ...playlist,
+      id: `playlist-${index + 1}`,
+    }))
+
+    await prefetchPlaylistWindow(queryClient, 'qq', 'user:42', playlists, {
+      limit: 4,
+      concurrency: 2,
+    })
+
+    expect(getPlaylistTracks).toHaveBeenCalledTimes(4)
+    expect(getPlaylistTracks.mock.calls.map(([request]) => request.id)).toEqual([
+      'playlist-1',
+      'playlist-2',
+      'playlist-3',
+      'playlist-4',
+    ])
     queryClient.clear()
   })
 })

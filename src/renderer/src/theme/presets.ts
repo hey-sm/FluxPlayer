@@ -22,8 +22,11 @@ export function cloneThemeVisualParams(params: Readonly<ThemeVisualParams>): The
 }
 
 export function snapshotFromPreset(_id: ThemePresetId = DEFAULT_THEME_PRESET_ID): ThemeSnapshot {
+  const visualParams = cloneThemeVisualParams(CLASSIC_GOLD_THEME.visualParams)
   return {
     selectedPresetId: DEFAULT_THEME_PRESET_ID,
-    visualParams: cloneThemeVisualParams(CLASSIC_GOLD_THEME.visualParams),
+    visualParams,
+    lyricsColor: visualParams.accent,
+    lyricsColorLinked: true,
   }
 }

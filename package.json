@@ -32,6 +32,8 @@
   },
   "dependencies": {
     "electron-updater": "6.8.9",
+    "gsap": "^3.15.0",
+    "motion": "^12.42.2",
     "three-text": "^0.6.5"
   },
   "devDependencies": {

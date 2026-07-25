@@ -4,7 +4,7 @@
 
 **沉浸式桌面音乐播放器**
 
-聚合网易云音乐与 QQ 音乐 · 音频响应式 3D 视觉背景 · 隐私优先的进程隔离架构
+聚合网易云音乐与 QQ 音乐 · Light Rays / Galaxy / HTML Light 动态背景 · 隐私优先的进程隔离架构
 
 `Electron 42` · `React 19` · `Three.js` · `TypeScript` · `Vite 8`
 
@@ -37,7 +37,7 @@
 
 ## 简介
 
-FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云音乐和 QQ 音乐两个 provider 聚合到统一的搜索、歌单、播放体验里，并以一层基于 Three.js 的音频响应式视觉背景作为产品核心卖点。
+FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云音乐和 QQ 音乐两个 provider 聚合到统一的搜索、歌单、播放体验里，并使用 Three.js 呈现动态背景与同步 3D 歌词。
 
 与常见的"内嵌网页壳"式播放器不同，FluxPlayer 的设计出发点是**进程隔离与隐私**：渲染进程完全不具备网络与凭据能力，所有上游请求、cookie、播放地址都被限制在 Electron 主进程内，渲染层只能拿到不透明的媒体句柄。
 
@@ -46,7 +46,7 @@ FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云�
 - **双 provider 聚合**：网易云 / QQ 音乐统一搜索、歌单、我喜欢、逐字歌词。
 - **智能播放容错**：音质自动降级重试、跨 provider 同名同歌手自动换源、失败黑名单、试听片段截断。
 - **多档音质**：超清母带 / 高清臻音 / 无损 / 极高 / 标准，跨 provider 归一化。
-- **音频响应式 3D 视觉**：多套 Three.js 视觉预设（粒子着色器 + 独立背景场景），随音频频谱和封面主色实时变化。
+- **动态背景与 3D 歌词**：内置 Light Rays、Galaxy 与 HTML Light 吊灯背景，歌词继续使用 Three.js 网格渲染并支持旋转、拖拽和缩放。
 - **自定义背景**：支持导入本地图片/视频，以及 Wallpaper Engine 视频项目。
 - **全局快捷键**：播放控制、切歌、音量、全屏。
 - **系统媒体集成**：Media Session（系统媒体控制中心 / 键盘媒体键）。
@@ -55,18 +55,18 @@ FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云�
 
 ## 技术栈
 
-| 层 | 选型 |
-|---|---|
-| 桌面运行时 | Electron 42 |
-| 构建 | electron-vite 5 / Vite 8 / oxc minify |
-| UI | React 19 · Tailwind CSS 4 · Radix UI · shadcn (new-york) · react-glass-ui |
-| 状态 | Zustand 5 · TanStack Query 5 |
-| 视觉 | Three.js 0.185 |
-| 校验 | Zod 4（IPC 入参 schema） |
-| 工具链 | oxlint · oxfmt（非 ESLint/Prettier） |
-| 测试 | Vitest 3（单测）· Playwright（e2e，真实 Electron） |
-| 打包 | electron-builder（Windows NSIS） |
-| 包管理 | pnpm |
+| 层         | 选型                                                                      |
+| ---------- | ------------------------------------------------------------------------- |
+| 桌面运行时 | Electron 42                                                               |
+| 构建       | electron-vite 5 / Vite 8 / oxc minify                                     |
+| UI         | React 19 · Tailwind CSS 4 · Radix UI · shadcn (new-york) · react-glass-ui |
+| 状态       | Zustand 5 · TanStack Query 5                                              |
+| 视觉       | Three.js 0.185                                                            |
+| 校验       | Zod 4（IPC 入参 schema）                                                  |
+| 工具链     | oxlint · oxfmt（非 ESLint/Prettier）                                      |
+| 测试       | Vitest 3（单测）· Playwright（e2e，真实 Electron）                        |
+| 打包       | electron-builder（Windows NSIS）                                          |
+| 包管理     | pnpm                                                                      |
 
 ## 快速开始
 
@@ -81,20 +81,20 @@ pnpm dev              # 启动开发（Electron + HMR）
 
 ## 可用脚本
 
-| 命令 | 说明 |
-|---|---|
-| `pnpm dev` | electron-vite 开发模式，渲染层 HMR |
-| `pnpm build` | 构建 main / preload / renderer 三进程产物到 `out/` |
-| `pnpm start` | 预览已构建产物 |
-| `pnpm typecheck` | 类型检查（**同时**跑 `tsconfig.node.json` 与 `tsconfig.web.json`） |
-| `pnpm lint` | oxlint 静态检查 |
-| `pnpm format` / `pnpm format:write` | oxfmt 校验 / 写入 |
-| `pnpm test` | Vitest 全量单测 |
-| `pnpm test:e2e` | 先 build 再跑 Playwright（真实 Electron） |
-| `pnpm smoke` | 无头启动冒烟测试（验证窗口加载、无本地 TCP 监听） |
-| `pnpm record:fixtures` | 重新录制 provider 测试夹具 |
-| `pnpm build:win` | 打 Windows NSIS 安装包到 `dist/` |
-| `pnpm build:win:dir` | 免安装目录版本 |
+| 命令                                | 说明                                                               |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `pnpm dev`                          | electron-vite 开发模式，渲染层 HMR                                 |
+| `pnpm build`                        | 构建 main / preload / renderer 三进程产物到 `out/`                 |
+| `pnpm start`                        | 预览已构建产物                                                     |
+| `pnpm typecheck`                    | 类型检查（**同时**跑 `tsconfig.node.json` 与 `tsconfig.web.json`） |
+| `pnpm lint`                         | oxlint 静态检查                                                    |
+| `pnpm format` / `pnpm format:write` | oxfmt 校验 / 写入                                                  |
+| `pnpm test`                         | Vitest 全量单测                                                    |
+| `pnpm test:e2e`                     | 先 build 再跑 Playwright（真实 Electron）                          |
+| `pnpm smoke`                        | 无头启动冒烟测试（验证窗口加载、无本地 TCP 监听）                  |
+| `pnpm record:fixtures`              | 重新录制 provider 测试夹具                                         |
+| `pnpm build:win`                    | 打 Windows NSIS 安装包到 `dist/`                                   |
+| `pnpm build:win:dir`                | 免安装目录版本                                                     |
 
 **跑单个测试：**
 
@@ -138,7 +138,7 @@ src/
     ├── api.ts             # window.fluxDesktop 桥接 + 错误码映射
     ├── stores/            # Zustand：player / auth
     ├── playback/          # PlaybackEngine（播放状态机核心）
-    ├── visual/            # Three.js 视觉系统（stage/bus/presets/backgrounds）
+    ├── visual/            # Three.js 动态背景与 3D 歌词（stage/backgrounds/lyrics3d-mesh）
     ├── perf/ticker.ts     # 全局唯一 RAF 注册表
     ├── features/          # 业务模块：search / library / playlist / lyrics / settings
     ├── components/        # 通用组件（glass 包装层 / ui / shell / player）
@@ -157,11 +157,11 @@ tests/
 
 FluxPlayer 严格遵循 Electron 三进程模型，并额外抽出「共享契约层」与「provider 纯逻辑层」，路径别名固定：
 
-| 别名 | 指向 | 角色 |
-|---|---|---|
-| `@shared` | `src/shared` | 跨进程契约（renderer 与 main 都 import） |
-| `@server` | `src/server` | provider 实现（被 main 适配调用） |
-| `@` / `@renderer` | `src/renderer/src` | 渲染层 |
+| 别名              | 指向               | 角色                                     |
+| ----------------- | ------------------ | ---------------------------------------- |
+| `@shared`         | `src/shared`       | 跨进程契约（renderer 与 main 都 import） |
+| `@server`         | `src/server`       | provider 实现（被 main 适配调用）        |
+| `@` / `@renderer` | `src/renderer/src` | 渲染层                                   |
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -249,17 +249,15 @@ FluxPlayer 严格遵循 Electron 三进程模型，并额外抽出「共享契�
 
 ### 视觉系统
 
-Three.js 视觉背景遵循「单一实例」原则，避免资源泄漏与多时钟竞争：
+Three.js 动态背景遵循「单一实例」原则，避免资源泄漏与多时钟竞争：
 
 - **单一 Stage** —— `VisualStage`（[src/renderer/src/visual/stage.ts](src/renderer/src/visual/stage.ts)）持有唯一的 renderer / scene / camera，所有子层（歌词层、背景管理器）共用它。
-- **单一状态桥** —— React → 视觉引擎的**唯一**接口是 `visualBus`（[src/renderer/src/visual/bus.ts](src/renderer/src/visual/bus.ts)）暴露的 `VisualSnapshot`。同步 patch 保证任意一帧观测到的都是一致快照（播放状态、频谱帧、封面 URL、主色、preset、DIY 参数）。
 - **单一 RAF** —— 全局 `ticker`（[src/renderer/src/perf/ticker.ts](src/renderer/src/perf/ticker.ts)）是唯一的 `requestAnimationFrame` 注册表，所有视觉循环都注册到它，受主进程 `PerfState` 约束降频。视觉代码不应自建动画时钟。
-- **两类 preset：**
-  - `preset 0–5`：粒子着色器视觉（legacy 移植），由 Stage 直接以 `ShaderMaterial` 渲染封面粒子。
-  - `preset 7–10`（NEBULA / CRYSTAL / SKYLINE / CINEMATIC_VISTA）：由 `MusicBackgroundManager` 管理的独立背景场景对象，同一时刻只实例化一个。
-  - 两个 registry 分工：[visual/presets/registry.ts](src/renderer/src/visual/presets/registry.ts) 定义相机基线与过渡曲线；[visual/backgrounds/registry.ts](src/renderer/src/visual/backgrounds/registry.ts) 是背景实例工厂。
+- **三种动态背景** —— Light Rays 与 Galaxy 使用全屏 shader；HTML Light 使用可拖拽物理吊灯、暖色聚光灯和程序化承光平面。三者由 `DynamicBackgroundManager` 懒加载并在切换时释放旧 GPU 资源。
+- **独立歌词数据流** —— `stageLyricsChannel` 只向 3D 歌词层发布当前歌词窗口和播放位置；动态背景不接入音频频谱。
+- **自定义背景优先** —— 本地图片、视频或 Wallpaper Engine 背景启用时释放动态 shader，3D 歌词仍由同一个 Stage 渲染。
 
-> `src/renderer/src/visual/**` 被 oxfmt 忽略（保留 legacy 移植的原始格式），改动视觉代码不受格式化约束但仍需过 lint。
+> `src/renderer/src/visual/**` 被 oxfmt 忽略以保留 shader 排版，改动视觉代码仍需通过 typecheck 与 lint。
 
 ### 性能治理
 
@@ -275,12 +273,12 @@ Three.js 视觉背景遵循「单一实例」原则，避免资源泄漏与多�
 
 ## 测试策略
 
-| 类型 | 环境 | 说明 |
-|---|---|---|
-| 单测 | Vitest（node 环境） | provider 映射、播放逻辑、协议、安全边界；`tests/unit/__snapshots__` 存映射快照 |
-| 夹具 | — | `tests/fixtures` 录制真实上游响应，`pnpm record:fixtures` 重录 |
-| e2e | Playwright + 真实 Electron | `tests/e2e/electron.fixture.ts` 起真实应用，音乐请求靠 fixture 注入 |
-| 冒烟 | `pnpm smoke` | 无头启动，校验窗口能加载、无本地 TCP |
+| 类型 | 环境                       | 说明                                                                           |
+| ---- | -------------------------- | ------------------------------------------------------------------------------ |
+| 单测 | Vitest（node 环境）        | provider 映射、播放逻辑、协议、安全边界；`tests/unit/__snapshots__` 存映射快照 |
+| 夹具 | —                          | `tests/fixtures` 录制真实上游响应，`pnpm record:fixtures` 重录                 |
+| e2e  | Playwright + 真实 Electron | `tests/e2e/electron.fixture.ts` 起真实应用，音乐请求靠 fixture 注入            |
+| 冒烟 | `pnpm smoke`               | 无头启动，校验窗口能加载、无本地 TCP                                           |
 
 重点边界测试（改相关代码前先读）：
 
@@ -309,4 +307,4 @@ e2e 下 `FLUX_E2E=1` 触发网络防护（阻断非 loopback），Playwright 配
 
 ## 许可证
 
-GPL-3.0
+MIT

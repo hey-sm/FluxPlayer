@@ -30,6 +30,8 @@ export interface ThemePreset {
 export interface ThemeSnapshot {
   selectedPresetId: ThemePresetId
   visualParams: ThemeVisualParams
+  lyricsColor: string
+  lyricsColorLinked: boolean
 }
 
 export type ThemeVisualPatch = Partial<ThemeVisualParams>

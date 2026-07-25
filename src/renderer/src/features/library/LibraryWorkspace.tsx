@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { PlaylistTracksResult } from '@shared/music-contract'
 import type { ProviderId, UnifiedPlaylist, UnifiedSong } from '@shared/models'
 import { coverProxyUrl, musicErrorMessage, normalizeCoverSource } from '../../api'
 import { AccountArea } from '../account/AccountArea'
@@ -7,13 +8,15 @@ import { useAuth } from '../../stores/auth'
 import { usePlayer } from '../../stores/player'
 import { LibrarySheet } from '../../components/shell/LibrarySheet'
 import { PlaylistDetailSheet } from '../../components/shell/PlaylistDetailSheet'
+import { AnimatedList } from '../../components/react-bits/AnimatedList'
 import {
-  calculateWindow,
   clearPlaylistIdentity,
   createPlaylistListQuery,
   createPlaylistTracksQuery,
   lastPlaylistStorageKey,
   prefetchLastPlaylist,
+  prefetchPlaylistWindow,
+  PLAYLIST_TRACKS_STALE_TIME,
 } from '../playlist'
 import { fetchLikedTracks } from './api'
 import { libraryQueryKeys } from './queries'
@@ -57,28 +60,14 @@ function PlaylistCoverImage({
   )
 }
 
-function PlaylistDetailPanel({ detail }: { detail: PlaylistDetail }): React.JSX.Element {
+function PlaylistDetailPanel({
+  detail,
+  onTrackSelect,
+}: {
+  detail: PlaylistDetail
+  onTrackSelect(): void
+}): React.JSX.Element {
   const setQueue = usePlayer((state) => state.setQueue)
-  const [scrollTop, setScrollTop] = useState(0)
-  const listRef = useRef<HTMLDivElement | null>(null)
-  const [viewportHeight, setViewportHeight] = useState(() => Math.max(220, window.innerHeight - 150))
-
-  useEffect(() => {
-    if (detail.tracks.length === 0) return
-    const list = listRef.current
-    if (!list) return
-    const syncViewportHeight = (): void => setViewportHeight(Math.max(1, list.clientHeight))
-    syncViewportHeight()
-    const resizeObserver = new ResizeObserver(syncViewportHeight)
-    resizeObserver.observe(list)
-    return () => resizeObserver.disconnect()
-  }, [detail.tracks.length])
-
-  const windowSlice = useMemo(
-    () => calculateWindow(detail.tracks.length, scrollTop, viewportHeight, DETAIL_ROW_HEIGHT, 3),
-    [detail.tracks.length, scrollTop, viewportHeight],
-  )
-  const visibleTracks = detail.tracks.slice(windowSlice.start, windowSlice.end)
 
   return (
     <aside className="shelf-detail-panel glass-surface" aria-label={`${detail.playlist.name}歌曲`}>
@@ -103,33 +92,28 @@ function PlaylistDetailPanel({ detail }: { detail: PlaylistDetail }): React.JSX.
         <div className="shelf-detail-status">歌单暂无歌曲</div>
       ) : null}
       {detail.tracks.length > 0 ? (
-        <div
-          ref={listRef}
+        <AnimatedList
+          items={detail.tracks}
+          getKey={(song, index) => `${detail.provider}:${song.id}:${index}`}
+          ariaLabel={`${detail.playlist.name}歌曲列表`}
           className="shelf-detail-list"
-          data-scroll-region
-          onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-        >
-          <div aria-hidden="true" style={{ height: windowSlice.offsetTop }} />
-          {visibleTracks.map((song, relativeIndex) => {
-            const index = windowSlice.start + relativeIndex
-            return (
-              <button
-                key={`${detail.provider}:${song.id}:${index}`}
-                type="button"
-                className="shelf-detail-row"
-                style={{ height: DETAIL_ROW_HEIGHT }}
-                onClick={() => void setQueue([...detail.tracks], index)}
-              >
-                {song.cover ? <img src={coverProxyUrl(song.cover)} alt="" loading="lazy" /> : <span />}
-                <span>
-                  <strong>{song.name}</strong>
-                  <small>{song.artist || '未知歌手'}</small>
-                </span>
-              </button>
-            )
-          })}
-          <div aria-hidden="true" style={{ height: windowSlice.offsetBottom }} />
-        </div>
+          itemClassName="shelf-detail-row"
+          virtualization={{ rowHeight: DETAIL_ROW_HEIGHT, overscan: 3 }}
+          getItemAriaLabel={(song) => `播放 ${song.name}，${song.artist || '未知歌手'}`}
+          onItemSelect={(_song, index) => {
+            onTrackSelect()
+            void setQueue([...detail.tracks], index)
+          }}
+          renderItem={(song) => (
+            <>
+              {song.cover ? <img src={coverProxyUrl(song.cover)} alt="" loading="lazy" /> : <span />}
+              <span>
+                <strong>{song.name}</strong>
+                <small>{song.artist || '未知歌手'}</small>
+              </span>
+            </>
+          )}
+        />
       ) : null}
     </aside>
   )
@@ -156,12 +140,12 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
   const recentIdentity = useMemo(() => ({ provider, userId: activeUserId }), [activeUserId, provider])
   const [detail, setDetail] = useState<PlaylistDetail | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(true)
   const [recentTracks, setRecentTracks] = useState<UnifiedSong[]>([])
   const [coverFallbacks, setCoverFallbacks] = useState<Record<string, string[]>>({})
   const requestGeneration = useRef(0)
   const currentScope = useRef(scope)
   const previousIdentities = useRef<Record<ProviderId, string>>({ netease: '', qq: '' })
-  const prefetchedScopes = useRef(new Set<string>())
 
   const playlistsQuery = useQuery({
     ...createPlaylistListQuery(provider, activeIdentity, 120),
@@ -179,12 +163,42 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
   }, [scope])
 
   useEffect(() => {
-    if (!activeIdentity || playlists.length === 0 || prefetchedScopes.current.has(scope)) return
-    prefetchedScopes.current.add(scope)
+    if (!activeIdentity || playlists.length === 0) return
     void prefetchLastPlaylist(queryClient, provider, activeIdentity, playlists).catch(() => {
       // A prefetch failure must not affect the library list.
     })
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      void prefetchPlaylistWindow(queryClient, provider, activeIdentity, playlists, {
+        concurrency: 2,
+        signal: controller.signal,
+      }).catch(() => {
+        // Background warming is best-effort; intent prefetch remains available.
+      })
+    }, 250)
+    return () => {
+      controller.abort()
+      window.clearTimeout(timer)
+    }
   }, [activeIdentity, playlists, provider, queryClient, scope])
+
+  useEffect(() => {
+    if (!current || (playerStatus !== 'loading' && playerStatus !== 'playing')) return
+    setDetailOpen(false)
+    setLibraryOpen(false)
+  }, [current, playerStatus])
+
+  const prefetchPlaylist = useCallback(
+    (playlist: UnifiedPlaylist) => {
+      if (!activeIdentity) return
+      void queryClient.prefetchQuery({
+        ...createPlaylistTracksQuery(provider, activeIdentity, playlist.id),
+        staleTime: PLAYLIST_TRACKS_STALE_TIME,
+      })
+    },
+    [activeIdentity, provider, queryClient],
+  )
 
   useEffect(() => {
     const currentIdentities: Record<ProviderId, string> = {
@@ -248,19 +262,21 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
       if (!activeIdentity) return
       localStorage.setItem(lastPlaylistStorageKey(provider, activeIdentity), String(playlist.id))
       const generation = ++requestGeneration.current
+      const query = createPlaylistTracksQuery(provider, activeIdentity, playlist.id)
+      const cached = queryClient.getQueryData<PlaylistTracksResult>(query.queryKey)
       setDetail({
         provider,
         identityToken: activeIdentity,
-        playlist,
-        tracks: [],
-        status: 'loading',
+        playlist: cached?.playlist ?? playlist,
+        tracks: cached?.tracks ?? [],
+        status: cached ? 'success' : 'loading',
       })
       setDetailOpen(true)
 
       void queryClient
         .fetchQuery({
-          ...createPlaylistTracksQuery(provider, activeIdentity, playlist.id),
-          staleTime: 5 * 60 * 1000,
+          ...query,
+          staleTime: PLAYLIST_TRACKS_STALE_TIME,
         })
         .then((result) => {
           if (generation !== requestGeneration.current || currentScope.current !== scope) return
@@ -280,6 +296,7 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
         })
         .catch((error: unknown) => {
           if (generation !== requestGeneration.current || currentScope.current !== scope) return
+          if (cached) return
           setDetail({
             provider,
             identityToken: activeIdentity,
@@ -335,6 +352,11 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
       ? detail
       : null
 
+  const closeListsForPlayback = useCallback(() => {
+    setDetailOpen(false)
+    setLibraryOpen(false)
+  }, [])
+
   return (
     <>
       <PlaylistDetailSheet open={detailOpen} available={Boolean(visibleDetail)} onOpenChange={setDetailOpen}>
@@ -342,12 +364,13 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
           <PlaylistDetailPanel
             key={`${visibleDetail.provider}:${visibleDetail.playlist.id}`}
             detail={visibleDetail}
+            onTrackSelect={closeListsForPlayback}
           />
         ) : (
           <div className="shelf-detail-status">请先从音乐库选择歌单</div>
         )}
       </PlaylistDetailSheet>
-      <LibrarySheet>
+      <LibrarySheet open={libraryOpen} onOpenChange={setLibraryOpen}>
         <aside className="library-drawer" aria-label="用户音乐库">
           <div className="library-provider-tabs" role="tablist" aria-label="音乐平台">
             {(['netease', 'qq'] as const).map((item) => (
@@ -378,14 +401,17 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
             </button>
           </div>
           {playlistsQuery.isFetching ? <div className="library-shelf-sync">正在同步歌单…</div> : null}
-          <div className="library-playlist-list" data-scroll-region>
-            {playlists.map((playlist) => (
-              <button
-                key={String(playlist.id)}
-                type="button"
-                className={String(visibleDetail?.playlist.id) === String(playlist.id) ? 'active' : ''}
-                onClick={() => openPlaylist(playlist)}
-              >
+          <AnimatedList
+            items={playlists}
+            getKey={(playlist) => String(playlist.id)}
+            selectedKey={visibleDetail ? String(visibleDetail.playlist.id) : null}
+            ariaLabel="歌单列表"
+            className="library-playlist-list"
+            getItemAriaLabel={(playlist) => `${playlist.name}，${playlist.trackCount} 首`}
+            onItemIntent={prefetchPlaylist}
+            onItemSelect={openPlaylist}
+            renderItem={(playlist) => (
+              <>
                 <PlaylistCoverImage
                   key={`${playlist.id}:${playlist.cover}:${(coverFallbacks[String(playlist.id)] ?? []).join('|')}`}
                   candidates={[playlist.cover || '', ...(coverFallbacks[String(playlist.id)] ?? [])]}
@@ -394,9 +420,9 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
                   <strong>{playlist.name}</strong>
                   <small>{playlist.trackCount} 首</small>
                 </span>
-              </button>
-            ))}
-          </div>
+              </>
+            )}
+          />
         </aside>
       </LibrarySheet>
     </>

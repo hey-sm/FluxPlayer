@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { ProviderId } from '@shared/models'
 import { coverProxyUrl, musicErrorMessage } from '../../api'
 import { Input } from '../../components/ui/input'
+import { AnimatedContent } from '../../components/react-bits/AnimatedContent'
 import { useClassicControlGlass } from '../../components/glass/classic-control'
 import { usePlayer } from '../../stores/player'
 import {
@@ -147,107 +148,119 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
           if (!event.currentTarget.contains(event.relatedTarget)) scheduleSearchDismiss()
         }}
       >
-        <div ref={searchGlassRef} className={`searchbar${classicTheme ? ' classic-search-glass' : ''}`}>
-          {classicTheme ? (
-            <svg className="control-glass-filter-svg" aria-hidden="true" focusable="false">
-              <defs
-                dangerouslySetInnerHTML={{
-                  __html: CLASSIC_GLASS_FILTER_SVG.replaceAll(
-                    CLASSIC_GLASS_FILTER_ID,
-                    'flux-classic-search-glass-filter',
-                  ).replaceAll(CLASSIC_GLASS_MAP_ID, 'flux-classic-search-glass-map'),
-                }}
-              />
-            </svg>
+        <AnimatedContent
+          visible={searchVisible}
+          direction="vertical"
+          reverse
+          distance={44}
+          className="search-animated-content"
+        >
+          <div ref={searchGlassRef} className={`searchbar${classicTheme ? ' classic-search-glass' : ''}`}>
+            {classicTheme ? (
+              <svg className="control-glass-filter-svg" aria-hidden="true" focusable="false">
+                <defs
+                  dangerouslySetInnerHTML={{
+                    __html: CLASSIC_GLASS_FILTER_SVG.replaceAll(
+                      CLASSIC_GLASS_FILTER_ID,
+                      'flux-classic-search-glass-filter',
+                    ).replaceAll(CLASSIC_GLASS_MAP_ID, 'flux-classic-search-glass-map'),
+                  }}
+                />
+              </svg>
+            ) : null}
+            <Input
+              ref={inputRef}
+              value={keyword}
+              placeholder="搜索歌曲 / 歌手"
+              onFocus={revealSearch}
+              onChange={(event) => {
+                const nextKeyword = event.target.value
+                setKeyword(nextKeyword)
+                setSearchVisible(true)
+                setSearchOpen(Boolean(nextKeyword.trim()))
+              }}
+              aria-expanded={searchOpen && Boolean(keyword.trim())}
+              aria-controls="search-results-popover"
+            />
+          </div>
+          {searchOpen && keyword.trim() ? (
+            <section
+              id="search-results-popover"
+              className="search-popover glass-surface"
+              aria-label="搜索结果"
+            >
+              <div className="search-provider-tabs" role="tablist" aria-label="搜索渠道">
+                {providerOrder.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    role="tab"
+                    draggable
+                    aria-selected={provider === item}
+                    className={provider === item ? 'active' : ''}
+                    onDragStart={() => setDraggedProvider(item)}
+                    onDragEnd={() => setDraggedProvider(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => dropProvider(item)}
+                    onClick={() => onProviderChange(item)}
+                  >
+                    {item === 'netease' ? '网易云' : 'QQ 音乐'}
+                    <small>
+                      {item === 'netease'
+                        ? (neteaseSearch.data?.songs.length ?? 0)
+                        : (qqSearch.data?.songs.length ?? 0)}
+                    </small>
+                  </button>
+                ))}
+                <span className="search-parallel-hint">双渠道并行</span>
+              </div>
+              <div className="results search-results" data-scroll-region>
+                {songs.length === 0 ? (
+                  <div className="empty">
+                    {activeSearch.isFetching
+                      ? '搜索中…'
+                      : activeSearch.error instanceof Error
+                        ? `搜索失败：${musicErrorMessage(activeSearch.error, '搜索失败')}`
+                        : debouncedKeyword
+                          ? '没有结果'
+                          : '准备搜索…'}
+                  </div>
+                ) : (
+                  songs.map((song, index) => {
+                    const key = `${song.provider}-${song.id}`
+                    const active = current && `${current.provider}-${current.id}` === key
+                    return (
+                      <button
+                        type="button"
+                        key={`${key}-${index}`}
+                        className={`result-row${active ? ' active' : ''}`}
+                        onClick={() => {
+                          dismissSearch()
+                          setKeyword('')
+                          void setQueue([...songs], index)
+                        }}
+                      >
+                        {song.cover ? (
+                          <img src={coverProxyUrl(song.cover)} alt="" loading="lazy" />
+                        ) : (
+                          <span className="result-cover-placeholder" />
+                        )}
+                        <span className="meta">
+                          <strong className="name">{song.name}</strong>
+                          <small className="artist">
+                            {song.artist}
+                            {song.album ? ` · ${song.album}` : ''}
+                          </small>
+                        </span>
+                        <span className="tag">{song.provider === 'qq' ? 'QQ' : '网易云'}</span>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </section>
           ) : null}
-          <Input
-            ref={inputRef}
-            value={keyword}
-            placeholder="搜索歌曲 / 歌手"
-            onFocus={revealSearch}
-            onChange={(event) => {
-              const nextKeyword = event.target.value
-              setKeyword(nextKeyword)
-              setSearchVisible(true)
-              setSearchOpen(Boolean(nextKeyword.trim()))
-            }}
-            aria-expanded={searchOpen && Boolean(keyword.trim())}
-            aria-controls="search-results-popover"
-          />
-        </div>
-        {searchOpen && keyword.trim() ? (
-          <section id="search-results-popover" className="search-popover glass-surface" aria-label="搜索结果">
-            <div className="search-provider-tabs" role="tablist" aria-label="搜索渠道">
-              {providerOrder.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  role="tab"
-                  draggable
-                  aria-selected={provider === item}
-                  className={provider === item ? 'active' : ''}
-                  onDragStart={() => setDraggedProvider(item)}
-                  onDragEnd={() => setDraggedProvider(null)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={() => dropProvider(item)}
-                  onClick={() => onProviderChange(item)}
-                >
-                  {item === 'netease' ? '网易云' : 'QQ 音乐'}
-                  <small>
-                    {item === 'netease'
-                      ? (neteaseSearch.data?.songs.length ?? 0)
-                      : (qqSearch.data?.songs.length ?? 0)}
-                  </small>
-                </button>
-              ))}
-              <span className="search-parallel-hint">双渠道并行</span>
-            </div>
-            <div className="results search-results" data-scroll-region>
-              {songs.length === 0 ? (
-                <div className="empty">
-                  {activeSearch.isFetching
-                    ? '搜索中…'
-                    : activeSearch.error instanceof Error
-                      ? `搜索失败：${musicErrorMessage(activeSearch.error, '搜索失败')}`
-                      : debouncedKeyword
-                        ? '没有结果'
-                        : '准备搜索…'}
-                </div>
-              ) : (
-                songs.map((song, index) => {
-                  const key = `${song.provider}-${song.id}`
-                  const active = current && `${current.provider}-${current.id}` === key
-                  return (
-                    <button
-                      type="button"
-                      key={`${key}-${index}`}
-                      className={`result-row${active ? ' active' : ''}`}
-                      onClick={() => {
-                        dismissSearch()
-                        setKeyword('')
-                        void setQueue([...songs], index)
-                      }}
-                    >
-                      {song.cover ? (
-                        <img src={coverProxyUrl(song.cover)} alt="" loading="lazy" />
-                      ) : (
-                        <span className="result-cover-placeholder" />
-                      )}
-                      <span className="meta">
-                        <strong className="name">{song.name}</strong>
-                        <small className="artist">
-                          {song.artist}
-                          {song.album ? ` · ${song.album}` : ''}
-                        </small>
-                      </span>
-                      <span className="tag">{song.provider === 'qq' ? 'QQ' : '网易云'}</span>
-                    </button>
-                  )
-                })
-              )}
-            </div>
-          </section>
-        ) : null}
+        </AnimatedContent>
       </div>
     </>
   )

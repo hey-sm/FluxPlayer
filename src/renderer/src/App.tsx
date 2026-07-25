@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import type { CustomBackground, WallpaperEngineProject } from '@shared/custom-background-contract'
 import type { ProviderId } from '@shared/models'
-import { coverProxyUrl } from './api'
 import { AppTopBar } from './components/shell/AppTopBar'
 import { FallbackNotice, PlayerBar } from './components/player/PlayerBar'
 import { LibraryWorkspace } from './features/library'
@@ -9,26 +8,20 @@ import { StageLyricsSynchronizer } from './features/lyrics'
 import { SearchPanel } from './features/search'
 import { useAuth } from './stores/auth'
 import { usePlayer } from './stores/player'
-import { useThemeStore } from './theme'
-import { visualBus, type VisualPreset } from './visual/bus'
-import { VISUAL_PRESET_BY_ID } from './visual/presets/registry'
+import { isDynamicBackgroundEffect, type DynamicBackgroundEffect } from './visual/backgrounds'
 import type { LyricsOffset } from './visual/StageCanvas'
-import {
-  attach as attachVisualAudio,
-  resume as resumeVisualAudio,
-  start as startVisualAudio,
-  stop as stopVisualAudio,
-} from './visual/audio'
 
 const SettingsPanel = lazy(() => import('./features/settings/SettingsPanel'))
 const StageCanvas = lazy(() =>
   import('./visual/StageCanvas').then((module) => ({ default: module.StageCanvas })),
 )
 
-const VISUAL_PRESET_KEY = 'fluxplayer-visual-preset-v1'
+const DYNAMIC_BACKGROUND_KEY = 'fluxplayer-dynamic-background-v1'
+const LEGACY_VISUAL_PRESET_KEY = 'fluxplayer-visual-preset-v1'
+const LEGACY_UI_MOTION_KEY = 'flux-ui-motion'
 const LYRICS_DRAG_KEY = 'flux-lyrics-drag-enabled'
 const LYRICS_OFFSET_KEY = 'flux-lyrics-offset'
-type BackgroundMode = 'visual' | 'wallpaper'
+type BackgroundMode = 'dynamic' | 'wallpaper'
 
 function initialLyricsDragEnabled(): boolean {
   try {
@@ -51,14 +44,12 @@ function initialLyricsOffset(): LyricsOffset {
   }
 }
 
-function initialVisualPreset(): VisualPreset {
+function initialDynamicBackground(): DynamicBackgroundEffect {
   try {
-    const raw = localStorage.getItem(VISUAL_PRESET_KEY)
-    if (raw === null) return 10
-    const value = Number(raw)
-    return VISUAL_PRESET_BY_ID.has(value as VisualPreset) ? (value as VisualPreset) : 10
+    const raw = localStorage.getItem(DYNAMIC_BACKGROUND_KEY)
+    return isDynamicBackgroundEffect(raw) ? raw : 'light-rays'
   } catch {
-    return 2
+    return 'light-rays'
   }
 }
 
@@ -77,42 +68,6 @@ function useAuthLifecycle(): void {
   }, [qqLoggedIn, startQQPolling])
 
   useEffect(() => () => useAuth.getState().stopQQPolling(), [])
-}
-
-function useVisualAudio(): void {
-  const currentCover = usePlayer((state) => state.current?.cover)
-  const playerStatus = usePlayer((state) => state.status)
-  const playerAudio = usePlayer((state) => state.audio)
-  const accentColor = useThemeStore((state) => state.visualParams.accent)
-
-  useEffect(() => {
-    visualBus.setPlaybackState(playerStatus)
-    if (playerStatus === 'playing') void resumeVisualAudio()
-  }, [playerStatus])
-
-  useEffect(() => {
-    visualBus.setCoverUrl(currentCover ? coverProxyUrl(currentCover) : null)
-  }, [currentCover])
-
-  useEffect(() => visualBus.setAccentColor(accentColor), [accentColor])
-
-  useEffect(() => {
-    attachVisualAudio(playerAudio)
-    startVisualAudio()
-    return stopVisualAudio
-  }, [playerAudio])
-
-  useEffect(() => {
-    const resumeFromGesture = (): void => {
-      void resumeVisualAudio()
-    }
-    window.addEventListener('pointerdown', resumeFromGesture, true)
-    window.addEventListener('keydown', resumeFromGesture, true)
-    return () => {
-      window.removeEventListener('pointerdown', resumeFromGesture, true)
-      window.removeEventListener('keydown', resumeFromGesture, true)
-    }
-  }, [])
 }
 
 function useGlobalHotkeys(): void {
@@ -155,9 +110,9 @@ function useGlobalHotkeys(): void {
 
 export default function App(): React.JSX.Element {
   const [provider, setProvider] = useState<ProviderId>('netease')
-  const [visualPreset, setVisualPreset] = useState<VisualPreset>(initialVisualPreset)
+  const [dynamicBackground, setDynamicBackground] =
+    useState<DynamicBackgroundEffect>(initialDynamicBackground)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [motionStyle, setMotionStyle] = useState(() => localStorage.getItem('flux-ui-motion') || 'glide')
   const [lyricsDragEnabled, setLyricsDragEnabled] = useState(initialLyricsDragEnabled)
   const [lyricsOffset, setLyricsOffset] = useState<LyricsOffset>(initialLyricsOffset)
   const [customBackground, setCustomBackground] = useState<CustomBackground | null>(null)
@@ -167,7 +122,6 @@ export default function App(): React.JSX.Element {
   const [wallpaperProjects, setWallpaperProjects] = useState<WallpaperEngineProject[]>([])
 
   useAuthLifecycle()
-  useVisualAudio()
   useGlobalHotkeys()
 
   useEffect(() => {
@@ -181,11 +135,13 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     try {
-      localStorage.setItem(VISUAL_PRESET_KEY, String(visualPreset))
+      localStorage.setItem(DYNAMIC_BACKGROUND_KEY, dynamicBackground)
+      localStorage.removeItem(LEGACY_VISUAL_PRESET_KEY)
+      localStorage.removeItem(LEGACY_UI_MOTION_KEY)
     } catch {
-      // Keep the selected preset for this session when persistence is unavailable.
+      // Keep the selected background for this session when persistence is unavailable.
     }
-  }, [visualPreset])
+  }, [dynamicBackground])
 
   useEffect(() => {
     try {
@@ -244,10 +200,10 @@ export default function App(): React.JSX.Element {
     }
   }, [])
 
-  const backgroundMode: BackgroundMode = customBackground && !backgroundMediaFailed ? 'wallpaper' : 'visual'
+  const backgroundMode: BackgroundMode = customBackground && !backgroundMediaFailed ? 'wallpaper' : 'dynamic'
 
   return (
-    <div className={`app motion-${motionStyle}`} data-background-mode={backgroundMode}>
+    <div className="app" data-background-mode={backgroundMode}>
       {backgroundMode === 'wallpaper' && customBackground ? (
         <div className="custom-background-layer" aria-hidden="true">
           {customBackground.kind === 'video' ? (
@@ -260,7 +216,7 @@ export default function App(): React.JSX.Element {
               playsInline
               onError={() => {
                 setBackgroundMediaFailed(true)
-                setBackgroundError('背景视频加载失败，已恢复音乐视觉。')
+                setBackgroundError('背景视频加载失败，已恢复动态背景。')
               }}
             />
           ) : (
@@ -270,7 +226,7 @@ export default function App(): React.JSX.Element {
               alt=""
               onError={() => {
                 setBackgroundMediaFailed(true)
-                setBackgroundError('背景图片加载失败，已恢复音乐视觉。')
+                setBackgroundError('背景图片加载失败，已恢复动态背景。')
               }}
             />
           )}
@@ -279,8 +235,8 @@ export default function App(): React.JSX.Element {
       <Suspense fallback={null}>
         <StageCanvas
           className="stage-bg"
-          preset={visualPreset}
-          backgroundEnabled={backgroundMode === 'visual'}
+          backgroundEffect={dynamicBackground}
+          backgroundEnabled={backgroundMode === 'dynamic'}
           lyricsDragEnabled={lyricsDragEnabled}
           lyricsOffset={lyricsOffset}
           onLyricsOffsetChange={setLyricsOffset}
@@ -292,8 +248,8 @@ export default function App(): React.JSX.Element {
           <SettingsPanel
             open
             onClose={() => setSettingsOpen(false)}
-            visualPreset={visualPreset}
-            onVisualPresetChange={setVisualPreset}
+            dynamicBackground={dynamicBackground}
+            onDynamicBackgroundChange={setDynamicBackground}
             customBackground={customBackground}
             backgroundBusy={backgroundBusy}
             backgroundError={backgroundError}
@@ -311,11 +267,6 @@ export default function App(): React.JSX.Element {
             onImportWallpaperEngine={(projectId) =>
               void runBackgroundCommand(() => window.fluxDesktop?.importWallpaperEngineProject(projectId))
             }
-            motionStyle={motionStyle}
-            onMotionStyleChange={(style) => {
-              setMotionStyle(style)
-              localStorage.setItem('flux-ui-motion', style)
-            }}
             lyricsDragEnabled={lyricsDragEnabled}
             onLyricsDragEnabledChange={setLyricsDragEnabled}
             onResetLyricsPosition={() => setLyricsOffset({ x: 0, y: 0 })}

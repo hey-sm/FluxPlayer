@@ -36,6 +36,14 @@ const NUMBER_KEYS = Object.freeze([
 type NumericThemeKey = (typeof NUMBER_KEYS)[number]
 type StringThemeKey = (typeof STRING_KEYS)[number]
 
+const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i
+
+export function normalizeHexColor(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return HEX_COLOR_PATTERN.test(normalized) ? normalized.toLowerCase() : null
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

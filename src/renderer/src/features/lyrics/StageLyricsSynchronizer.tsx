@@ -7,7 +7,9 @@ import { useLyrics } from './query'
 export function StageLyricsSynchronizer(): null {
   const current = usePlayer((state) => state.current)
   const position = usePlaybackProgress((state) => state.position)
-  const accentColor = useThemeStore((state) => state.visualParams.accent)
+  const accentColor = useThemeStore((state) =>
+    state.lyricsColorLinked ? state.visualParams.accent : state.lyricsColor,
+  )
   const lyrics = useLyrics(current)
   const lines = useMemo(() => lyrics.data?.lines ?? [], [lyrics.data?.lines])
 

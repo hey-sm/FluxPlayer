@@ -1,12 +1,13 @@
-export { MusicBackgroundManager } from './manager'
+export { DynamicBackgroundManager } from './manager'
 export {
-  MUSIC_BACKGROUND_BY_PRESET,
-  MUSIC_BACKGROUND_DEFINITIONS,
-  isMusicBackgroundPreset,
-} from './registry'
+  DYNAMIC_BACKGROUND_EFFECTS,
+  DYNAMIC_BACKGROUND_OPTIONS,
+  isDynamicBackgroundEffect,
+  type DynamicBackgroundEffect,
+} from './dynamic'
+export { DYNAMIC_BACKGROUND_BY_EFFECT, DYNAMIC_BACKGROUND_DEFINITIONS } from './registry'
 export type {
-  BackgroundPresetId,
-  BackgroundUpdateFrame,
-  MusicVisualBackground,
-  MusicVisualBackgroundDefinition,
+  DynamicBackground,
+  DynamicBackgroundDefinition,
+  DynamicBackgroundPointerInput,
 } from './types'

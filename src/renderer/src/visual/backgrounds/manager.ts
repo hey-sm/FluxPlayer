@@ -1,85 +1,116 @@
 import * as THREE from 'three'
-import type { VisualPreset } from '../bus'
-import { MUSIC_BACKGROUND_BY_PRESET, isMusicBackgroundPreset } from './registry'
+import { DYNAMIC_BACKGROUND_BY_EFFECT } from './registry'
+import type { DynamicBackgroundEffect } from './dynamic'
 import type {
-  BackgroundPresetId,
-  BackgroundUpdateFrame,
-  MusicVisualBackground,
-  MusicVisualBackgroundDefinition,
+  DynamicBackground,
+  DynamicBackgroundDefinition,
+  DynamicBackgroundPointerInput,
 } from './types'
 
-/** Lazily owns exactly one active background while keeping one stable Stage scene node. */
-export class MusicBackgroundManager {
+export class DynamicBackgroundManager {
   readonly group = new THREE.Group()
-  private active: MusicVisualBackground | null = null
-  private activePreset: BackgroundPresetId | null = null
-  private coverTexture: THREE.Texture | null = null
+  private active: DynamicBackground | null = null
+  private activeEffect: DynamicBackgroundEffect | null = null
+  private width = 1
+  private height = 1
+  private pixelRatio = 1
+  private pointer = { x: 0.5, y: 0.5, active: false }
+  private accentColor = '#00f5d4'
   private disposed = false
 
   constructor(
-    private readonly definitions: ReadonlyMap<BackgroundPresetId, MusicVisualBackgroundDefinition> =
-      MUSIC_BACKGROUND_BY_PRESET,
+    private readonly definitions: ReadonlyMap<DynamicBackgroundEffect, DynamicBackgroundDefinition> =
+      DYNAMIC_BACKGROUND_BY_EFFECT,
   ) {
-    this.group.name = 'music-background-manager'
-    this.group.visible = false
+    this.group.name = 'dynamic-background-manager'
   }
 
-  static supports(preset: number): preset is BackgroundPresetId {
-    return isMusicBackgroundPreset(preset)
+  get activeEffectId(): DynamicBackgroundEffect | null {
+    return this.activeEffect
   }
 
-  get activePresetId(): BackgroundPresetId | null {
-    return this.activePreset
-  }
-
-  setPreset(preset: VisualPreset): void {
+  setEffect(effect: DynamicBackgroundEffect | null): void {
     if (this.disposed) return
-    const definition = this.definitions.get(preset as BackgroundPresetId)
-    if (!definition) {
-      this.releaseActive()
-      this.group.visible = false
-      return
-    }
-    if (this.activePreset === definition.id && this.active) {
-      this.group.visible = true
-      return
-    }
+    if (effect === this.activeEffect && this.active) return
     this.releaseActive()
+    if (!effect) return
+    const definition = this.definitions.get(effect)
+    if (!definition) return
     const background = definition.create()
     this.active = background
-    this.activePreset = definition.id
-    background.setCoverTexture(this.coverTexture)
+    this.activeEffect = effect
     this.group.add(background.group)
-    this.group.visible = true
+    background.setAccentColor(this.accentColor)
+    background.setViewport(this.width, this.height, this.pixelRatio)
+    background.setPointer(this.pointer.x, this.pointer.y, this.pointer.active)
   }
 
-  setCoverTexture(texture: THREE.Texture | null): void {
-    if (this.disposed || this.coverTexture === texture) return
-    this.coverTexture = texture
-    this.active?.setCoverTexture(texture)
+  setAccentColor(color: string): void {
+    if (this.disposed || this.accentColor === color) return
+    this.accentColor = color
+    this.active?.setAccentColor(color)
   }
 
-  update(deltaTime: number, frame: Readonly<BackgroundUpdateFrame>): void {
-    if (this.disposed || !this.group.visible) return
-    this.active?.update(deltaTime, frame)
+  setViewport(width: number, height: number, pixelRatio: number): void {
+    if (this.disposed) return
+    this.width = Math.max(1, width)
+    this.height = Math.max(1, height)
+    this.pixelRatio = Math.max(0.5, pixelRatio)
+    this.active?.setViewport(this.width, this.height, this.pixelRatio)
+  }
+
+  setPointer(x: number, y: number, active: boolean): void {
+    if (this.disposed) return
+    this.pointer = {
+      x: THREE.MathUtils.clamp(x, 0, 1),
+      y: THREE.MathUtils.clamp(y, 0, 1),
+      active,
+    }
+    this.active?.setPointer(this.pointer.x, this.pointer.y, active)
+  }
+
+  pointerDown(input: DynamicBackgroundPointerInput): boolean {
+    if (this.disposed || !this.active?.pointerDown) return false
+    return this.active.pointerDown(this.normalizePointerInput(input))
+  }
+
+  pointerMove(input: DynamicBackgroundPointerInput): void {
+    if (this.disposed) return
+    this.active?.pointerMove?.(this.normalizePointerInput(input))
+  }
+
+  pointerUp(input: DynamicBackgroundPointerInput): void {
+    if (this.disposed) return
+    this.active?.pointerUp?.(this.normalizePointerInput(input))
+  }
+
+  update(deltaTime: number): void {
+    if (!this.disposed) this.active?.update(deltaTime)
   }
 
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    this.coverTexture = null
     this.releaseActive()
     this.group.clear()
   }
 
   private releaseActive(): void {
     if (!this.active) {
-      this.activePreset = null
+      this.activeEffect = null
       return
     }
     this.group.remove(this.active.group)
     this.active.dispose()
     this.active = null
-    this.activePreset = null
+    this.activeEffect = null
+  }
+
+  private normalizePointerInput(input: DynamicBackgroundPointerInput): DynamicBackgroundPointerInput {
+    return {
+      ...input,
+      x: THREE.MathUtils.clamp(input.x, 0, 1),
+      y: THREE.MathUtils.clamp(input.y, 0, 1),
+    }
   }
 }

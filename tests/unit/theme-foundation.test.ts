@@ -3,7 +3,6 @@ import {
   DEFAULT_THEME_PRESET_ID,
   THEME_CSS_VARIABLE_NAMES,
   THEME_PERSISTENCE_KEY,
-  THEME_PERSISTENCE_VERSION,
   THEME_PRESETS,
   THEME_PRESET_LIST,
   createThemeStore,
@@ -43,7 +42,7 @@ describe('classic-only theme', () => {
   it('migrates old preset and customized V1 snapshots to classic defaults', () => {
     const migrated = deserializePersistedTheme(
       JSON.stringify({
-        version: THEME_PERSISTENCE_VERSION,
+        version: 1,
         selectedPresetId: 'soft-white',
         visualParams: { accent: '#ff0000', blur: 40 },
       }),
@@ -51,12 +50,14 @@ describe('classic-only theme', () => {
     expect(migrated).toEqual({
       selectedPresetId: 'classic-gold',
       visualParams: { ...THEME_PRESETS['classic-gold'].visualParams },
+      lyricsColor: THEME_PRESETS['classic-gold'].visualParams.accent,
+      lyricsColorLinked: true,
     })
   })
 
   it('rejects malformed JSON and unknown persistence versions', () => {
     expect(deserializePersistedTheme('{not-json')).toBeNull()
-    expect(deserializePersistedTheme(JSON.stringify({ version: 2 }))).toBeNull()
+    expect(deserializePersistedTheme(JSON.stringify({ version: 3 }))).toBeNull()
   })
 
   it('applies classic variables and rewrites persisted state on startup', () => {
@@ -74,8 +75,38 @@ describe('classic-only theme', () => {
     expect(store.getState()).toMatchObject({ selectedPresetId: 'classic-gold', hydrated: true })
     expect(style.values.get('--flux-bg')).toBe(THEME_PRESETS['classic-gold'].visualParams.background)
     expect(JSON.parse(storage.getItem(THEME_PERSISTENCE_KEY)!)).toEqual({
-      version: 1,
+      version: 2,
       selectedPresetId: 'classic-gold',
+      visualParams: THEME_PRESETS['classic-gold'].visualParams,
+      lyricsColor: THEME_PRESETS['classic-gold'].visualParams.accent,
+      lyricsColorLinked: true,
+    })
+  })
+
+  it('persists the accent and lets lyric color follow or diverge', () => {
+    const storage = new MemoryThemeStorage()
+    const style = new MemoryStyle()
+    const store = createThemeStore({ storage, styleTarget: style })
+
+    store.getState().setAccent('#3B82F6')
+    expect(store.getState().visualParams.accent).toBe('#3b82f6')
+    expect(store.getState().lyricsColor).toBe('#3b82f6')
+    expect(style.values.get('--flux-accent')).toBe('#3b82f6')
+
+    store.getState().setLyricsColorLinked(false)
+    store.getState().setLyricsColor('#f43f5e')
+    store.getState().setAccent('#22c55e')
+    expect(store.getState()).toMatchObject({
+      lyricsColor: '#f43f5e',
+      lyricsColorLinked: false,
+      visualParams: { accent: '#22c55e' },
+    })
+
+    const restored = createThemeStore({ storage, styleTarget: new MemoryStyle() })
+    expect(restored.getState()).toMatchObject({
+      lyricsColor: '#f43f5e',
+      lyricsColorLinked: false,
+      visualParams: { accent: '#22c55e' },
     })
   })
 

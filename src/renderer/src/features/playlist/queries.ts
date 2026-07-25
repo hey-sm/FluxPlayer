@@ -2,6 +2,9 @@ import type { QueryClient, QueryFunctionContext } from '@tanstack/react-query'
 import type { ProviderId, UnifiedPlaylist } from '@shared/models'
 import { fetchPlaylistTracks, fetchPlaylists } from './api'
 
+export const PLAYLIST_TRACKS_STALE_TIME = 5 * 60 * 1000
+export const INITIAL_PLAYLIST_PREFETCH_LIMIT = 12
+
 export const playlistQueryKeys = {
   all: ['playlist'] as const,
   identity: (provider: ProviderId, identityToken: string) => ['playlist', provider, identityToken] as const,
@@ -62,8 +65,35 @@ export async function prefetchLastPlaylist(
   if (!playlist) return
   await queryClient.prefetchQuery({
     ...createPlaylistTracksQuery(provider, identityToken, playlist.id),
-    staleTime: 5 * 60 * 1000,
+    staleTime: PLAYLIST_TRACKS_STALE_TIME,
   })
+}
+
+/** Warms the playlists most likely to be visible without flooding the provider API. */
+export async function prefetchPlaylistWindow(
+  queryClient: QueryClient,
+  provider: ProviderId,
+  identityToken: string,
+  playlists: readonly UnifiedPlaylist[],
+  options: { limit?: number; concurrency?: number; signal?: AbortSignal } = {},
+): Promise<void> {
+  const limit = Math.max(0, options.limit ?? INITIAL_PLAYLIST_PREFETCH_LIMIT)
+  const candidates = playlists.slice(0, limit)
+  const concurrency = Math.max(1, Math.min(options.concurrency ?? 2, candidates.length))
+  let cursor = 0
+
+  const worker = async (): Promise<void> => {
+    while (!options.signal?.aborted) {
+      const playlist = candidates[cursor++]
+      if (!playlist) return
+      await queryClient.prefetchQuery({
+        ...createPlaylistTracksQuery(provider, identityToken, playlist.id),
+        staleTime: PLAYLIST_TRACKS_STALE_TIME,
+      })
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()))
 }
 
 export async function clearPlaylistIdentity(

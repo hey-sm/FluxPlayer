@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-FluxPlayer 是一个 Electron + React 桌面音乐播放器，聚合网易云音乐与 QQ 音乐两个 provider，核心特色是基于 Three.js 音频响应式视觉背景。使用 pnpm、electron-vite、oxlint/oxfmt（非 ESLint/Prettier）、Vitest + Playwright。
+FluxPlayer 是一个 Electron + React 桌面音乐播放器，聚合网易云音乐与 QQ 音乐两个 provider，使用 Three.js 渲染动态背景与 3D 歌词。使用 pnpm、electron-vite、oxlint/oxfmt（非 ESLint/Prettier）、Vitest + Playwright。
 
 ## Commands
 
@@ -63,9 +63,10 @@ pnpm exec playwright test tests/e2e/player.spec.ts     # 单个 e2e（需先 pnp
 ### 视觉系统（Three.js）
 
 - **单一 Stage**：`VisualStage`（[src/renderer/src/visual/stage.ts](src/renderer/src/visual/stage.ts)）持有唯一 renderer/scene/camera，所有子层共用它，绝不自建动画时钟。
-- **单一状态桥**：React → 视觉引擎的**唯一**接口是 `visualBus`（[src/renderer/src/visual/bus.ts](src/renderer/src/visual/bus.ts)）的 `VisualSnapshot`，同步 patch 保证每帧观测到一致快照。
 - **单一 RAF**：全局 `ticker`（[src/renderer/src/perf/ticker.ts](src/renderer/src/perf/ticker.ts)）是唯一 `requestAnimationFrame` 注册表，受主进程 `PerfGovernor` 广播的 `PerfState` 约束（minimize/hide → background/suspended 降频）。视觉循环别自己开 RAF。
-- **preset 分两类**：`preset 0-5`（粒子着色器，legacy）由 stage 直接渲染；`preset 7-10`（NEBULA/CRYSTAL/SKYLINE/CINEMATIC_VISTA）是 `MusicBackgroundManager` 管的独立背景对象。两个 registry 分别是 [visual/presets/registry.ts](src/renderer/src/visual/presets/registry.ts)（相机/过渡定义）和 [visual/backgrounds/registry.ts](src/renderer/src/visual/backgrounds/registry.ts)（背景实例工厂）。`visual/**` 目录被 oxfmt 忽略（保留 legacy 移植格式）。
+- **动态背景**：`DynamicBackgroundManager` 只实例化 Light Rays、Galaxy 或 HTML Light 中当前选中的一个。两个 React Bits shader 与 HTML Light 物理吊灯共享 renderer/ticker；不再存在音频分析器、封面粒子或 legacy preset。
+- **React 边界**：`StageCanvas` 只传入 `backgroundEffect`、启用状态和歌词交互参数；自定义图片/视频背景启用时释放动态背景，但保留歌词场景。
+- **上游许可**：React Bits 适配代码保留来源注释，许可证全文与依赖说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ### 测试约定
 

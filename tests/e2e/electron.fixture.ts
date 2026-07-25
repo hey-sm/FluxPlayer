@@ -766,13 +766,6 @@ export const test = base.extend<ElectronFixtures>({
         // The player owns a detached `new Audio()` element. Instrument the constructor before app code so
         // the E2E can assert the real element rather than mocking HTMLMediaElement.play().
         await app.context().addInitScript(() => {
-          // A stale pre-M6 preference must not be able to disable the always-on visual stage.
-          try {
-            localStorage.setItem('fluxplayer-visual-enabled-v1', '0')
-          } catch {
-            // A transient opaque origin before the local page loads may not expose storage.
-          }
-
           const NativeAudio = window.Audio
           const trackedAudio: HTMLAudioElement[] = []
           Object.defineProperty(globalThis, '__fluxE2EAudioElements', {

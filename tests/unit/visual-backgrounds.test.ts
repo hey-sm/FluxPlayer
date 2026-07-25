@@ -1,122 +1,171 @@
 import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
-import { CinematicVistaBackground } from '@renderer/visual/backgrounds/cinematic-vista'
-import { MusicBackgroundManager } from '@renderer/visual/backgrounds/manager'
-import { MUSIC_BACKGROUND_DEFINITIONS, isMusicBackgroundPreset } from '@renderer/visual/backgrounds/registry'
-import type {
-  BackgroundPresetId,
-  MusicVisualBackground,
-  MusicVisualBackgroundDefinition,
-} from '@renderer/visual/backgrounds/types'
+import {
+  DYNAMIC_BACKGROUND_DEFINITIONS,
+  DynamicBackgroundManager,
+  isDynamicBackgroundEffect,
+  type DynamicBackgroundEffect,
+} from '@renderer/visual/backgrounds'
+import { GalaxyBackground } from '@renderer/visual/backgrounds/galaxy'
+import { HtmlLightBackground } from '@renderer/visual/backgrounds/html-light'
+import { LightRaysBackground } from '@renderer/visual/backgrounds/light-rays'
+import type { DynamicBackground, DynamicBackgroundDefinition } from '@renderer/visual/backgrounds/types'
 
-const frame = {
-  analyserFrame: { bass: 0.2, mid: 0.3, treble: 0.4, energy: 0.35, timestamp: 1 },
-  beatPulse: 0.25,
-  accentColor: '#7c8cff',
-} as const
-
-function fakeDefinition(id: BackgroundPresetId) {
-  const background: MusicVisualBackground = {
+function fakeDefinition(effect: DynamicBackgroundEffect) {
+  const background: DynamicBackground = {
     group: new THREE.Group(),
-    setCoverTexture: vi.fn(),
+    setAccentColor: vi.fn(),
+    setViewport: vi.fn(),
+    setPointer: vi.fn(),
     update: vi.fn(),
     dispose: vi.fn(),
   }
-  const definition: MusicVisualBackgroundDefinition = { id, create: vi.fn(() => background) }
+  const definition: DynamicBackgroundDefinition = {
+    effect,
+    create: vi.fn(() => background),
+  }
   return { definition, background }
 }
 
-describe('music background registry', () => {
-  it('appends managed background ids without changing the 0..9 ABI', () => {
-    expect(MUSIC_BACKGROUND_DEFINITIONS.map(({ id }) => id)).toEqual([7, 8, 9, 10])
-    expect(isMusicBackgroundPreset(10)).toBe(true)
-    expect(isMusicBackgroundPreset(6)).toBe(false)
-    expect(isMusicBackgroundPreset(11)).toBe(false)
-  })
-})
-
-describe('MusicBackgroundManager lifecycle', () => {
-  it('lazily owns one background, forwards Stage frames and disposes on replacement', () => {
-    const first = fakeDefinition(7)
-    const second = fakeDefinition(10)
-    const definitions = new Map<BackgroundPresetId, MusicVisualBackgroundDefinition>([
-      [7, first.definition],
-      [10, second.definition],
+describe('dynamic background registry', () => {
+  it('exposes Light Rays, Galaxy, and HTML Light and validates persisted values', () => {
+    expect(DYNAMIC_BACKGROUND_DEFINITIONS.map(({ effect }) => effect)).toEqual([
+      'light-rays',
+      'galaxy',
+      'html-light',
     ])
-    const manager = new MusicBackgroundManager(definitions)
-    const borrowedCover = new THREE.Texture()
-    const borrowedDispose = vi.spyOn(borrowedCover, 'dispose')
-
-    manager.setCoverTexture(borrowedCover)
-    expect(first.definition.create).not.toHaveBeenCalled()
-    expect(manager.group.children).toHaveLength(0)
-
-    manager.setPreset(10)
-    expect(second.definition.create).toHaveBeenCalledOnce()
-    expect(second.background.setCoverTexture).toHaveBeenCalledWith(borrowedCover)
-    expect(manager.activePresetId).toBe(10)
-    expect(manager.group.children).toEqual([second.background.group])
-
-    manager.update(1 / 60, frame)
-    expect(second.background.update).toHaveBeenCalledWith(1 / 60, frame)
-    manager.setPreset(10)
-    expect(second.definition.create).toHaveBeenCalledOnce()
-
-    manager.setPreset(7)
-    expect(second.background.dispose).toHaveBeenCalledOnce()
-    expect(first.definition.create).toHaveBeenCalledOnce()
-    expect(manager.activePresetId).toBe(7)
-
-    manager.dispose()
-    manager.dispose()
-    expect(first.background.dispose).toHaveBeenCalledOnce()
-    expect(manager.group.children).toHaveLength(0)
-    expect(borrowedDispose).not.toHaveBeenCalled()
+    expect(isDynamicBackgroundEffect('light-rays')).toBe(true)
+    expect(isDynamicBackgroundEffect('galaxy')).toBe(true)
+    expect(isDynamicBackgroundEffect('html-light')).toBe(true)
+    expect(isDynamicBackgroundEffect('cinematic-vista')).toBe(false)
+    expect(isDynamicBackgroundEffect(null)).toBe(false)
   })
 })
 
-describe('CinematicVistaBackground cover ownership', () => {
-  it('uses an owned gradient fallback and never disposes a borrowed Stage cover', () => {
-    const background = new CinematicVistaBackground()
-    const window = background.group.getObjectByName('cinematic-vista-cover-window') as THREE.Mesh<
-      THREE.PlaneGeometry,
-      THREE.MeshBasicMaterial
-    >
-    const fallback = window.material.map
-    const borrowedCover = new THREE.Texture()
-    const fallbackDispose = vi.spyOn(fallback!, 'dispose')
-    const borrowedDispose = vi.spyOn(borrowedCover, 'dispose')
+describe('DynamicBackgroundManager lifecycle', () => {
+  it('owns one effect, restores viewport/pointer state and disposes replacements once', () => {
+    const lightRays = fakeDefinition('light-rays')
+    const galaxy = fakeDefinition('galaxy')
+    const manager = new DynamicBackgroundManager(
+      new Map([
+        ['light-rays', lightRays.definition],
+        ['galaxy', galaxy.definition],
+      ]),
+    )
 
-    expect(fallback?.name).toBe('cinematic-vista-fallback-cover')
-    background.setCoverTexture(borrowedCover)
-    expect(window.material.map).toBe(borrowedCover)
-    background.setCoverTexture(null)
-    expect(window.material.map).toBe(fallback)
-    background.setCoverTexture(borrowedCover)
+    manager.setViewport(1280, 720, 1.25)
+    manager.setPointer(0.2, 0.7, true)
+    manager.setAccentColor('#3b82f6')
+    manager.setEffect('light-rays')
+    expect(lightRays.background.setAccentColor).toHaveBeenCalledWith('#3b82f6')
+    expect(lightRays.background.setViewport).toHaveBeenCalledWith(1280, 720, 1.25)
+    expect(lightRays.background.setPointer).toHaveBeenCalledWith(0.2, 0.7, true)
+    manager.update(1 / 60)
+    expect(lightRays.background.update).toHaveBeenCalledWith(1 / 60)
 
+    manager.setEffect('galaxy')
+    expect(lightRays.background.dispose).toHaveBeenCalledOnce()
+    expect(manager.activeEffectId).toBe('galaxy')
+    manager.setEffect(null)
+    expect(galaxy.background.dispose).toHaveBeenCalledOnce()
+    expect(manager.group.children).toHaveLength(0)
+    manager.dispose()
+    manager.dispose()
+    expect(galaxy.background.dispose).toHaveBeenCalledOnce()
+  })
+
+  it('normalizes and forwards optional pointer lifecycle events only to the active background', () => {
+    const background: DynamicBackground = {
+      group: new THREE.Group(),
+      setAccentColor: vi.fn(),
+      setViewport: vi.fn(),
+      setPointer: vi.fn(),
+      pointerDown: vi.fn(() => true),
+      pointerMove: vi.fn(),
+      pointerUp: vi.fn(),
+      update: vi.fn(),
+      dispose: vi.fn(),
+    }
+    const manager = new DynamicBackgroundManager(
+      new Map([
+        [
+          'html-light',
+          { effect: 'html-light', create: () => background } satisfies DynamicBackgroundDefinition,
+        ],
+      ]),
+    )
+
+    expect(manager.pointerDown({ x: 2, y: -1, button: 0, pointerId: 7 })).toBe(false)
+    manager.setEffect('html-light')
+    expect(manager.pointerDown({ x: 2, y: -1, button: 0, pointerId: 7 })).toBe(true)
+    expect(background.pointerDown).toHaveBeenCalledWith({ x: 1, y: 0, button: 0, pointerId: 7 })
+    manager.pointerMove({ x: 0.4, y: 0.6, button: -1, pointerId: 7 })
+    manager.pointerUp({ x: 0.5, y: 0.7, button: 0, pointerId: 7, cancelled: true })
+    expect(background.pointerMove).toHaveBeenCalledOnce()
+    expect(background.pointerUp).toHaveBeenCalledOnce()
+    manager.dispose()
+  })
+})
+
+describe('React Bits shader ports', () => {
+  it.each([
+    ['light-rays', () => new LightRaysBackground()],
+    ['galaxy', () => new GalaxyBackground()],
+  ] as const)('%s owns one fullscreen material and disposes it idempotently', (_name, create) => {
+    const background = create()
+    const mesh = background.group.children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>
+    const geometryDispose = vi.spyOn(mesh.geometry, 'dispose')
+    const materialDispose = vi.spyOn(mesh.material, 'dispose')
+    background.setViewport(800, 600, 1.25)
+    background.setPointer(0.25, 0.75, true)
+    background.update(1 / 60)
+    background.dispose()
+    background.dispose()
+    expect(geometryDispose).toHaveBeenCalledOnce()
+    expect(materialDispose).toHaveBeenCalledOnce()
+    expect(background.group.children).toHaveLength(0)
+  })
+})
+
+describe('HTML Light port', () => {
+  it('moves the lamp through the routed pointer lifecycle and releases all owned GPU resources once', () => {
+    const background = new HtmlLightBackground()
+    const lamp = background.group.getObjectByName('html-light-lamp-root')!
+    const initialPosition = lamp.position.clone()
     const geometries = new Set<THREE.BufferGeometry>()
     const materials = new Set<THREE.Material>()
+    const textures = new Set<THREE.Texture>()
     background.group.traverse((object) => {
-      const renderable = object as THREE.Mesh | THREE.Points
-      if (renderable.geometry) geometries.add(renderable.geometry)
+      const renderable = object as THREE.Mesh | THREE.Sprite
+      if ('geometry' in renderable && renderable.geometry) geometries.add(renderable.geometry)
       const objectMaterials = Array.isArray(renderable.material)
         ? renderable.material
         : renderable.material
           ? [renderable.material]
           : []
-      for (const material of objectMaterials) materials.add(material)
+      for (const material of objectMaterials) {
+        materials.add(material)
+        const map = (material as THREE.Material & { map?: THREE.Texture | null }).map
+        if (map) textures.add(map)
+      }
     })
-    const geometryDisposers = [...geometries].map((geometry) => vi.spyOn(geometry, 'dispose'))
-    const materialDisposers = [...materials].map((material) => vi.spyOn(material, 'dispose'))
+    expect([...geometries].some((geometry) => geometry.type === 'ConeGeometry')).toBe(false)
+    const geometryDisposals = [...geometries].map((geometry) => vi.spyOn(geometry, 'dispose'))
+    const materialDisposals = [...materials].map((material) => vi.spyOn(material, 'dispose'))
+    const textureDisposals = [...textures].map((texture) => vi.spyOn(texture, 'dispose'))
 
-    background.update(1 / 60, frame)
+    background.setViewport(1280, 720, 1.25)
+    expect(background.pointerDown({ x: 0.5, y: 0.18, button: 0, pointerId: 4 })).toBe(true)
+    background.pointerMove({ x: 0.65, y: 0.27, button: -1, pointerId: 4 })
+    for (let frame = 0; frame < 12; frame += 1) background.update(1 / 60)
+    background.pointerUp({ x: 0.65, y: 0.27, button: 0, pointerId: 4 })
+    expect(lamp.position.distanceTo(initialPosition)).toBeGreaterThan(0.01)
+
     background.dispose()
     background.dispose()
-
-    expect(fallbackDispose).toHaveBeenCalledOnce()
-    expect(borrowedDispose).not.toHaveBeenCalled()
-    for (const dispose of geometryDisposers) expect(dispose).toHaveBeenCalledOnce()
-    for (const dispose of materialDisposers) expect(dispose).toHaveBeenCalledOnce()
+    for (const dispose of [...geometryDisposals, ...materialDisposals, ...textureDisposals]) {
+      expect(dispose).toHaveBeenCalledOnce()
+    }
     expect(background.group.children).toHaveLength(0)
   })
 })

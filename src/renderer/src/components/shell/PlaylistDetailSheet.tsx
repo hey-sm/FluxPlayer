@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { AnimatedContent } from '../react-bits/AnimatedContent'
 
 export function PlaylistDetailSheet({
   open,
@@ -30,13 +31,15 @@ export function PlaylistDetailSheet({
           if (available) onOpenChange(true)
         }}
       />
-      <div
-        className={`flux-detail-sheet flux-hover-panel${open ? ' is-open' : ''}`}
+      <AnimatedContent
+        visible={open}
+        direction="horizontal"
+        className="flux-detail-sheet flux-hover-panel"
         onPointerEnter={cancelClose}
         onPointerLeave={scheduleClose}
       >
         <div className="flux-sheet-body">{children}</div>
-      </div>
+      </AnimatedContent>
     </>
   )
 }

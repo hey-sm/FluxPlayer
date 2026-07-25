@@ -1,23 +1,27 @@
 import type * as THREE from 'three'
-import type { AnalyserFrame, VisualPreset } from '../bus'
+import type { DynamicBackgroundEffect } from './dynamic'
 
-export type BackgroundPresetId = Extract<VisualPreset, 7 | 8 | 9 | 10>
-
-export interface BackgroundUpdateFrame {
-  analyserFrame: Readonly<AnalyserFrame>
-  beatPulse: number
-  accentColor: string
+export interface DynamicBackgroundPointerInput {
+  x: number
+  y: number
+  button: number
+  pointerId: number
+  cancelled?: boolean
 }
 
-/** A Stage-owned background. Cover textures are borrowed and must never be disposed here. */
-export interface MusicVisualBackground {
+export interface DynamicBackground {
   readonly group: THREE.Group
-  setCoverTexture(texture: THREE.Texture | null): void
-  update(deltaTime: number, frame: Readonly<BackgroundUpdateFrame>): void
+  setAccentColor(color: string): void
+  setViewport(width: number, height: number, pixelRatio: number): void
+  setPointer(x: number, y: number, active: boolean): void
+  pointerDown?(input: DynamicBackgroundPointerInput): boolean
+  pointerMove?(input: DynamicBackgroundPointerInput): void
+  pointerUp?(input: DynamicBackgroundPointerInput): void
+  update(deltaTime: number): void
   dispose(): void
 }
 
-export interface MusicVisualBackgroundDefinition {
-  id: BackgroundPresetId
-  create(): MusicVisualBackground
+export interface DynamicBackgroundDefinition {
+  effect: DynamicBackgroundEffect
+  create(): DynamicBackground
 }
