@@ -63,6 +63,7 @@ const DEFAULT_VOLUME = 0.8
 const VOLUME_STORAGE_KEY = 'fluxplayer-volume-v1'
 const QUALITY_STORAGE_KEY = 'fluxplayer-quality-v1'
 const TRIAL_LIMIT_SECONDS = 30
+const MEDIA_LOAD_TIMEOUT_MS = 20_000
 const NETEASE_QUALITY_ORDER: readonly QualityLevel[] = ['jymaster', 'hires', 'lossless', 'exhigh', 'standard']
 
 function browserStorage(): Storage | null {
@@ -145,6 +146,7 @@ export class PlaybackEngine {
   private shuffleOrder: number[] = []
   private shuffleCursor = -1
   private mediaSessionBound = false
+  private pendingAudioLoadCancel: (() => void) | null = null
 
   constructor(audio: HTMLAudioElement = new Audio()) {
     this.audio = audio
@@ -181,6 +183,7 @@ export class PlaybackEngine {
     const queue = [...songs]
     if (!queue.length) {
       this.loadGeneration += 1
+      this.cancelPendingAudioLoad()
       this.audio.pause()
       this.audio.src = ''
       this.activeTrialLimitSeconds = null
@@ -256,6 +259,7 @@ export class PlaybackEngine {
     }
 
     const generation = ++this.loadGeneration
+    this.cancelPendingAudioLoad()
     this.audio.pause()
     this.patch({ status: 'loading' })
     const targetLabel = providerLabel(request.provider)
@@ -490,6 +494,7 @@ export class PlaybackEngine {
     const song = this.state().queue[index]
     if (!song) return
     const generation = ++this.loadGeneration
+    this.cancelPendingAudioLoad()
     this.activeTrialLimitSeconds = null
     const duration = song.duration / 1000 || 0
     this.patch({
@@ -533,9 +538,8 @@ export class PlaybackEngine {
       }
 
       this.activeTrialLimitSeconds = info.trial ? TRIAL_LIMIT_SECONDS : null
-      this.audio.src = info.url
       try {
-        await this.audio.play()
+        await this.playAudioSource(info.url)
       } catch (playError) {
         if (this.stale(generation)) return
         if (await this.tryQualityRetry(index, generation, options, info, requested)) return
@@ -574,6 +578,60 @@ export class PlaybackEngine {
       this.patch({ status: 'error', message: errorMessage(error) })
       updatePlaybackState('none')
     }
+  }
+
+  private cancelPendingAudioLoad(): void {
+    const cancel = this.pendingAudioLoadCancel
+    this.pendingAudioLoadCancel = null
+    cancel?.()
+  }
+
+  /**
+   * HTMLMediaElement.play() may remain pending when a custom-protocol request fails while loading.
+   * Race it against the element's error event and a bounded timeout so the UI can retry or leave loading.
+   */
+  private playAudioSource(url: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      let settled = false
+      let timer: ReturnType<typeof setTimeout> | null = null
+
+      const cleanup = (): void => {
+        this.audio.removeEventListener('error', onError)
+        if (timer) clearTimeout(timer)
+        if (this.pendingAudioLoadCancel === cancel) this.pendingAudioLoadCancel = null
+      }
+      const succeed = (): void => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve()
+      }
+      const fail = (error: unknown): void => {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(error)
+      }
+      const onError = (): void => {
+        const code = this.audio.error?.code
+        fail(new Error(code ? `音频地址加载失败（媒体错误 ${code}）` : '音频地址加载失败'))
+      }
+      const cancel = (): void => {
+        const error = new Error('音频加载已被新的播放请求替换')
+        error.name = 'AbortError'
+        fail(error)
+      }
+
+      this.pendingAudioLoadCancel = cancel
+      this.audio.addEventListener('error', onError)
+      timer = setTimeout(() => fail(new Error('音频地址加载超时')), MEDIA_LOAD_TIMEOUT_MS)
+      this.audio.src = url
+      try {
+        this.audio.play().then(succeed, fail)
+      } catch (error) {
+        fail(error)
+      }
+    })
   }
 
   private resumePlayback(): void {

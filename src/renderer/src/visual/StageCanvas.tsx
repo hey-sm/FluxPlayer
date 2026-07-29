@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useThemeStore } from '../theme'
 import type { DynamicBackgroundEffect } from './backgrounds'
+import type { LyricsAnimationMode } from './lyrics3d-mesh/animation'
 import type { VisualStage } from './stage'
 
 export interface LyricsOffset {
@@ -12,6 +13,7 @@ export interface StageCanvasProps {
   backgroundEffect?: DynamicBackgroundEffect
   backgroundEnabled?: boolean
   lyricsDragEnabled?: boolean
+  lyricsAnimationMode?: LyricsAnimationMode
   lyricsOffset?: LyricsOffset
   onLyricsOffsetChange?(offset: LyricsOffset): void
   className?: string
@@ -29,6 +31,7 @@ export function StageCanvas({
   backgroundEffect = 'light-rays',
   backgroundEnabled = true,
   lyricsDragEnabled = false,
+  lyricsAnimationMode = 'compact',
   lyricsOffset = { x: 0, y: 0 },
   onLyricsOffsetChange,
   className,
@@ -41,6 +44,7 @@ export function StageCanvas({
   const backgroundEnabledRef = useRef(backgroundEnabled)
   const accentColorRef = useRef(accentColor)
   const lyricsDragEnabledRef = useRef(lyricsDragEnabled)
+  const lyricsAnimationModeRef = useRef(lyricsAnimationMode)
   const lyricsOffsetRef = useRef(lyricsOffset)
   const onLyricsOffsetChangeRef = useRef(onLyricsOffsetChange)
 
@@ -59,6 +63,7 @@ export function StageCanvas({
       stage.setBackgroundEffect(backgroundEffectRef.current)
       stage.setBackgroundEnabled(backgroundEnabledRef.current)
       stage.setLyricsDragEnabled(lyricsDragEnabledRef.current)
+      stage.setLyricsAnimationMode(lyricsAnimationModeRef.current)
       stage.setLyricsOffset(lyricsOffsetRef.current.x, lyricsOffsetRef.current.y)
       const stop = stage.start()
       let pointerId: number | null = null
@@ -240,6 +245,11 @@ export function StageCanvas({
   }, [lyricsDragEnabled])
 
   useEffect(() => {
+    lyricsAnimationModeRef.current = lyricsAnimationMode
+    stageRef.current?.setLyricsAnimationMode(lyricsAnimationMode)
+  }, [lyricsAnimationMode])
+
+  useEffect(() => {
     lyricsOffsetRef.current = lyricsOffset
     stageRef.current?.setLyricsOffset(lyricsOffset.x, lyricsOffset.y)
   }, [lyricsOffset])
@@ -252,8 +262,10 @@ export function StageCanvas({
     <div
       ref={containerRef}
       className={className}
+      data-stage-background=""
       data-lyrics-draggable={lyricsDragEnabled || undefined}
       data-lyrics-interaction={lyricsDragEnabled ? 'move' : 'rotate'}
+      data-lyrics-animation-mode={lyricsAnimationMode}
       style={{ width: '100%', height: '100%', ...style }}
     />
   )

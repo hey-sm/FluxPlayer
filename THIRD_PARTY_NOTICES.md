@@ -2,7 +2,7 @@
 
 ## React Bits adaptations
 
-The controlled `AnimatedContent`, generic `AnimatedList`, Light Rays shader, and Galaxy shader are adapted from React Bits commit `8d1c5fa9ebee6e077e70c9e5c63b44e87dbeaecc`.
+The controlled `AnimatedContent`, generic `AnimatedList`, and Light Rays shader are adapted from React Bits commit `8d1c5fa9ebee6e077e70c9e5c63b44e87dbeaecc`.
 
 Copyright (c) 2026 David Haz
 
@@ -39,6 +39,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 Source: https://github.com/jinruozai/HTML-Light-Demo
 
 The upstream project credits the original concept and art direction to https://x.com/kaolti.
+
+## Galaxy background reference
+
+The Galaxy background is FluxPlayer's own implementation of the widely documented procedural spiral-galaxy
+point cloud (per-star branch angle, radius-proportional spin, power-biased scatter, inner-to-outer color
+ramp on additively blended points). Its framing references the "Galaxy" particles demo at
+https://threejsdemos.com/demos/particles/galaxy, which publishes no license — no code, shader or asset from
+that page is redistributed here; the generator, GLSL, seeded RNG and viewport fitting in
+[src/renderer/src/visual/backgrounds/galaxy/index.ts](src/renderer/src/visual/backgrounds/galaxy/index.ts)
+are original.
 
 ## Runtime dependencies
 

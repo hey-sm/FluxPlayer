@@ -14,6 +14,11 @@ const NCM_SONG_FIXTURE = {
   al: { id: 18916, name: '叶惠美', picUrl: 'https://p1.music.126.net/x.jpg' },
   dt: 269920,
   fee: 8,
+  h: { br: 320000, size: 1 },
+  l: { br: 128000, size: 1 },
+  sq: { br: 999000, size: 1 },
+  hr: null,
+  privilege: { playMaxBrLevel: 'jymaster' },
 }
 
 describe('mapSongRecord', () => {
@@ -30,6 +35,7 @@ describe('mapSongRecord', () => {
       cover: 'https://p1.music.126.net/x.jpg',
       duration: 269920,
       fee: 8,
+      supportedQualities: ['jymaster', 'lossless', 'exhigh', 'standard'],
     })
   })
   it('多歌手用 / 连接', () => {

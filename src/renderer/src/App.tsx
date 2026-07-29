@@ -1,15 +1,18 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { CustomBackground, WallpaperEngineProject } from '@shared/custom-background-contract'
 import type { ProviderId } from '@shared/models'
-import { AppTopBar } from './components/shell/AppTopBar'
+import { AppTopBar, FocusModeExitControls } from './components/shell/AppTopBar'
 import { FallbackNotice, PlayerBar } from './components/player/PlayerBar'
 import { LibraryWorkspace } from './features/library'
 import { StageLyricsSynchronizer } from './features/lyrics'
 import { SearchPanel } from './features/search'
 import { useAuth } from './stores/auth'
-import { usePlayer } from './stores/player'
+import { gsap, motionDurations, motionEases, useGSAP, useReducedMotion } from './motion'
+import { usePlaybackProgress, usePlayer } from './stores/player'
 import { isDynamicBackgroundEffect, type DynamicBackgroundEffect } from './visual/backgrounds'
+import { parseBackgroundMode, type BackgroundMode } from './visual/background-mode'
 import type { LyricsOffset } from './visual/StageCanvas'
+import { isLyricsAnimationMode, type LyricsAnimationMode } from './visual/lyrics3d-mesh/animation'
 
 const SettingsPanel = lazy(() => import('./features/settings/SettingsPanel'))
 const StageCanvas = lazy(() =>
@@ -21,7 +24,8 @@ const LEGACY_VISUAL_PRESET_KEY = 'fluxplayer-visual-preset-v1'
 const LEGACY_UI_MOTION_KEY = 'flux-ui-motion'
 const LYRICS_DRAG_KEY = 'flux-lyrics-drag-enabled'
 const LYRICS_OFFSET_KEY = 'flux-lyrics-offset'
-type BackgroundMode = 'dynamic' | 'wallpaper'
+const LYRICS_ANIMATION_KEY = 'flux-lyrics-animation-mode-v1'
+const BACKGROUND_MODE_KEY = 'fluxplayer-background-mode-v1'
 
 function initialLyricsDragEnabled(): boolean {
   try {
@@ -50,6 +54,23 @@ function initialDynamicBackground(): DynamicBackgroundEffect {
     return isDynamicBackgroundEffect(raw) ? raw : 'light-rays'
   } catch {
     return 'light-rays'
+  }
+}
+
+function initialLyricsAnimationMode(): LyricsAnimationMode {
+  try {
+    const raw = localStorage.getItem(LYRICS_ANIMATION_KEY)
+    return isLyricsAnimationMode(raw) ? raw : 'compact'
+  } catch {
+    return 'compact'
+  }
+}
+
+function initialBackgroundMode(): BackgroundMode | null {
+  try {
+    return parseBackgroundMode(localStorage.getItem(BACKGROUND_MODE_KEY))
+  } catch {
+    return null
   }
 }
 
@@ -108,27 +129,122 @@ function useGlobalHotkeys(): void {
   }, [])
 }
 
+function isPlaybackShortcutTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return Boolean(
+    target.closest(
+      'input, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"], [role="option"], [role="slider"], [data-scroll-region]',
+    ),
+  )
+}
+
+function usePlaybackKeyboardShortcuts(focusMode: boolean, exitFocusMode: () => void): void {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && focusMode) {
+        event.preventDefault()
+        exitFocusMode()
+        return
+      }
+      if (
+        event.defaultPrevented ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        isPlaybackShortcutTarget(event.target)
+      ) {
+        return
+      }
+
+      const player = usePlayer.getState()
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        if (event.repeat || player.queue.length === 0) return
+        event.preventDefault()
+        if (event.key === 'ArrowUp') void player.prev()
+        else void player.next()
+        return
+      }
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      const { position, duration } = usePlaybackProgress.getState()
+      if (!player.current || duration <= 0) return
+      event.preventDefault()
+      const nextPosition = position + (event.key === 'ArrowLeft' ? -5 : 5)
+      player.seek(Math.max(0, Math.min(duration, nextPosition)) / duration)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [exitFocusMode, focusMode])
+}
+
 export default function App(): React.JSX.Element {
   const [provider, setProvider] = useState<ProviderId>('netease')
   const [dynamicBackground, setDynamicBackground] =
     useState<DynamicBackgroundEffect>(initialDynamicBackground)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsMounted, setSettingsMounted] = useState(false)
+  const [focusMode, setFocusMode] = useState(false)
   const [lyricsDragEnabled, setLyricsDragEnabled] = useState(initialLyricsDragEnabled)
+  const [lyricsAnimationMode, setLyricsAnimationMode] =
+    useState<LyricsAnimationMode>(initialLyricsAnimationMode)
   const [lyricsOffset, setLyricsOffset] = useState<LyricsOffset>(initialLyricsOffset)
   const [customBackground, setCustomBackground] = useState<CustomBackground | null>(null)
+  const [backgroundMode, setBackgroundMode] = useState<BackgroundMode | null>(initialBackgroundMode)
   const [backgroundMediaFailed, setBackgroundMediaFailed] = useState(false)
   const [backgroundBusy, setBackgroundBusy] = useState(false)
   const [backgroundError, setBackgroundError] = useState('')
   const [wallpaperProjects, setWallpaperProjects] = useState<WallpaperEngineProject[]>([])
+  const appRef = useRef<HTMLDivElement>(null)
+  const reducedMotion = useReducedMotion()
 
   useAuthLifecycle()
   useGlobalHotkeys()
 
+  const exitFocusMode = useCallback(() => {
+    setFocusMode(false)
+    const desktop = window.fluxDesktop
+    if (!desktop) return
+    void desktop
+      .getWindowState()
+      .then((state) => (state.isFullScreen ? desktop.exitFullscreenWindowed() : undefined))
+  }, [])
+
+  const enterFocusMode = useCallback(() => {
+    setSettingsOpen(false)
+    const desktop = window.fluxDesktop
+    if (!desktop) {
+      setFocusMode(true)
+      return
+    }
+    void desktop
+      .getWindowState()
+      .then(async (state) => {
+        if (!state.isFullScreen) await desktop.toggleFullscreen()
+        setFocusMode(true)
+      })
+      .catch(() => setFocusMode(false))
+  }, [])
+
+  usePlaybackKeyboardShortcuts(focusMode, exitFocusMode)
+
   useEffect(() => {
     const desktop = window.fluxDesktop
     if (!desktop) return
-    void desktop.getCustomBackground().then(setCustomBackground)
-    return desktop.onCustomBackgroundChanged(setCustomBackground)
+    return desktop.onWindowState((state) => {
+      if (!state.isFullScreen) setFocusMode(false)
+    })
+  }, [])
+
+  useEffect(() => {
+    const desktop = window.fluxDesktop
+    if (!desktop) return
+    const applyCustomBackground = (background: CustomBackground | null): void => {
+      setCustomBackground(background)
+      setBackgroundMode((mode) => (background ? (mode ?? 'wallpaper') : 'dynamic'))
+    }
+    void desktop.getCustomBackground().then(applyCustomBackground)
+    return desktop.onCustomBackgroundChanged(applyCustomBackground)
   }, [])
 
   useEffect(() => setBackgroundMediaFailed(false), [customBackground?.url])
@@ -142,6 +258,23 @@ export default function App(): React.JSX.Element {
       // Keep the selected background for this session when persistence is unavailable.
     }
   }, [dynamicBackground])
+
+  useEffect(() => {
+    if (!backgroundMode) return
+    try {
+      localStorage.setItem(BACKGROUND_MODE_KEY, backgroundMode)
+    } catch {
+      // Keep the selected replacement source for this session when persistence is unavailable.
+    }
+  }, [backgroundMode])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LYRICS_ANIMATION_KEY, lyricsAnimationMode)
+    } catch {
+      // Keep the selected lyric motion for this session when persistence is unavailable.
+    }
+  }, [lyricsAnimationMode])
 
   useEffect(() => {
     try {
@@ -170,6 +303,7 @@ export default function App(): React.JSX.Element {
         if (!result || result.canceled) return
         if (!result.ok) throw new Error(result.error || '背景导入失败')
         setCustomBackground(result.background)
+        setBackgroundMode(result.background ? 'wallpaper' : 'dynamic')
         setBackgroundMediaFailed(false)
         setWallpaperProjects([])
       } catch (error) {
@@ -200,12 +334,51 @@ export default function App(): React.JSX.Element {
     }
   }, [])
 
-  const backgroundMode: BackgroundMode = customBackground && !backgroundMediaFailed ? 'wallpaper' : 'dynamic'
+  const effectiveBackgroundMode: BackgroundMode =
+    backgroundMode === 'wallpaper' && customBackground && !backgroundMediaFailed ? 'wallpaper' : 'dynamic'
+
+  useGSAP(
+    () => {
+      const topbar = appRef.current?.querySelector<HTMLElement>('[data-app-chrome="topbar"]')
+      const content = appRef.current?.querySelector<HTMLElement>('[data-app-chrome="content"]')
+      const targets = [topbar, content].filter((target): target is HTMLElement => Boolean(target))
+      if (reducedMotion) {
+        gsap.set(targets, {
+          autoAlpha: focusMode ? 0 : 1,
+          y: 0,
+          pointerEvents: focusMode ? 'none' : 'auto',
+        })
+        return
+      }
+
+      gsap.to(targets, {
+        autoAlpha: focusMode ? 0 : 1,
+        y: (index) => (focusMode ? (index === 0 ? -10 : 10) : 0),
+        pointerEvents: focusMode ? 'none' : 'auto',
+        duration: motionDurations.emphasized,
+        ease: focusMode ? motionEases.exit : motionEases.enter,
+        stagger: 0.02,
+        overwrite: 'auto',
+      })
+      return () => gsap.killTweensOf(targets)
+    },
+    {
+      scope: appRef,
+      dependencies: [focusMode, reducedMotion],
+      revertOnUpdate: true,
+    },
+  )
 
   return (
-    <div className="app" data-background-mode={backgroundMode}>
-      {backgroundMode === 'wallpaper' && customBackground ? (
-        <div className="custom-background-layer" aria-hidden="true">
+    <div
+      ref={appRef}
+      className="app group/app relative flex h-full flex-col overflow-hidden bg-[var(--flux-bg)]"
+      data-app-root=""
+      data-background-mode={effectiveBackgroundMode}
+      data-focus-mode={focusMode || undefined}
+    >
+      {effectiveBackgroundMode === 'wallpaper' && customBackground ? (
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
           {customBackground.kind === 'video' ? (
             <video
               key={customBackground.url}
@@ -214,8 +387,10 @@ export default function App(): React.JSX.Element {
               loop
               autoPlay
               playsInline
+              className="size-full object-cover"
               onError={() => {
                 setBackgroundMediaFailed(true)
+                setBackgroundMode('dynamic')
                 setBackgroundError('背景视频加载失败，已恢复动态背景。')
               }}
             />
@@ -224,8 +399,10 @@ export default function App(): React.JSX.Element {
               key={customBackground.url}
               src={customBackground.url}
               alt=""
+              className="size-full object-cover"
               onError={() => {
                 setBackgroundMediaFailed(true)
+                setBackgroundMode('dynamic')
                 setBackgroundError('背景图片加载失败，已恢复动态背景。')
               }}
             />
@@ -234,22 +411,42 @@ export default function App(): React.JSX.Element {
       ) : null}
       <Suspense fallback={null}>
         <StageCanvas
-          className="stage-bg"
+          className="pointer-events-auto absolute inset-0 z-[1]"
           backgroundEffect={dynamicBackground}
-          backgroundEnabled={backgroundMode === 'dynamic'}
+          backgroundEnabled={effectiveBackgroundMode === 'dynamic'}
           lyricsDragEnabled={lyricsDragEnabled}
+          lyricsAnimationMode={lyricsAnimationMode}
           lyricsOffset={lyricsOffset}
           onLyricsOffsetChange={setLyricsOffset}
         />
       </Suspense>
-      <AppTopBar settingsOpen={settingsOpen} onToggleSettings={() => setSettingsOpen((open) => !open)} />
-      {settingsOpen ? (
+      <AppTopBar
+        settingsOpen={settingsOpen}
+        onToggleSettings={() => {
+          setSettingsMounted(true)
+          setSettingsOpen((open) => !open)
+        }}
+        onEnterFocusMode={enterFocusMode}
+      />
+      {focusMode ? <FocusModeExitControls onExit={exitFocusMode} /> : null}
+      {settingsMounted ? (
         <Suspense fallback={null}>
           <SettingsPanel
-            open
+            open={settingsOpen}
             onClose={() => setSettingsOpen(false)}
             dynamicBackground={dynamicBackground}
-            onDynamicBackgroundChange={setDynamicBackground}
+            onDynamicBackgroundChange={(effect) => {
+              setDynamicBackground(effect)
+              setBackgroundMode('dynamic')
+            }}
+            backgroundMode={effectiveBackgroundMode}
+            onBackgroundModeChange={(mode) => {
+              if (mode === 'wallpaper') {
+                setBackgroundMediaFailed(false)
+                setBackgroundError('')
+              }
+              setBackgroundMode(mode)
+            }}
             customBackground={customBackground}
             backgroundBusy={backgroundBusy}
             backgroundError={backgroundError}
@@ -268,6 +465,8 @@ export default function App(): React.JSX.Element {
               void runBackgroundCommand(() => window.fluxDesktop?.importWallpaperEngineProject(projectId))
             }
             lyricsDragEnabled={lyricsDragEnabled}
+            lyricsAnimationMode={lyricsAnimationMode}
+            onLyricsAnimationModeChange={setLyricsAnimationMode}
             onLyricsDragEnabledChange={setLyricsDragEnabled}
             onResetLyricsPosition={() => setLyricsOffset({ x: 0, y: 0 })}
           />
@@ -275,7 +474,10 @@ export default function App(): React.JSX.Element {
       ) : null}
       <StageLyricsSynchronizer />
       <LibraryWorkspace provider={provider} onProviderChange={setProvider} />
-      <div className="content">
+      <div
+        data-app-chrome="content"
+        className="content relative z-[71] mx-auto flex min-h-0 w-full max-w-[min(1180px,calc(100vw-24px))] flex-1 flex-col gap-3.5 px-[22px] pt-1 pb-[18px]"
+      >
         <SearchPanel provider={provider} onProviderChange={setProvider} />
         <PlayerBar />
         <FallbackNotice />

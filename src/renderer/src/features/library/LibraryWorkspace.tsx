@@ -21,6 +21,12 @@ import {
 import { fetchLikedTracks } from './api'
 import { libraryQueryKeys } from './queries'
 import { readRecentPlays, recordRecentPlay, subscribeRecentPlays } from './recent'
+import {
+  libraryRowVariants,
+  libraryShortcutVariants,
+  libraryStatusVariants,
+  providerTabVariants,
+} from './variants'
 
 interface PlaylistDetail {
   readonly provider: ProviderId
@@ -70,34 +76,47 @@ function PlaylistDetailPanel({
   const setQueue = usePlayer((state) => state.setQueue)
 
   return (
-    <aside className="shelf-detail-panel glass-surface" aria-label={`${detail.playlist.name}歌曲`}>
-      <header>
+    <aside
+      className="flex h-full min-h-0 w-full flex-col p-3.5 text-[var(--flux-text)]"
+      aria-label={`${detail.playlist.name}歌曲`}
+      data-library-detail-panel=""
+    >
+      <header className="mb-2.5 grid grid-cols-[48px_minmax(0,1fr)] items-center gap-2.5">
         <PlaylistCoverImage
           key={`${detail.playlist.id}:${detail.playlist.cover}:${detail.tracks[0]?.cover ?? ''}`}
           candidates={[detail.playlist.cover || '', detail.tracks.find((track) => track.cover)?.cover || '']}
+          className="size-12 rounded-[var(--flux-radius-control)] bg-[color-mix(in_srgb,var(--flux-panel-border)_7%,transparent)] object-cover"
         />
-        <span>
-          <strong>{detail.playlist.name}</strong>
-          <small>
+        <span className="min-w-0">
+          <strong className="block truncate">{detail.playlist.name}</strong>
+          <small className="mt-[3px] block truncate text-[11px] text-[var(--flux-text-muted)]">
             {detail.playlist.creator ? `${detail.playlist.creator} · ` : ''}
             {detail.playlist.trackCount || detail.tracks.length} 首
           </small>
         </span>
       </header>
-      {detail.status === 'loading' ? <div className="shelf-detail-status">正在加载歌曲…</div> : null}
+      {detail.status === 'loading' ? (
+        <div className={libraryStatusVariants()} data-library-detail-status="loading">
+          正在加载歌曲…
+        </div>
+      ) : null}
       {detail.status === 'error' ? (
-        <div className="shelf-detail-status error">{detail.error || '歌单加载失败'}</div>
+        <div className={libraryStatusVariants({ tone: 'danger' })} data-library-detail-status="error">
+          {detail.error || '歌单加载失败'}
+        </div>
       ) : null}
       {detail.status === 'success' && detail.tracks.length === 0 ? (
-        <div className="shelf-detail-status">歌单暂无歌曲</div>
+        <div className={libraryStatusVariants()} data-library-detail-status="empty">
+          歌单暂无歌曲
+        </div>
       ) : null}
       {detail.tracks.length > 0 ? (
         <AnimatedList
           items={detail.tracks}
           getKey={(song, index) => `${detail.provider}:${song.id}:${index}`}
           ariaLabel={`${detail.playlist.name}歌曲列表`}
-          className="shelf-detail-list"
-          itemClassName="shelf-detail-row"
+          className="min-h-0 flex-1 overflow-hidden"
+          itemClassName={libraryRowVariants({ layout: 'detail' })}
           virtualization={{ rowHeight: DETAIL_ROW_HEIGHT, overscan: 3 }}
           getItemAriaLabel={(song) => `播放 ${song.name}，${song.artist || '未知歌手'}`}
           onItemSelect={(_song, index) => {
@@ -106,10 +125,21 @@ function PlaylistDetailPanel({
           }}
           renderItem={(song) => (
             <>
-              {song.cover ? <img src={coverProxyUrl(song.cover)} alt="" loading="lazy" /> : <span />}
-              <span>
-                <strong>{song.name}</strong>
-                <small>{song.artist || '未知歌手'}</small>
+              {song.cover ? (
+                <img
+                  className="size-10 rounded-[var(--flux-radius-control)] bg-[color-mix(in_srgb,var(--flux-panel-border)_7%,transparent)] object-cover"
+                  src={coverProxyUrl(song.cover)}
+                  alt=""
+                  loading="lazy"
+                />
+              ) : (
+                <span className="size-10 rounded-[var(--flux-radius-control)] bg-[color-mix(in_srgb,var(--flux-panel-border)_7%,transparent)]" />
+              )}
+              <span className="min-w-0">
+                <strong className="block truncate">{song.name}</strong>
+                <small className="mt-[3px] block truncate text-[11px] text-[var(--flux-text-muted)]">
+                  {song.artist || '未知歌手'}
+                </small>
               </span>
             </>
           )}
@@ -367,46 +397,71 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
             onTrackSelect={closeListsForPlayback}
           />
         ) : (
-          <div className="shelf-detail-status">请先从音乐库选择歌单</div>
+          <div className={libraryStatusVariants()} data-library-detail-status="unavailable">
+            请先从音乐库选择歌单
+          </div>
         )}
       </PlaylistDetailSheet>
       <LibrarySheet open={libraryOpen} onOpenChange={setLibraryOpen}>
-        <aside className="library-drawer" aria-label="用户音乐库">
-          <div className="library-provider-tabs" role="tablist" aria-label="音乐平台">
+        <aside
+          className="flex h-full min-h-0 w-full flex-col p-3.5 text-[var(--flux-text)]"
+          aria-label="用户音乐库"
+          data-library-panel=""
+        >
+          <div className="mb-3 flex items-center gap-1.5" role="tablist" aria-label="音乐平台">
             {(['netease', 'qq'] as const).map((item) => (
               <button
                 key={item}
                 role="tab"
                 aria-selected={provider === item}
-                className={provider === item ? 'active' : ''}
+                className={providerTabVariants({ active: provider === item })}
+                data-library-provider={item}
                 onClick={() => onProviderChange(item)}
               >
                 {item === 'netease' ? '网易云' : 'QQ 音乐'}
               </button>
             ))}
           </div>
-          <AccountArea provider={provider} />
-          <div className="library-shortcuts" aria-label="快捷歌单">
-            <button type="button" disabled={!loggedIn} onClick={openLikedTracks}>
-              <strong>我的喜欢</strong>
-              <small>{loggedIn ? '平台收藏' : '登录后查看'}</small>
+          <AccountArea
+            provider={provider}
+            className="mr-0 mb-3 min-h-[34px] [&_[data-account-nickname]]:max-w-[135px]"
+          />
+          <div className="mb-3 grid grid-cols-2 gap-2" aria-label="快捷歌单" data-library-shortcuts="">
+            <button
+              className={libraryShortcutVariants()}
+              type="button"
+              disabled={!loggedIn}
+              onClick={openLikedTracks}
+            >
+              <strong className="block">我的喜欢</strong>
+              <small className="mt-1 block text-[10px] text-[var(--flux-text-muted)]">
+                {loggedIn ? '平台收藏' : '登录后查看'}
+              </small>
             </button>
             <button
+              className={libraryShortcutVariants()}
               type="button"
               disabled={recentTracks.length === 0}
               onClick={() => openTracks('最近播放', recentTracks, 'FluxPlayer 记录')}
             >
-              <strong>最近播放</strong>
-              <small>{recentTracks.length ? `${recentTracks.length} 首` : '暂无记录'}</small>
+              <strong className="block">最近播放</strong>
+              <small className="mt-1 block text-[10px] text-[var(--flux-text-muted)]">
+                {recentTracks.length ? `${recentTracks.length} 首` : '暂无记录'}
+              </small>
             </button>
           </div>
-          {playlistsQuery.isFetching ? <div className="library-shelf-sync">正在同步歌单…</div> : null}
+          {playlistsQuery.isFetching ? (
+            <div className="px-2.5 py-1.5 text-[11px] text-[var(--flux-text-muted)]" data-library-sync="">
+              正在同步歌单…
+            </div>
+          ) : null}
           <AnimatedList
             items={playlists}
             getKey={(playlist) => String(playlist.id)}
             selectedKey={visibleDetail ? String(visibleDetail.playlist.id) : null}
             ariaLabel="歌单列表"
-            className="library-playlist-list"
+            className="min-h-0 flex-1 overflow-hidden"
+            itemClassName={libraryRowVariants({ layout: 'playlist' })}
             getItemAriaLabel={(playlist) => `${playlist.name}，${playlist.trackCount} 首`}
             onItemIntent={prefetchPlaylist}
             onItemSelect={openPlaylist}
@@ -415,10 +470,13 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
                 <PlaylistCoverImage
                   key={`${playlist.id}:${playlist.cover}:${(coverFallbacks[String(playlist.id)] ?? []).join('|')}`}
                   candidates={[playlist.cover || '', ...(coverFallbacks[String(playlist.id)] ?? [])]}
+                  className="size-[42px] rounded-[var(--flux-radius-control)] bg-[var(--flux-accent-soft)] object-cover"
                 />
-                <span>
-                  <strong>{playlist.name}</strong>
-                  <small>{playlist.trackCount} 首</small>
+                <span className="min-w-0">
+                  <strong className="block truncate">{playlist.name}</strong>
+                  <small className="mt-[3px] block truncate text-[11px] text-[var(--flux-text-muted)]">
+                    {playlist.trackCount} 首
+                  </small>
                 </span>
               </>
             )}

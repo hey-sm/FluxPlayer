@@ -14,5 +14,10 @@
   "album": "叶惠美",
   "cover": "https://p1.music.126.net/ZGffiDQZrGj5s_hnR1CNbg==/109951165566379710.jpg",
   "duration": 269000,
-  "fee": 0
+  "fee": 0,
+  "supportedQualities": [
+    "lossless",
+    "exhigh",
+    "standard"
+  ]
 }

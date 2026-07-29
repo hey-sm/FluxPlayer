@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { ProviderId } from '@shared/models'
 import { coverProxyUrl, musicErrorMessage } from '../../api'
-import { Input } from '../../components/ui/input'
-import { AnimatedContent } from '../../components/react-bits/AnimatedContent'
+import { glassSurfaceVariants } from '../../components/glass'
 import { useClassicControlGlass } from '../../components/glass/classic-control'
+import { AnimatedContent } from '../../components/react-bits/AnimatedContent'
+import { Input } from '../../components/ui/input'
+import { cn } from '../../lib/utils'
+import { Flip, gsap, motionDurations, motionEases, useGSAP, useReducedMotion } from '../../motion'
 import { usePlayer } from '../../stores/player'
 import {
   CLASSIC_GLASS_FILTER_ID,
@@ -48,8 +51,13 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
   const inputRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
   const sensorRef = useRef<HTMLDivElement>(null)
+  const popoverRef = useRef<HTMLElement>(null)
+  const resultsRef = useRef<HTMLDivElement>(null)
+  const providerTabsRef = useRef<HTMLDivElement>(null)
+  const providerFlipStateRef = useRef<ReturnType<typeof Flip.getState> | null>(null)
   const closeScheduler = useMemo(() => createSearchDismissScheduler(), [])
   const previousKeywordEmpty = useRef(true)
+  const reducedMotion = useReducedMotion()
   const searchGlassRef = useClassicControlGlass(
     classicTheme,
     'flux-classic-search-glass-filter',
@@ -67,6 +75,8 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
   })
   const activeSearch = provider === 'qq' ? qqSearch : neteaseSearch
   const songs = useMemo(() => activeSearch.data?.songs ?? [], [activeSearch.data?.songs])
+  const resultAnimationKey = songs.map((song) => `${song.provider}:${song.id}`).join('|')
+  const providerOrderKey = providerOrder.join('|')
 
   useEffect(() => {
     const hasKeyword = Boolean(keyword.trim())
@@ -123,8 +133,90 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
     }
   }, [closeScheduler, dismissSearch])
 
+  useGSAP(
+    () => {
+      const popover = popoverRef.current
+      if (!searchOpen || !popover) return
+      gsap.killTweensOf(popover)
+      if (reducedMotion) {
+        gsap.set(popover, { autoAlpha: 1, y: 0, scale: 1 })
+        return
+      }
+      gsap.fromTo(
+        popover,
+        { autoAlpha: 0, y: -8, scale: 0.985, transformOrigin: '50% 0%' },
+        {
+          autoAlpha: 1,
+          y: 0,
+          scale: 1,
+          duration: motionDurations.emphasized,
+          ease: motionEases.enter,
+          overwrite: 'auto',
+        },
+      )
+      return () => gsap.killTweensOf(popover)
+    },
+    {
+      scope: searchRef,
+      dependencies: [reducedMotion, searchOpen],
+      revertOnUpdate: true,
+    },
+  )
+
+  useGSAP(
+    () => {
+      if (!searchOpen || !resultsRef.current) return
+      const rows = resultsRef.current.querySelectorAll<HTMLElement>('[data-search-result]')
+      if (!rows.length) return
+      gsap.killTweensOf(rows)
+      if (reducedMotion) {
+        gsap.set(rows, { autoAlpha: 1, y: 0 })
+        return
+      }
+      gsap.fromTo(
+        rows,
+        { autoAlpha: 0, y: 8 },
+        {
+          autoAlpha: 1,
+          y: 0,
+          duration: motionDurations.base,
+          ease: motionEases.standard,
+          stagger: 0.025,
+          overwrite: 'auto',
+        },
+      )
+      return () => gsap.killTweensOf(rows)
+    },
+    {
+      scope: resultsRef,
+      dependencies: [provider, reducedMotion, resultAnimationKey, searchOpen],
+      revertOnUpdate: true,
+    },
+  )
+
+  useGSAP(
+    () => {
+      const state = providerFlipStateRef.current
+      providerFlipStateRef.current = null
+      if (!state || reducedMotion) return
+      const animation = Flip.from(state, {
+        duration: motionDurations.emphasized,
+        ease: motionEases.standard,
+        absolute: true,
+        nested: true,
+      })
+      return () => animation.kill()
+    },
+    {
+      scope: providerTabsRef,
+      dependencies: [providerOrderKey, reducedMotion],
+    },
+  )
+
   const dropProvider = (target: ProviderId): void => {
     if (!draggedProvider || draggedProvider === target) return
+    const tabs = providerTabsRef.current?.querySelectorAll<HTMLElement>('[data-search-provider]')
+    providerFlipStateRef.current = tabs?.length ? Flip.getState(tabs) : null
     setProviderOrder([target, draggedProvider])
     setDraggedProvider(null)
   }
@@ -133,14 +225,20 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
     <>
       <div
         ref={sensorRef}
-        className="search-hover-sensor"
+        data-search-sensor=""
+        className="pointer-events-auto fixed top-0 left-1/2 z-[82] h-8 w-[min(620px,calc(100vw-180px))] -translate-x-1/2 [-webkit-app-region:no-drag]"
         aria-hidden="true"
         onPointerEnter={revealSearch}
         onPointerLeave={scheduleSearchDismiss}
       />
       <div
-        className={`search-shell${searchVisible ? ' is-visible' : ''}`}
         ref={searchRef}
+        data-search-shell=""
+        data-visible={searchVisible || undefined}
+        className={cn(
+          'pointer-events-auto fixed top-0 left-1/2 h-[26px] w-[min(620px,calc(100vw-180px))] -translate-x-1/2 pt-[15px] [-webkit-app-region:no-drag]',
+          searchVisible ? 'z-[83]' : 'z-[81]',
+        )}
         onPointerEnter={revealSearch}
         onPointerLeave={scheduleSearchDismiss}
         onFocusCapture={revealSearch}
@@ -153,9 +251,20 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
           direction="vertical"
           reverse
           distance={44}
-          className="search-animated-content"
+          enterDuration={motionDurations.emphasized}
+          exitDuration={motionDurations.base}
+          enterEase={motionEases.enter}
+          exitEase={motionEases.exit}
+          data-search-motion=""
+          className="relative w-full pt-2"
         >
-          <div ref={searchGlassRef} className={`searchbar${classicTheme ? ' classic-search-glass' : ''}`}>
+          <div
+            ref={searchGlassRef}
+            className={cn(
+              'searchbar relative flex items-center rounded-full',
+              classicTheme && 'classic-search-glass',
+            )}
+          >
             {classicTheme ? (
               <svg className="control-glass-filter-svg" aria-hidden="true" focusable="false">
                 <defs
@@ -171,6 +280,13 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
             <Input
               ref={inputRef}
               value={keyword}
+              className={cn(
+                'h-[52px] min-h-[52px] flex-1 rounded-full border-[var(--flux-glass-border)] bg-[color-mix(in_srgb,var(--flux-glass-background)_88%,transparent)] px-[18px] text-sm text-[var(--flux-text)]',
+                '[box-shadow:var(--flux-shadow-control)] backdrop-blur-[var(--flux-glass-blur)] backdrop-saturate-[var(--flux-glass-saturation)]',
+                'transition-[border-color,background-color,box-shadow] duration-[var(--motion-duration-base)] placeholder:text-[var(--flux-text-muted)]',
+                'focus-visible:border-[color-mix(in_srgb,var(--flux-accent)_52%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--flux-glass-background)_96%,transparent)] focus-visible:ring-0',
+                'focus-visible:[box-shadow:var(--flux-shadow-focus)] motion-reduce:transition-none',
+              )}
               placeholder="搜索歌曲 / 歌手"
               onFocus={revealSearch}
               onChange={(event) => {
@@ -185,19 +301,41 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
           </div>
           {searchOpen && keyword.trim() ? (
             <section
+              ref={popoverRef}
               id="search-results-popover"
-              className="search-popover glass-surface"
+              data-search-popover=""
+              className={cn(
+                glassSurfaceVariants({
+                  treatment: classicTheme ? 'classicPanel' : 'theme',
+                  elevation: 'raised',
+                }),
+                'absolute top-[69px] left-0 z-[2] max-h-[min(570px,calc(100vh-210px))] w-full overflow-hidden rounded-[18px]',
+                '[box-shadow:var(--flux-shadow-panel)]',
+              )}
               aria-label="搜索结果"
             >
-              <div className="search-provider-tabs" role="tablist" aria-label="搜索渠道">
+              <div
+                ref={providerTabsRef}
+                data-search-provider-tabs=""
+                className="flex min-h-[46px] items-center gap-[5px] border-b border-[var(--flux-panel-border)] px-[9px] py-[7px]"
+                role="tablist"
+                aria-label="搜索渠道"
+              >
                 {providerOrder.map((item) => (
                   <button
                     key={item}
                     type="button"
                     role="tab"
                     draggable
+                    data-search-provider={item}
                     aria-selected={provider === item}
-                    className={provider === item ? 'active' : ''}
+                    className={cn(
+                      'h-8 cursor-pointer rounded-full border border-transparent bg-transparent px-[13px] text-xs text-[var(--flux-text-muted)] transition-[color,background-color,border-color,opacity] duration-[var(--motion-duration-fast)] motion-reduce:transition-none',
+                      'hover:text-[var(--flux-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--flux-accent)]',
+                      provider === item &&
+                        'border-[color-mix(in_srgb,var(--flux-accent)_32%,transparent)] bg-[var(--flux-accent-soft)] text-[var(--flux-text)]',
+                      draggedProvider === item && 'opacity-60',
+                    )}
                     onDragStart={() => setDraggedProvider(item)}
                     onDragEnd={() => setDraggedProvider(null)}
                     onDragOver={(event) => event.preventDefault()}
@@ -205,18 +343,29 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
                     onClick={() => onProviderChange(item)}
                   >
                     {item === 'netease' ? '网易云' : 'QQ 音乐'}
-                    <small>
+                    <small className="ml-[7px] text-[10px] text-[var(--flux-text-muted)]">
                       {item === 'netease'
                         ? (neteaseSearch.data?.songs.length ?? 0)
                         : (qqSearch.data?.songs.length ?? 0)}
                     </small>
                   </button>
                 ))}
-                <span className="search-parallel-hint">双渠道并行</span>
+                <span className="ml-auto pr-[7px] text-[10px] tracking-[0.08em] text-[var(--flux-text-muted)]">
+                  双渠道并行
+                </span>
               </div>
-              <div className="results search-results" data-scroll-region>
+              <div
+                ref={resultsRef}
+                data-search-results=""
+                data-scroll-region
+                className={cn(
+                  'max-h-[min(510px,calc(100vh-266px))] min-h-0 w-full overflow-y-auto border-0 bg-transparent',
+                  '[scrollbar-color:color-mix(in_srgb,var(--flux-panel-border)_18%,transparent)_transparent] [scrollbar-width:thin]',
+                  '[&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--flux-panel-border)_18%,transparent)]',
+                )}
+              >
                 {songs.length === 0 ? (
-                  <div className="empty">
+                  <div className="px-0 py-[42px] text-center text-[13px] text-[var(--flux-text-muted)]">
                     {activeSearch.isFetching
                       ? '搜索中…'
                       : activeSearch.error instanceof Error
@@ -233,7 +382,13 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
                       <button
                         type="button"
                         key={`${key}-${index}`}
-                        className={`result-row${active ? ' active' : ''}`}
+                        data-search-result=""
+                        data-active={active || undefined}
+                        className={cn(
+                          'flex min-h-[62px] w-full cursor-pointer items-center gap-3 border-0 border-b border-[color-mix(in_srgb,var(--flux-panel-border)_55%,transparent)] bg-transparent px-3.5 py-2.5 text-left text-[var(--flux-text)]',
+                          'hover:bg-[var(--flux-accent-soft)] focus-visible:bg-[var(--flux-accent-soft)] focus-visible:outline-none',
+                          active && 'bg-[var(--flux-accent-soft)]',
+                        )}
                         onClick={() => {
                           dismissSearch()
                           setKeyword('')
@@ -241,18 +396,25 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
                         }}
                       >
                         {song.cover ? (
-                          <img src={coverProxyUrl(song.cover)} alt="" loading="lazy" />
+                          <img
+                            className="size-[42px] shrink-0 rounded-[10px] bg-[color-mix(in_srgb,var(--flux-panel-border)_9%,transparent)] object-cover"
+                            src={coverProxyUrl(song.cover)}
+                            alt=""
+                            loading="lazy"
+                          />
                         ) : (
-                          <span className="result-cover-placeholder" />
+                          <span className="size-[42px] shrink-0 rounded-[10px] bg-[color-mix(in_srgb,var(--flux-panel-border)_9%,transparent)]" />
                         )}
-                        <span className="meta">
-                          <strong className="name">{song.name}</strong>
-                          <small className="artist">
+                        <span className="min-w-0 flex-1">
+                          <strong className="block truncate text-sm">{song.name}</strong>
+                          <small className="mt-1 block truncate text-xs text-[var(--flux-text-muted)]">
                             {song.artist}
                             {song.album ? ` · ${song.album}` : ''}
                           </small>
                         </span>
-                        <span className="tag">{song.provider === 'qq' ? 'QQ' : '网易云'}</span>
+                        <span className="text-[11px] text-[var(--flux-text-muted)]">
+                          {song.provider === 'qq' ? 'QQ' : '网易云'}
+                        </span>
                       </button>
                     )
                   })

@@ -22,5 +22,10 @@
   "cover": "https://y.qq.com/music/photo_new/T002R300x300M000003RMaRI1iFoYd.jpg?max_age=2592000",
   "duration": 215000,
   "fee": 1,
-  "playable": false
+  "playable": false,
+  "supportedQualities": [
+    "lossless",
+    "exhigh",
+    "standard"
+  ]
 }

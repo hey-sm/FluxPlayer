@@ -18,8 +18,39 @@
   --flux-glass-chromatic-aberration: 0;
   --flux-glass-radius: 14px;
 
+  --flux-radius-control: 9px;
+  --flux-radius-panel: 14px;
+  --flux-radius-shell: 22px;
+  --flux-edge-sheet-radius: 15px;
+  --flux-topbar-height: 48px;
+
+  --flux-shadow-control: 0 20px 64px rgba(0, 0, 0, 0.25);
+  --flux-shadow-focus: 0 16px 46px rgba(0, 0, 0, 0.28), 0 0 0 3px var(--flux-accent-soft);
+  --flux-shadow-panel: 0 28px 82px rgba(0, 0, 0, 0.5);
+  --flux-shadow-float: 0 12px 36px rgba(0, 0, 0, 0.28);
+  --flux-shadow-raised:
+    inset 0 1px 0 color-mix(in srgb, var(--flux-panel-border) 7%, transparent),
+    0 18px 48px rgba(0, 0, 0, 0.24);
+
   --flux-font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
   --flux-font-scale: 1;
+
+  --motion-duration-fast: 140ms;
+  --motion-duration-base: 180ms;
+  --motion-duration-emphasized: 280ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Compact SVG glass controls; never apply these displacement-era values to scrolling panels. */
+  --saved-panel-glass-bg: rgba(0, 0, 0, 0.1);
+  --saved-panel-glass-filter: blur(12px) saturate(1.8) brightness(1.16);
+  --saved-panel-glass-shadow:
+    inset 0 0 2px 1px rgba(255, 255, 255, 0.35), inset 0 0 10px 4px rgba(255, 255, 255, 0.15),
+    0 4px 16px rgba(17, 17, 26, 0.05), 0 8px 24px rgba(17, 17, 26, 0.05), 0 16px 56px rgba(17, 17, 26, 0.05),
+    inset 0 4px 16px rgba(17, 17, 26, 0.05), inset 0 8px 24px rgba(17, 17, 26, 0.05),
+    inset 0 16px 56px rgba(17, 17, 26, 0.05);
+  --saved-panel-glass-radius: 50px;
+  --flux-search-glass-radius: var(--flux-radius-shell);
+  --flux-search-glass-border: rgba(255, 255, 255, 0.34);
 
   /* Derived values are shared by native glass surfaces and ordinary controls. */
   --flux-accent-soft: color-mix(in srgb, var(--flux-accent) 18%, transparent);
@@ -34,15 +65,4 @@
     var(--flux-panel-border) calc(var(--flux-glass-border-opacity) * 100%),
     transparent
   );
-}
-
-/* Compatibility aliases while M3 incrementally replaces the original global styles. */
-:root {
-  --bg: var(--flux-bg);
-  --panel: var(--flux-glass-background);
-  --panel-border: var(--flux-glass-border);
-  --text: var(--flux-text);
-  --text-dim: var(--flux-text-muted);
-  --accent: var(--flux-accent);
-  --danger: var(--flux-danger);
 }

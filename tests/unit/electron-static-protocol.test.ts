@@ -94,7 +94,7 @@ describe('flux://app static protocol', () => {
       "frame-ancestors 'none'",
       "form-action 'none'",
       "script-src 'self' 'wasm-unsafe-eval'",
-      "connect-src 'self' flux:",
+      "connect-src 'self' flux: flux-font:",
     ]) {
       expect(directives.has(directive), directive).toBe(true)
     }

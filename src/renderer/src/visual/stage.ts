@@ -6,6 +6,8 @@ import {
   type DynamicBackgroundPointerInput,
 } from './backgrounds'
 import { Lyrics3DMeshLayer } from './lyrics3d-mesh'
+import type { LyricsAnimationMode } from './lyrics3d-mesh/animation'
+import { LYRICS_ZOOM_MAX_RADIUS, LYRICS_ZOOM_MIN_RADIUS } from './lyrics3d-mesh/config'
 import { ResourceRegistry } from './resources'
 import { stageLyricsChannel } from './scene'
 
@@ -88,6 +90,7 @@ export class VisualStage {
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
     const applyMotionPreference = (): void => {
       this.reducedMotion = motionQuery.matches
+      this.lyricsLayer.setReducedMotion(this.reducedMotion)
       if (this.reducedMotion) this.backgrounds.setPointer(0.5, 0.5, false)
     }
     applyMotionPreference()
@@ -177,6 +180,10 @@ export class VisualStage {
     this.lyricsDragEnabled = enabled
   }
 
+  setLyricsAnimationMode(mode: LyricsAnimationMode): void {
+    this.lyricsLayer.setAnimationMode(mode)
+  }
+
   setLyricsOffset(x: number, y: number): void {
     const bounds = this.lyricsOffsetBounds()
     this.lyricsLayer.setOffset(
@@ -206,7 +213,11 @@ export class VisualStage {
   }
 
   zoomLyrics(deltaY: number): void {
-    this.cameraTarget.radius = THREE.MathUtils.clamp(this.cameraTarget.radius + deltaY * 0.005, 3.2, 12)
+    this.cameraTarget.radius = THREE.MathUtils.clamp(
+      this.cameraTarget.radius + deltaY * 0.005,
+      LYRICS_ZOOM_MIN_RADIUS,
+      LYRICS_ZOOM_MAX_RADIUS,
+    )
   }
 
   getLyricsOffset(): Readonly<{ x: number; y: number }> {

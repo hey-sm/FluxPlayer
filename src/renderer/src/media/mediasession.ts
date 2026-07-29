@@ -20,6 +20,24 @@ export interface MediaSessionHooks {
 
 const supported = typeof navigator !== 'undefined' && 'mediaSession' in navigator
 
+/** MediaMetadata artwork only accepts standard web/data/blob URLs in Chromium. */
+export function mediaSessionArtworkUrl(value: unknown): string {
+  const source = typeof value === 'string' ? value.trim() : ''
+  if (!source) return ''
+  const normalized = source.startsWith('//') ? `https:${source}` : source
+  try {
+    const url = new URL(normalized)
+    return url.protocol === 'http:' ||
+      url.protocol === 'https:' ||
+      url.protocol === 'data:' ||
+      url.protocol === 'blob:'
+      ? url.href
+      : ''
+  } catch {
+    return ''
+  }
+}
+
 /** 注册系统媒体控件的动作处理器；返回解绑函数。幂等安全。 */
 export function bindMediaSession(hooks: MediaSessionHooks): () => void {
   if (!supported) return () => {}
@@ -56,16 +74,15 @@ export function updateMediaMetadata(song: UnifiedSong | null): void {
     return
   }
   try {
+    const artworkUrl = mediaSessionArtworkUrl(song.cover)
     navigator.mediaSession.metadata = new MediaMetadata({
       title: song.name,
       artist: song.artist,
       album: song.album || '',
-      artwork: song.cover
+      artwork: artworkUrl
         ? [
             {
-              src: song.cover.startsWith('flux-media://cover')
-                ? song.cover
-                : `flux-media://cover?url=${encodeURIComponent(song.cover)}`,
+              src: artworkUrl,
               sizes: '512x512',
               type: 'image/jpeg',
             },

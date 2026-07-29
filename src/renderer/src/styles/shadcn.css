@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@import 'tw-animate-css';
 
 @theme inline {
   --color-background: var(--background);
@@ -24,6 +23,13 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-control: var(--flux-radius-control);
+  --radius-panel: var(--flux-radius-panel);
+  --radius-shell: var(--flux-radius-shell);
+  --shadow-control: var(--flux-shadow-control);
+  --shadow-panel: var(--flux-shadow-panel);
+  --blur-glass: var(--flux-glass-blur);
+  --ease-standard: var(--motion-ease-standard);
 }
 
 :root {

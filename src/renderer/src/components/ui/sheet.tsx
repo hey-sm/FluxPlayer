@@ -2,51 +2,227 @@ import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-const Sheet = DialogPrimitive.Root
+import { gsap, motionDurations, motionEases, useGSAP, useReducedMotion } from '@/motion'
+import { buttonVariants } from './button-variants'
+
+interface SheetMotionContextValue {
+  open: boolean
+  present: boolean
+  completeExit(): void
+}
+
+const SheetMotionContext = React.createContext<SheetMotionContextValue | null>(null)
+
+type SheetProps = React.ComponentProps<typeof DialogPrimitive.Root>
+
+function Sheet({ open: controlledOpen, defaultOpen, onOpenChange, children, ...props }: SheetProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false)
+  const open = controlledOpen ?? uncontrolledOpen
+  const [present, setPresent] = React.useState(open)
+  const openRef = React.useRef(open)
+  const wasOpenRef = React.useRef(false)
+  const restoreFocusRef = React.useRef<HTMLElement | null>(null)
+  openRef.current = open
+
+  React.useLayoutEffect(() => {
+    if (open && !wasOpenRef.current) {
+      restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      setPresent(true)
+    }
+    wasOpenRef.current = open
+  }, [open])
+
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      if (controlledOpen === undefined) setUncontrolledOpen(nextOpen)
+      onOpenChange?.(nextOpen)
+    },
+    [controlledOpen, onOpenChange],
+  )
+
+  const completeExit = React.useCallback(() => {
+    if (openRef.current) return
+    setPresent(false)
+    const restoreTarget = restoreFocusRef.current
+    window.requestAnimationFrame(() => restoreTarget?.focus({ preventScroll: true }))
+  }, [])
+
+  const motionState = React.useMemo(() => ({ open, present, completeExit }), [completeExit, open, present])
+
+  return (
+    <SheetMotionContext.Provider value={motionState}>
+      <DialogPrimitive.Root {...props} open={open} onOpenChange={handleOpenChange}>
+        {children}
+      </DialogPrimitive.Root>
+    </SheetMotionContext.Provider>
+  )
+}
+
 const SheetTrigger = DialogPrimitive.Trigger
 const SheetClose = DialogPrimitive.Close
 const SheetPortal = DialogPrimitive.Portal
-function SheetOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
-  return (
-    <DialogPrimitive.Overlay
-      className={cn(
-        'fixed inset-x-0 bottom-0 top-[var(--topbar-height)] z-[60] bg-black/25 backdrop-blur-[1px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-        className,
-      )}
-      {...props}
-    />
-  )
-}
+
+const SheetOverlay = React.forwardRef<
+  React.ComponentRef<typeof DialogPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Overlay
+    ref={ref}
+    data-sheet-motion-overlay=""
+    className={cn(
+      'fixed inset-x-0 bottom-0 top-[var(--flux-topbar-height)] z-[60] bg-black/25 backdrop-blur-[1px]',
+      className,
+    )}
+    {...props}
+  />
+))
+SheetOverlay.displayName = DialogPrimitive.Overlay.displayName
+
 type SheetSide = 'left' | 'right'
-function SheetContent({
-  side = 'right',
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & { side?: SheetSide }) {
-  return (
-    <SheetPortal>
-      <SheetOverlay />
-      <DialogPrimitive.Content
-        data-side={side}
-        className={cn(
-          'fixed bottom-0 top-[var(--topbar-height)] z-[61] flex h-[calc(100dvh-var(--topbar-height))] flex-col border-border bg-popover text-popover-foreground shadow-2xl backdrop-blur-2xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out',
-          side === 'left'
-            ? 'left-0 w-[min(360px,calc(100vw-24px))] border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left'
-            : 'right-0 w-[min(440px,calc(100vw-24px))] border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right',
-          className,
-        )}
-        {...props}
-      >
-        {children}
-        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-          <X className="size-4" />
-          <span className="sr-only">关闭</span>
-        </DialogPrimitive.Close>
-      </DialogPrimitive.Content>
-    </SheetPortal>
-  )
+type SheetContentProps = Omit<
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>,
+  'forceMount'
+> & {
+  side?: SheetSide
 }
+
+const SheetContent = React.forwardRef<React.ComponentRef<typeof DialogPrimitive.Content>, SheetContentProps>(
+  ({ side = 'right', className, children, ...props }, forwardedRef) => {
+    const motionState = React.useContext(SheetMotionContext)
+    if (!motionState) throw new Error('SheetContent must be used within Sheet')
+
+    const { open, present, completeExit } = motionState
+    const overlayRef = React.useRef<React.ComponentRef<typeof DialogPrimitive.Overlay>>(null)
+    const contentRef = React.useRef<React.ComponentRef<typeof DialogPrimitive.Content>>(null)
+    const enteredRef = React.useRef(false)
+    const reducedMotion = useReducedMotion()
+    const hiddenXPercent = side === 'left' ? -100 : 100
+
+    const setContentRef = React.useCallback(
+      (node: React.ComponentRef<typeof DialogPrimitive.Content> | null) => {
+        contentRef.current = node
+        if (typeof forwardedRef === 'function') forwardedRef(node)
+        else if (forwardedRef) forwardedRef.current = node
+      },
+      [forwardedRef],
+    )
+
+    useGSAP(
+      () => {
+        const overlay = overlayRef.current
+        const content = contentRef.current
+        if (!present || !overlay || !content) return
+
+        gsap.killTweensOf([overlay, content])
+        const timeline = gsap.timeline()
+
+        if (open) {
+          if (!enteredRef.current) {
+            gsap.set(overlay, { autoAlpha: 0 })
+            gsap.set(content, {
+              autoAlpha: reducedMotion ? 1 : 0.96,
+              xPercent: reducedMotion ? 0 : hiddenXPercent,
+            })
+          }
+          enteredRef.current = true
+          timeline
+            .to(
+              overlay,
+              {
+                autoAlpha: 1,
+                duration: reducedMotion ? 0 : motionDurations.base,
+                ease: motionEases.enter,
+                overwrite: 'auto',
+              },
+              0,
+            )
+            .to(
+              content,
+              {
+                autoAlpha: 1,
+                xPercent: 0,
+                duration: reducedMotion ? 0 : motionDurations.emphasized,
+                ease: motionEases.enter,
+                overwrite: 'auto',
+              },
+              0,
+            )
+        } else {
+          timeline
+            .to(
+              content,
+              {
+                autoAlpha: reducedMotion ? 1 : 0.96,
+                xPercent: reducedMotion ? 0 : hiddenXPercent,
+                duration: reducedMotion ? 0 : motionDurations.base,
+                ease: motionEases.exit,
+                overwrite: 'auto',
+              },
+              0,
+            )
+            .to(
+              overlay,
+              {
+                autoAlpha: 0,
+                duration: reducedMotion ? 0 : motionDurations.base,
+                ease: motionEases.exit,
+                overwrite: 'auto',
+              },
+              0,
+            )
+            .eventCallback('onComplete', () => {
+              enteredRef.current = false
+              completeExit()
+            })
+        }
+
+        return () => {
+          timeline.kill()
+          gsap.killTweensOf([overlay, content])
+        }
+      },
+      {
+        scope: contentRef,
+        dependencies: [completeExit, hiddenXPercent, open, present, reducedMotion],
+      },
+    )
+
+    if (!present) return null
+
+    return (
+      <SheetPortal forceMount>
+        <SheetOverlay ref={overlayRef} forceMount />
+        <DialogPrimitive.Content
+          ref={setContentRef}
+          forceMount
+          data-side={side}
+          data-sheet-motion-content=""
+          className={cn(
+            'fixed bottom-0 top-[var(--flux-topbar-height)] z-[61] flex h-[calc(100dvh-var(--flux-topbar-height))] flex-col border-border bg-popover text-popover-foreground shadow-2xl backdrop-blur-2xl outline-none',
+            side === 'left'
+              ? 'left-0 w-[min(360px,calc(100vw-24px))] border-r'
+              : 'right-0 w-[min(440px,calc(100vw-24px))] border-l',
+            className,
+          )}
+          {...props}
+        >
+          {children}
+          <DialogPrimitive.Close
+            className={cn(
+              buttonVariants({ variant: 'ghost', size: 'icon-sm' }),
+              'absolute right-3 top-3 size-7 text-muted-foreground',
+            )}
+          >
+            <X className="size-4" />
+            <span className="sr-only">关闭</span>
+          </DialogPrimitive.Close>
+        </DialogPrimitive.Content>
+      </SheetPortal>
+    )
+  },
+)
+SheetContent.displayName = DialogPrimitive.Content.displayName
+
 function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div

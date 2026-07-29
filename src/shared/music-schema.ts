@@ -32,6 +32,7 @@ export const unifiedSongSchema = z.object({
   artistMid: z.optional(z.string()),
   albumMid: z.optional(z.string()),
   playable: z.optional(z.boolean()),
+  supportedQualities: z.optional(z.array(qualityLevelSchema)),
 })
 
 export const musicSearchRequestSchema = z.object({

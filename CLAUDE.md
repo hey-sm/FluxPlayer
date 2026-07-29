@@ -9,9 +9,10 @@ FluxPlayer 是一个 Electron + React 桌面音乐播放器，聚合网易云音
 ## Commands
 
 ```bash
-pnpm dev              # electron-vite 开发（HMR）
+pnpm dev              # electron-vite 开发（Renderer CSS/TSX HMR）
+pnpm start            # pnpm dev 的便捷别名
 pnpm build            # 三进程构建到 out/
-pnpm start            # electron-vite preview（预览已构建产物）
+pnpm preview          # electron-vite preview（读取 out/，无源码热更新）
 pnpm typecheck        # 两套 tsconfig 都要过：tsconfig.node.json + tsconfig.web.json
 pnpm lint             # oxlint
 pnpm format           # oxfmt --check（校验）
@@ -64,7 +65,7 @@ pnpm exec playwright test tests/e2e/player.spec.ts     # 单个 e2e（需先 pnp
 
 - **单一 Stage**：`VisualStage`（[src/renderer/src/visual/stage.ts](src/renderer/src/visual/stage.ts)）持有唯一 renderer/scene/camera，所有子层共用它，绝不自建动画时钟。
 - **单一 RAF**：全局 `ticker`（[src/renderer/src/perf/ticker.ts](src/renderer/src/perf/ticker.ts)）是唯一 `requestAnimationFrame` 注册表，受主进程 `PerfGovernor` 广播的 `PerfState` 约束（minimize/hide → background/suspended 降频）。视觉循环别自己开 RAF。
-- **动态背景**：`DynamicBackgroundManager` 只实例化 Light Rays、Galaxy 或 HTML Light 中当前选中的一个。两个 React Bits shader 与 HTML Light 物理吊灯共享 renderer/ticker；不再存在音频分析器、封面粒子或 legacy preset。
+- **动态背景**：`DynamicBackgroundManager` 只实例化 Light Rays / HTML Light / Galaxy 中当前选中的一个。三者共享 renderer/ticker；不再存在音频分析器、封面粒子或 legacy preset。Galaxy 是自写的螺旋星系点云（种子固定 → 每次启动构图一致，`setPointer` 刻意空实现，只有极慢自转），构图参考见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 - **React 边界**：`StageCanvas` 只传入 `backgroundEffect`、启用状态和歌词交互参数；自定义图片/视频背景启用时释放动态背景，但保留歌词场景。
 - **上游许可**：React Bits 适配代码保留来源注释，许可证全文与依赖说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 

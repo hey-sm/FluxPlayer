@@ -16,7 +16,13 @@ const TRACK_INFO_FIXTURE = {
   interval: 269,
   singer: [{ id: 4558, mid: '0025NhlN2yWrP4', name: '周杰伦' }],
   album: { id: 20164, mid: '000MkMni19ClKG', name: '叶惠美' },
-  file: { media_mid: '003OUlho2HcRHC' },
+  file: {
+    media_mid: '003OUlho2HcRHC',
+    size_hires: 0,
+    size_flac: 400,
+    size_320mp3: 300,
+    size_128mp3: 100,
+  },
   pay: { pay_play: 1 },
 }
 
@@ -39,6 +45,7 @@ describe('mapQQTrack', () => {
       duration: 269000,
       fee: 1,
       playable: false,
+      supportedQualities: ['lossless', 'exhigh', 'standard'],
     })
     expect(song.cover).toContain('000MkMni19ClKG')
   })

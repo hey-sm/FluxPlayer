@@ -279,6 +279,7 @@ function isAllowedAppRequest(route: Route): boolean {
   if (requestUrl.protocol === 'flux-media:') {
     return requestUrl.hostname === 'audio' || requestUrl.hostname === 'cover'
   }
+  if (requestUrl.protocol === 'flux-font:') return requestUrl.hostname === 'face'
   return requestUrl.protocol === 'flux-background:'
 }
 
@@ -326,7 +327,7 @@ function execute(file: string, args: string[]): Promise<string> {
 async function windowsProcessSnapshot(): Promise<ProcessIdentity[]> {
   const script = [
     '$ErrorActionPreference = "Stop"',
-    '$rows = @(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CreationDate,Name)',
+    '$rows = @(Get-CimInstance Win32_Process | ForEach-Object { [PSCustomObject]@{ ProcessId = $_.ProcessId; ParentProcessId = $_.ParentProcessId; CreationDate = $_.CreationDate.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture); Name = $_.Name } })',
     '$rows | ConvertTo-Json -Compress',
   ].join('; ')
   const stdout = await execute('powershell.exe', [
@@ -415,9 +416,9 @@ async function terminateVerifiedProcesses(
       '  $processId = [int]$target.pid',
       '  $current = Get-CimInstance Win32_Process -Filter ("ProcessId = {0}" -f $processId)',
       '  if ($null -eq $current) { continue }',
-      '  $expected = [DateTimeOffset]::Parse([string]$target.creationDate, [Globalization.CultureInfo]::InvariantCulture)',
-      '  $actual = [DateTimeOffset]$current.CreationDate',
-      '  if ($actual.UtcDateTime.Ticks -ne $expected.UtcDateTime.Ticks) { continue }',
+      '  $expected = [string]$target.creationDate',
+      '  $actual = $current.CreationDate.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)',
+      '  if ($actual -ne $expected) { continue }',
       '  $result = Invoke-CimMethod -InputObject $current -MethodName Terminate -Arguments @{ Reason = 1 }',
       '  if ($result.ReturnValue -ne 0) { throw "Terminate failed for verified PID $processId with code $($result.ReturnValue)" }',
       '}',

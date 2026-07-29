@@ -77,15 +77,24 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
   await window.evaluate((browserWindow) => browserWindow.setSize(1440, 900))
 
   await page.getByRole('button', { name: '设置' }).click()
-  await expect(page.getByRole('combobox', { name: '歌词动效' })).toHaveCount(0)
+  const lyricsAnimation = page.getByRole('combobox', { name: '歌词动画' })
+  await expect(lyricsAnimation).toContainText('紧凑滚动')
+  await lyricsAnimation.click()
+  await page.getByRole('option', { name: '仅当前歌词' }).click()
+  await expect(page.locator('[data-stage-background]')).toHaveAttribute('data-lyrics-animation-mode', 'focus')
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('flux-lyrics-animation-mode-v1')))
+    .toBe('focus')
   const lyricsDragSwitch = page.getByRole('switch', { name: '允许拖拽歌词' })
   await expect(lyricsDragSwitch).toHaveAttribute('aria-checked', 'false')
   await lyricsDragSwitch.click()
   await expect(lyricsDragSwitch).toHaveAttribute('aria-checked', 'true')
   await page.getByRole('button', { name: '关闭', exact: true }).click()
 
-  await page.locator('.search-hover-sensor').hover()
-  await page.getByPlaceholder(/搜索歌曲/).fill('LYRICS VISUAL')
+  const searchInput = page.getByPlaceholder(/搜索歌曲/)
+  await page.locator('[data-search-sensor]').dispatchEvent('pointerenter')
+  await expect(searchInput).toBeVisible()
+  await searchInput.fill('LYRICS VISUAL')
   await page.getByText(TRACK.name, { exact: true }).click()
   await expect(page.getByRole('button', { name: '暂停' })).toBeVisible()
   await page.evaluate(() => {
@@ -100,9 +109,10 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
     contentType: 'image/png',
   })
 
-  const canvas = page.locator('.stage-bg canvas')
+  const canvas = page.locator('[data-stage-background] canvas')
   await expect(canvas).toBeVisible()
   const desktopShot = await canvas.screenshot()
+  await page.screenshot({ path: testInfo.outputPath('lyrics-desktop-stage.png') })
   const desktopSignal = await canvasSignal(desktopShot)
   expect(desktopSignal.range).toBeGreaterThan(40)
   expect(desktopSignal.deviation).toBeGreaterThan(8)

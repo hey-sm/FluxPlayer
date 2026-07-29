@@ -4,7 +4,7 @@
 
 **沉浸式桌面音乐播放器**
 
-聚合网易云音乐与 QQ 音乐 · Light Rays / Galaxy / HTML Light 动态背景 · 隐私优先的进程隔离架构
+聚合网易云音乐与 QQ 音乐 · Light Rays / HTML Light / Galaxy 动态背景 · 隐私优先的进程隔离架构
 
 `Electron 42` · `React 19` · `Three.js` · `TypeScript` · `Vite 8`
 
@@ -46,7 +46,7 @@ FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云�
 - **双 provider 聚合**：网易云 / QQ 音乐统一搜索、歌单、我喜欢、逐字歌词。
 - **智能播放容错**：音质自动降级重试、跨 provider 同名同歌手自动换源、失败黑名单、试听片段截断。
 - **多档音质**：超清母带 / 高清臻音 / 无损 / 极高 / 标准，跨 provider 归一化。
-- **动态背景与 3D 歌词**：内置 Light Rays、Galaxy 与 HTML Light 吊灯背景，歌词继续使用 Three.js 网格渲染并支持旋转、拖拽和缩放。
+- **动态背景与 3D 歌词**：内置 Light Rays 光线、HTML Light 吊灯与 Galaxy 螺旋星系背景，歌词继续使用 Three.js 网格渲染并支持旋转、拖拽和缩放。
 - **自定义背景**：支持导入本地图片/视频，以及 Wallpaper Engine 视频项目。
 - **全局快捷键**：播放控制、切歌、音量、全屏。
 - **系统媒体集成**：Media Session（系统媒体控制中心 / 键盘媒体键）。
@@ -83,9 +83,9 @@ pnpm dev              # 启动开发（Electron + HMR）
 
 | 命令                                | 说明                                                               |
 | ----------------------------------- | ------------------------------------------------------------------ |
-| `pnpm dev`                          | electron-vite 开发模式，渲染层 HMR                                 |
+| `pnpm dev` / `pnpm start`           | electron-vite 开发模式，渲染层 CSS/TSX HMR                         |
 | `pnpm build`                        | 构建 main / preload / renderer 三进程产物到 `out/`                 |
-| `pnpm start`                        | 预览已构建产物                                                     |
+| `pnpm preview`                      | 启动时执行一次构建后预览静态 `out/` 产物，不提供运行时源码热更新   |
 | `pnpm typecheck`                    | 类型检查（**同时**跑 `tsconfig.node.json` 与 `tsconfig.web.json`） |
 | `pnpm lint`                         | oxlint 静态检查                                                    |
 | `pnpm format` / `pnpm format:write` | oxfmt 校验 / 写入                                                  |
@@ -94,7 +94,9 @@ pnpm dev              # 启动开发（Electron + HMR）
 | `pnpm smoke`                        | 无头启动冒烟测试（验证窗口加载、无本地 TCP 监听）                  |
 | `pnpm record:fixtures`              | 重新录制 provider 测试夹具                                         |
 | `pnpm build:win`                    | 打 Windows NSIS 安装包到 `dist/`                                   |
-| `pnpm build:win:dir`                | 免安装目录版本                                                     |
+
+> 开发界面时请使用 `pnpm dev` 或 `pnpm start`。`pnpm preview` 默认只在启动时构建一次，运行期间修改源码不会热更新；需要重启 `preview`，或先执行 `pnpm build` 再使用 `electron-vite preview --skipBuild` 查看新的静态产物。
+> | `pnpm build:win:dir` | 免安装目录版本 |
 
 **跑单个测试：**
 
@@ -253,7 +255,7 @@ Three.js 动态背景遵循「单一实例」原则，避免资源泄漏与多�
 
 - **单一 Stage** —— `VisualStage`（[src/renderer/src/visual/stage.ts](src/renderer/src/visual/stage.ts)）持有唯一的 renderer / scene / camera，所有子层（歌词层、背景管理器）共用它。
 - **单一 RAF** —— 全局 `ticker`（[src/renderer/src/perf/ticker.ts](src/renderer/src/perf/ticker.ts)）是唯一的 `requestAnimationFrame` 注册表，所有视觉循环都注册到它，受主进程 `PerfState` 约束降频。视觉代码不应自建动画时钟。
-- **三种动态背景** —— Light Rays 与 Galaxy 使用全屏 shader；HTML Light 使用可拖拽物理吊灯、暖色聚光灯和程序化承光平面。三者由 `DynamicBackgroundManager` 懒加载并在切换时释放旧 GPU 资源。
+- **三种动态背景** —— Light Rays 使用全屏 shader；HTML Light 使用可拖拽物理吊灯、暖色聚光灯和程序化承光平面；Galaxy 使用 8 万颗加色混合星点组成的螺旋星系（固定种子、白色核球 + 随主题色微调的蓝色外圈、极慢自转）。三者由 `DynamicBackgroundManager` 懒加载并在切换时释放旧 GPU 资源。
 - **独立歌词数据流** —— `stageLyricsChannel` 只向 3D 歌词层发布当前歌词窗口和播放位置；动态背景不接入音频频谱。
 - **自定义背景优先** —— 本地图片、视频或 Wallpaper Engine 背景启用时释放动态 shader，3D 歌词仍由同一个 Stage 渲染。
 

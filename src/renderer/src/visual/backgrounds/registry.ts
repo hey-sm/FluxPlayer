@@ -6,8 +6,8 @@ import type { DynamicBackgroundDefinition } from './types'
 
 export const DYNAMIC_BACKGROUND_DEFINITIONS: readonly DynamicBackgroundDefinition[] = Object.freeze([
   Object.freeze({ effect: 'light-rays', create: () => new LightRaysBackground() }),
-  Object.freeze({ effect: 'galaxy', create: () => new GalaxyBackground() }),
   Object.freeze({ effect: 'html-light', create: () => new HtmlLightBackground() }),
+  Object.freeze({ effect: 'galaxy', create: () => new GalaxyBackground() }),
 ])
 
 export const DYNAMIC_BACKGROUND_BY_EFFECT: ReadonlyMap<DynamicBackgroundEffect, DynamicBackgroundDefinition> =

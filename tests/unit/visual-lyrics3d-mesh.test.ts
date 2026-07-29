@@ -2,15 +2,30 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { lyricGlyphProgress } from '@renderer/visual/lyrics3d-mesh/highlight'
 import { createLyricsMaterial } from '@renderer/visual/lyrics3d-mesh/material'
+import {
+  LYRICS_FONT_WEIGHT,
+  LYRICS_ZOOM_MAX_RADIUS,
+  LYRICS_ZOOM_MIN_RADIUS,
+} from '@renderer/visual/lyrics3d-mesh/config'
 
 describe('lyrics3d-mesh static material', () => {
   it('uses a front-sided standard material without deformation modes', () => {
     const handle = createLyricsMaterial('#ffffff')
     handle.setHighlight(1.4, 1, new THREE.Color('#8fffe0'))
+    handle.setWeight(0.008)
     expect(handle.material.side).toBe(THREE.FrontSide)
     expect(handle.material.isMeshStandardMaterial).toBe(true)
     expect(handle.material.onBeforeCompile).toBeTypeOf('function')
     handle.material.dispose()
+  })
+})
+
+describe('lyrics3d-mesh display tuning', () => {
+  it('keeps zoom and synthetic weight inside legible bounds', () => {
+    expect(LYRICS_ZOOM_MIN_RADIUS).toBe(6.4)
+    expect(LYRICS_ZOOM_MAX_RADIUS).toBe(18)
+    expect(LYRICS_FONT_WEIGHT).toBeGreaterThanOrEqual(0)
+    expect(LYRICS_FONT_WEIGHT).toBeLessThanOrEqual(0.03)
   })
 })
 

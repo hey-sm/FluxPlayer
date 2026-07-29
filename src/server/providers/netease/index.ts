@@ -3,6 +3,7 @@ import type {
   LyricDoc,
   NeteaseLoginInfo,
   PlaybackRestriction,
+  QualityLevel,
   UnifiedArtist,
   UnifiedPlaylist,
   UnifiedSong,
@@ -113,6 +114,7 @@ export function mapSongRecord(raw: unknown): UnifiedSong {
   const artists = mapArtists(song.ar ?? song.artists)
   const album = asRecord(song.al ?? song.album)
   const id = identifier(song.id) ?? ''
+  const supportedQualities = neteaseSupportedQualities(song)
   return {
     provider: 'netease',
     type: 'song',
@@ -125,7 +127,33 @@ export function mapSongRecord(raw: unknown): UnifiedSong {
     cover: stringValue(album.picUrl ?? album.coverUrl),
     duration: numberValue(song.dt ?? song.duration),
     fee: song.fee === undefined ? undefined : numberValue(song.fee),
+    ...(supportedQualities ? { supportedQualities } : {}),
   }
+}
+
+const NETEASE_QUALITY_FILES: readonly [QualityLevel, readonly string[]][] = [
+  ['hires', ['hr']],
+  ['lossless', ['sq']],
+  ['exhigh', ['h']],
+  ['standard', ['l', 'm']],
+]
+
+function hasNeteaseAudioFile(song: Record<string, unknown>, fields: readonly string[]): boolean {
+  return fields.some((fieldName) => {
+    const file = asRecord(song[fieldName])
+    return numberValue(file.size) > 0 || numberValue(file.br) > 0
+  })
+}
+
+export function neteaseSupportedQualities(song: Record<string, unknown>): QualityLevel[] | undefined {
+  const supported: QualityLevel[] = []
+  const privilege = asRecord(song.privilege)
+  const maximum = stringValue(privilege.playMaxBrLevel ?? privilege.maxBrLevel).toLowerCase()
+  if (maximum === 'jymaster') supported.push('jymaster')
+  for (const [quality, fields] of NETEASE_QUALITY_FILES) {
+    if (hasNeteaseAudioFile(song, fields)) supported.push(quality)
+  }
+  return supported.length ? supported : undefined
 }
 
 export function readCookieFromResponse(response: unknown): string {

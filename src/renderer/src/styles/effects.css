@@ -1,0 +1,52 @@
+/* Complex renderer effects only: SVG displacement filters and browser-specific glass treatment. */
+
+/* The approved golden SVG displacement is restricted to the compact player strip. */
+.control-glass-filter-svg {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.playerbar.classic-control-glass {
+  position: relative;
+  border: 0;
+  border-radius: var(--saved-panel-glass-radius);
+  background: var(--saved-panel-glass-bg);
+  -webkit-backdrop-filter: var(--saved-panel-glass-filter);
+  backdrop-filter: var(--saved-panel-glass-filter);
+  box-shadow: var(--saved-panel-glass-shadow);
+}
+
+html.classic-control-glass-svg-ok .playerbar.classic-control-glass {
+  background: var(--saved-panel-glass-bg);
+  -webkit-backdrop-filter: url(#mineradio-control-glass-filter) saturate(1);
+  backdrop-filter: url(#mineradio-control-glass-filter) saturate(1);
+}
+
+/* Classic search uses the same approved SVG liquid-glass treatment as the player strip. */
+.searchbar.classic-search-glass {
+  position: relative;
+  border: 1px solid var(--flux-search-glass-border);
+  border-radius: var(--flux-search-glass-radius);
+  background: var(--saved-panel-glass-bg);
+  box-shadow: var(--saved-panel-glass-shadow);
+  -webkit-backdrop-filter: var(--saved-panel-glass-filter);
+  backdrop-filter: var(--saved-panel-glass-filter);
+  overflow: hidden;
+}
+
+.searchbar.classic-search-glass input,
+.searchbar.classic-search-glass input:focus {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.classic-search-glass-svg-ok .searchbar.classic-search-glass {
+  -webkit-backdrop-filter: url(#flux-classic-search-glass-filter) saturate(1);
+  backdrop-filter: url(#flux-classic-search-glass-filter) saturate(1);
+}

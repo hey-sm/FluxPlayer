@@ -15,7 +15,7 @@ vi.mock('@renderer/api', () => ({
 }))
 
 class FakeAudio extends EventTarget {
-  static playScript: (src: string) => Promise<void> = () => Promise.resolve()
+  static playScript: (src: string, audio: FakeAudio) => Promise<void> = () => Promise.resolve()
   src = ''
   volume = 1
   preload = ''
@@ -25,7 +25,7 @@ class FakeAudio extends EventTarget {
 
   play(): Promise<void> {
     this.paused = false
-    return FakeAudio.playScript(this.src).catch((error: unknown) => {
+    return FakeAudio.playScript(this.src, this).catch((error: unknown) => {
       this.paused = true
       throw error
     })
@@ -138,6 +138,38 @@ describe('PlaybackEngine fallback orchestration', () => {
       resolvedQuality: 'exhigh',
     })
     expect(search).not.toHaveBeenCalled()
+  })
+
+  it('leaves loading and retries when the media element emits an error while play remains pending', async () => {
+    const current = song(1, 'qq')
+    resolvePlayback.mockImplementation(async ({ quality }) => playable('qq', `media-${quality}`, quality))
+    FakeAudio.playScript = (src, audio) => {
+      if (!src.endsWith('-hires')) return Promise.resolve()
+      queueMicrotask(() => audio.dispatchEvent(new Event('error')))
+      return new Promise<void>(() => {})
+    }
+
+    await usePlayer.getState().setQueue([current], 0)
+
+    expect(resolvePlayback.mock.calls.map(([request]) => request.quality)).toEqual(['hires', 'exhigh'])
+    expect(usePlayer.getState()).toMatchObject({ status: 'playing', resolvedQuality: 'exhigh' })
+  })
+
+  it('cancels a pending media load when a newer queue selection starts', async () => {
+    const first = song(1, 'netease')
+    const second = song(2, 'netease')
+    resolvePlayback.mockImplementation(async ({ song: requestedSong }) =>
+      playable('netease', String(requestedSong.id)),
+    )
+    FakeAudio.playScript = (src) => (src.endsWith('/1') ? new Promise<void>(() => {}) : Promise.resolve())
+
+    const staleLoad = usePlayer.getState().setQueue([first], 0)
+    await vi.waitFor(() => expect(usePlayer.getState().audio.src).toContain('/1'))
+    await usePlayer.getState().setQueue([second], 0)
+    await staleLoad
+
+    expect(usePlayer.getState()).toMatchObject({ current: second, status: 'playing' })
+    expect(usePlayer.getState().audio.src).toContain('/2')
   })
 
   it('automatically switches an unavailable Netease song to a matching QQ source', async () => {

@@ -1,4 +1,4 @@
-import type { UnifiedArtist, UnifiedPlaylist, UnifiedSong } from '@shared/models'
+import type { QualityLevel, UnifiedArtist, UnifiedPlaylist, UnifiedSong } from '@shared/models'
 import {
   asArray,
   asRecord,
@@ -62,6 +62,7 @@ export function mapQQTrack(raw: unknown, fallback: Partial<UnifiedSong> = {}): U
   const mid = stringValue(track.mid ?? fallback.mid ?? fallback.songmid)
   const albumMid = stringValue(album.mid ?? album.pmid)
   const pay = asRecord(track.pay)
+  const supportedQualities = qqSupportedQualities({ ...track, ...file }) ?? fallback.supportedQualities
   return {
     provider: 'qq',
     type: 'qq',
@@ -81,7 +82,22 @@ export function mapQQTrack(raw: unknown, fallback: Partial<UnifiedSong> = {}): U
     duration: numberValue(track.interval) * 1000,
     fee: numberValue(pay.pay_play) ? 1 : 0,
     playable: false,
+    ...(supportedQualities ? { supportedQualities } : {}),
   }
+}
+
+const QQ_QUALITY_SIZE_FIELDS: readonly [QualityLevel, readonly string[]][] = [
+  ['hires', ['size_hires', 'sizeHires']],
+  ['lossless', ['size_flac', 'size_ape', 'sizeFlac', 'sizeApe']],
+  ['exhigh', ['size_320mp3', 'size320mp3', 'size_320']],
+  ['standard', ['size_128mp3', 'size_96aac', 'size_48aac', 'size128mp3', 'size_128']],
+]
+
+export function qqSupportedQualities(file: Record<string, unknown>): QualityLevel[] | undefined {
+  const supported = QQ_QUALITY_SIZE_FIELDS.filter(([, fields]) =>
+    fields.some((fieldName) => numberValue(file[fieldName]) > 0),
+  ).map(([quality]) => quality)
+  return supported.length ? supported : undefined
 }
 
 export function mapQQPlaylistTrack(raw: unknown): UnifiedSong {
@@ -95,6 +111,7 @@ export function mapQQPlaylistTrack(raw: unknown): UnifiedSong {
   const albumMid = stringValue(album.mid ?? track.albummid ?? root.albummid)
   const pay = asRecord(track.pay)
   const fallbackId = identifier(track.id ?? track.songid ?? root.id ?? root.songid) ?? ''
+  const supportedQualities = qqSupportedQualities({ ...root, ...track, ...file })
   return {
     provider: 'qq',
     type: 'qq',
@@ -115,6 +132,7 @@ export function mapQQPlaylistTrack(raw: unknown): UnifiedSong {
     duration: numberValue(track.interval ?? root.interval) * 1000,
     fee: numberValue(pay.pay_play) ? 1 : 0,
     playable: false,
+    ...(supportedQualities ? { supportedQualities } : {}),
   }
 }
 

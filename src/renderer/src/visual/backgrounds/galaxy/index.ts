@@ -1,216 +1,270 @@
 /*
- * Shader adapted from React Bits Galaxy at commit 8d1c5fa9.
- * Copyright (c) 2026 David Haz. MIT + Commons Clause; see THIRD_PARTY_NOTICES.md.
+ * Composition reference: the "Galaxy" particles demo at https://threejsdemos.com/demos/particles/galaxy
+ * — a procedural spiral generator (per-star branch angle, radius-proportional spin, power-biased
+ * scatter, inner-to-outer color ramp on additively blended points).
+ *
+ * That page publishes no license, so no upstream code is reused: the generator, GLSL, seeded RNG and
+ * viewport fitting below are FluxPlayer's own and follow the Stage contract (shared renderer/ticker,
+ * one owned group, everything disposed once). See THIRD_PARTY_NOTICES.md.
+ *
+ * The reference frames the disc with an orbiting camera; FluxPlayer cannot move the shared background
+ * camera, so the disc itself is tilted to the same oblique elevation and the composition stays static
+ * apart from one very slow rotation — the 3D lyrics own the foreground.
  */
 import * as THREE from 'three'
 import { disposeObjectTree } from '../resources'
 import type { DynamicBackground } from '../types'
 
+const CAMERA_FOV = 37
+const CAMERA_DISTANCE = 13.6
+// The tunables mirror the reference demo's live control panel: 80000 stars, radius 20, 2 arms,
+// spiral tightness 2.5, randomness 0.535 at power 1, star size 0.01, white core, 0099ff rim.
+const STAR_COUNT = 80_000
+const BRANCH_COUNT = 2
+const SPIN_TURNS = 7.96 // tightness 2.5 over radius 20 = 50rad; tight winding is what blurs the arms
+const CORE_BIAS = 1 // uniform radius, so density falls off as 1/r and lights the bulge on its own
+const SCATTER_POWER = 1 // uniform scatter: the arms dissolve into a haze instead of staying crisp
+const SCATTER_STRENGTH = 0.535
+const DISC_FLATTEN = 0.6 // share of the planar scatter applied vertically, keeping a lens not a ball
+const TILT = 0.44 // radians of viewing elevation above the disc plane
+const INITIAL_SPIN = 0.83 // the disc already reads as a galaxy before update() ever runs
+const SPIN_SPEED = 0.018 // rad/s, one revolution ~350s; 0 stops the disc entirely
+const CORE_GLOW_SIZE = 0.34 // fraction of the disc radius
+const CORE_GLOW_OPACITY = 0.06
+const STAR_INTENSITY = 1.05 // global star brightness multiplier
+const CORE_DIM = 0.5 // how much the bulge stars are dimmed, 0 = no dimming
+const CORE_DIM_RADIUS = 0.26 // share of the disc radius the dimming covers
+const CORE_COLOR = '#ffffff'
+const EDGE_COLOR = '#0099ff'
+const EDGE_ACCENT_MIX = 0.34 // how far the rim leans from the reference blue toward the theme color
+const CORE_ACCENT_MIX = 0.05
+const STAR_SEED = 0x5eed1a5b
+
 const VERTEX_SHADER = `
-varying vec2 vUv;
+attribute float aRadius;
+attribute float aSize;
+attribute float aSeed;
+
+uniform float uTime;
+uniform float uSizeScale;
+uniform vec3 uCoreColor;
+uniform vec3 uEdgeColor;
+
+varying vec3 vColor;
+varying float vIntensity;
+
 void main() {
-  vUv = uv;
-  gl_Position = vec4(position.xy, 0.0, 1.0);
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mvPosition;
+  float depth = max(0.001, -mvPosition.z);
+  float breath = 0.95 + 0.05 * sin(uTime * 0.42 + aSeed * 6.2831853);
+  gl_PointSize = clamp(aSize * uSizeScale * breath / depth, 1.0, 42.0);
+  vColor = mix(uCoreColor, uEdgeColor, clamp(aRadius, 0.0, 1.0));
+  // The bulge is dense enough to blow out on its own, so its stars are dimmed toward the center.
+  float coreDim = mix(${(1 - CORE_DIM).toFixed(3)}, 1.0, smoothstep(0.0, ${CORE_DIM_RADIUS.toFixed(3)}, aRadius));
+  float rimFade = 1.0 - 0.45 * smoothstep(0.86, 1.0, aRadius);
+  vIntensity = breath * ${STAR_INTENSITY.toFixed(3)} * coreDim * rimFade;
 }
 `
 
 const FRAGMENT_SHADER = `
 precision highp float;
-uniform float uTime;
-uniform vec3 uResolution;
-uniform vec2 uFocal;
-uniform vec2 uRotation;
-uniform float uStarSpeed;
-uniform float uDensity;
-uniform float uHueShift;
-uniform float uSpeed;
-uniform vec2 uMouse;
-uniform float uGlowIntensity;
-uniform float uSaturation;
-uniform bool uMouseRepulsion;
-uniform float uTwinkleIntensity;
-uniform float uRotationSpeed;
-uniform float uRepulsionStrength;
-uniform float uMouseActiveFactor;
-uniform float uAutoCenterRepulsion;
-uniform vec3 uAccentColor;
-varying vec2 vUv;
 
-#define NUM_LAYER 4.0
-#define STAR_COLOR_CUTOFF 0.2
-#define MAT45 mat2(0.7071, -0.7071, 0.7071, 0.7071)
-#define PERIOD 3.0
+varying vec3 vColor;
+varying float vIntensity;
 
-float Hash21(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-float tri(float x) { return abs(fract(x) * 2.0 - 1.0); }
-float tris(float x) {
-  float t = fract(x);
-  return 1.0 - smoothstep(0.0, 1.0, abs(2.0 * t - 1.0));
-}
-float trisn(float x) {
-  float t = fract(x);
-  return 2.0 * (1.0 - smoothstep(0.0, 1.0, abs(2.0 * t - 1.0))) - 1.0;
-}
-vec3 hsv2rgb(vec3 c) {
-  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-float Star(vec2 uv, float flare) {
-  float d = length(uv);
-  float m = (0.05 * uGlowIntensity) / d;
-  float rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
-  m += rays * flare * uGlowIntensity;
-  uv *= MAT45;
-  rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
-  m += rays * 0.3 * flare * uGlowIntensity;
-  m *= smoothstep(1.0, 0.2, d);
-  return m;
-}
-vec3 StarLayer(vec2 uv) {
-  vec3 col = vec3(0.0);
-  vec2 gv = fract(uv) - 0.5;
-  vec2 id = floor(uv);
-  for (int y = -1; y <= 1; y++) {
-    for (int x = -1; x <= 1; x++) {
-      vec2 offset = vec2(float(x), float(y));
-      vec2 si = id + offset;
-      float seed = Hash21(si);
-      float size = fract(seed * 345.32);
-      float glossLocal = tri(uStarSpeed / (PERIOD * seed + 1.0));
-      float flareSize = smoothstep(0.9, 1.0, size) * glossLocal;
-      float red = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 1.0)) + STAR_COLOR_CUTOFF;
-      float blu = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 3.0)) + STAR_COLOR_CUTOFF;
-      float grn = min(red, blu) * seed;
-      vec3 base = vec3(red, grn, blu);
-      float hue = atan(base.g - base.r, base.b - base.r) / 6.28318 + 0.5;
-      hue = fract(hue + uHueShift / 360.0);
-      float sat = length(base - vec3(dot(base, vec3(0.299, 0.587, 0.114)))) * uSaturation;
-      float val = max(max(base.r, base.g), base.b);
-      base = hsv2rgb(vec3(hue, sat, val));
-      vec2 pad = vec2(
-        tris(seed * 34.0 + uTime * uSpeed / 10.0),
-        tris(seed * 38.0 + uTime * uSpeed / 30.0)
-      ) - 0.5;
-      float star = Star(gv - offset - pad, flareSize);
-      float twinkle = trisn(uTime * uSpeed + seed * 6.2831) * 0.5 + 1.0;
-      twinkle = mix(1.0, twinkle, uTwinkleIntensity);
-      col += star * twinkle * size * base;
-    }
-  }
-  return col;
-}
 void main() {
-  vec2 focalPx = uFocal * uResolution.xy;
-  vec2 uv = (vUv * uResolution.xy - focalPx) / uResolution.y;
-  vec2 mouseNorm = uMouse - vec2(0.5);
-  if (uAutoCenterRepulsion > 0.0) {
-    float centerDist = length(uv);
-    uv += normalize(uv) * (uAutoCenterRepulsion / (centerDist + 0.1)) * 0.05;
-  } else if (uMouseRepulsion) {
-    vec2 mousePosUV = (uMouse * uResolution.xy - focalPx) / uResolution.y;
-    float mouseDist = length(uv - mousePosUV);
-    uv += normalize(uv - mousePosUV) * (uRepulsionStrength / (mouseDist + 0.1)) * 0.05 * uMouseActiveFactor;
-  } else {
-    uv += mouseNorm * 0.1 * uMouseActiveFactor;
-  }
-  float autoRotAngle = uTime * uRotationSpeed;
-  mat2 autoRot = mat2(cos(autoRotAngle), -sin(autoRotAngle), sin(autoRotAngle), cos(autoRotAngle));
-  uv = autoRot * uv;
-  uv = mat2(uRotation.x, -uRotation.y, uRotation.y, uRotation.x) * uv;
-  vec3 col = vec3(0.0);
-  for (float i = 0.0; i < 1.0; i += 1.0 / NUM_LAYER) {
-    float depth = fract(i + uStarSpeed * uSpeed);
-    float scale = mix(20.0 * uDensity, 0.5 * uDensity, depth);
-    float fade = depth * smoothstep(1.0, 0.9, depth);
-    col += StarLayer(uv * scale + i * 453.32) * fade;
-  }
-  gl_FragColor = vec4(col * mix(vec3(1.0), uAccentColor, 0.82), 1.0);
+  float distanceToCenter = length(gl_PointCoord - 0.5) * 2.0;
+  if (distanceToCenter > 1.0) discard;
+  float falloff = pow(1.0 - distanceToCenter, 2.2);
+  float halo = pow(1.0 - distanceToCenter, 6.5) * 0.55;
+  gl_FragColor = vec4(vColor * vIntensity * (1.0 + halo), falloff * vIntensity);
+  #include <colorspace_fragment>
 }
 `
 
+/** Mulberry32: the disc is generated once per instance and must look identical on every launch. */
+function createRandom(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let value = state
+    value = Math.imul(value ^ (value >>> 15), value | 1)
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61)
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Signed offset biased toward zero so arms stay readable instead of blurring into a disc. */
+function scatter(random: () => number): number {
+  return Math.pow(random(), SCATTER_POWER) * (random() < 0.5 ? -1 : 1)
+}
+
+function createGalaxyGeometry(): THREE.BufferGeometry {
+  const random = createRandom(STAR_SEED)
+  const positions = new Float32Array(STAR_COUNT * 3)
+  const radii = new Float32Array(STAR_COUNT)
+  const sizes = new Float32Array(STAR_COUNT)
+  const seeds = new Float32Array(STAR_COUNT)
+
+  for (let index = 0; index < STAR_COUNT; index += 1) {
+    const radius = Math.pow(random(), CORE_BIAS)
+    const branchAngle = ((index % BRANCH_COUNT) / BRANCH_COUNT) * Math.PI * 2
+    const angle = branchAngle + radius * SPIN_TURNS * Math.PI * 2
+    const spread = SCATTER_STRENGTH * radius
+    const offset = index * 3
+    positions[offset] = Math.cos(angle) * radius + scatter(random) * spread
+    positions[offset + 1] = scatter(random) * spread * DISC_FLATTEN
+    positions[offset + 2] = Math.sin(angle) * radius + scatter(random) * spread
+    radii[index] = radius
+    // The reference's size 0.01 against radius 20 is sub-pixel — on our canvas that pins every star
+    // to the 1px clamp and the haze never forms, so stars are sized for this DPI instead.
+    sizes[index] = (0.006 + random() * 0.008) * (random() < 0.03 ? 2.2 : 1)
+    seeds[index] = random()
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setAttribute('aRadius', new THREE.BufferAttribute(radii, 1))
+  geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
+  geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1))
+  return geometry
+}
+
+function createCoreTexture(): THREE.DataTexture {
+  const size = 96
+  const data = new Uint8Array(size * size * 4)
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const dx = (x + 0.5) / size - 0.5
+      const dy = (y + 0.5) / size - 0.5
+      const distance = Math.min(1, Math.hypot(dx, dy) * 2)
+      const intensity = Math.pow(1 - distance, 3.1)
+      const offset = (y * size + x) * 4
+      data[offset] = 255
+      data[offset + 1] = 255
+      data[offset + 2] = 255
+      data[offset + 3] = Math.round(intensity * 255)
+    }
+  }
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.minFilter = THREE.LinearFilter
+  texture.magFilter = THREE.LinearFilter
+  texture.generateMipmaps = false
+  texture.needsUpdate = true
+  return texture
+}
+
 export class GalaxyBackground implements DynamicBackground {
   readonly group = new THREE.Group()
+
+  private readonly disc = new THREE.Group()
   private readonly material: THREE.ShaderMaterial
-  private readonly targetMouse = new THREE.Vector2(0.5, 0.5)
-  private readonly smoothMouse = new THREE.Vector2(0.5, 0.5)
-  private targetMouseActive = 0
-  private smoothMouseActive = 0
+  private readonly stars: THREE.Points
+  private readonly coreTexture = createCoreTexture()
+  private readonly coreMaterial: THREE.MeshBasicMaterial
+  private readonly core: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>
+  private readonly baseCoreColor = new THREE.Color(CORE_COLOR)
+  private readonly baseEdgeColor = new THREE.Color(EDGE_COLOR)
+  private readonly accentColor = new THREE.Color(CORE_COLOR)
+
   private elapsed = 0
+  private discRadius = 8
   private disposed = false
 
   constructor() {
     this.group.name = 'galaxy-background'
     this.group.userData.backgroundEffect = 'galaxy'
+    this.group.rotation.x = TILT
+
+    this.disc.name = 'galaxy-disc'
+    this.disc.rotation.y = INITIAL_SPIN
+    this.group.add(this.disc)
+
     this.material = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
-        uResolution: { value: new THREE.Vector3(1, 1, 1) },
-        uFocal: { value: new THREE.Vector2(0.5, 0.5) },
-        uRotation: { value: new THREE.Vector2(1, 0) },
-        uStarSpeed: { value: 0 },
-        uDensity: { value: 1 },
-        uHueShift: { value: 140 },
-        uSpeed: { value: 1 },
-        uMouse: { value: this.smoothMouse },
-        uGlowIntensity: { value: 0.3 },
-        uSaturation: { value: 0 },
-        uMouseRepulsion: { value: true },
-        uTwinkleIntensity: { value: 0.3 },
-        uRotationSpeed: { value: 0.1 },
-        uRepulsionStrength: { value: 2 },
-        uMouseActiveFactor: { value: 0 },
-        uAutoCenterRepulsion: { value: 0 },
-        uAccentColor: { value: new THREE.Color('#00f5d4') },
+        uSizeScale: { value: 1 },
+        uCoreColor: { value: this.baseCoreColor.clone() },
+        uEdgeColor: { value: this.baseEdgeColor.clone() },
       },
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
+      transparent: true,
       depthTest: false,
       depthWrite: false,
-      toneMapped: false,
+      blending: THREE.AdditiveBlending,
     })
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.material)
-    mesh.name = 'galaxy-fullscreen-quad'
-    mesh.frustumCulled = false
-    mesh.renderOrder = -100
-    this.group.add(mesh)
+
+    this.stars = new THREE.Points(createGalaxyGeometry(), this.material)
+    this.stars.name = 'galaxy-stars'
+    this.stars.frustumCulled = false
+    this.stars.renderOrder = -100
+    this.disc.add(this.stars)
+
+    this.coreMaterial = new THREE.MeshBasicMaterial({
+      map: this.coreTexture,
+      color: this.baseCoreColor.clone(),
+      transparent: true,
+      opacity: CORE_GLOW_OPACITY,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+    })
+    this.core = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.coreMaterial)
+    this.core.name = 'galaxy-core-glow'
+    // The glow lives outside the spinning disc and cancels the tilt so it stays screen-facing.
+    this.core.rotation.x = -TILT
+    this.core.scale.setScalar(CORE_GLOW_SIZE)
+    this.core.frustumCulled = false
+    this.core.renderOrder = -101
+    this.group.add(this.core)
   }
 
   setAccentColor(color: string): void {
-    const accent = this.material.uniforms.uAccentColor.value as THREE.Color
-    accent.set(color)
+    if (this.disposed) return
+    this.accentColor.set(color)
+    const edge = this.material.uniforms.uEdgeColor.value as THREE.Color
+    edge.copy(this.baseEdgeColor).lerp(this.accentColor, EDGE_ACCENT_MIX)
+    // The bulge keeps its warm cast and only leans slightly toward the theme color.
+    this.coreMaterial.color.copy(this.baseCoreColor).lerp(this.accentColor, CORE_ACCENT_MIX)
   }
 
   setViewport(width: number, height: number, pixelRatio: number): void {
-    const resolution = this.material.uniforms.uResolution.value as THREE.Vector3
-    resolution.set(width * pixelRatio, height * pixelRatio, width / Math.max(height, 1))
+    if (this.disposed) return
+    const safeWidth = Math.max(1, width)
+    const safeHeight = Math.max(1, height)
+    const visibleHeight = 2 * Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV * 0.5)) * CAMERA_DISTANCE
+    const visibleWidth = visibleHeight * (safeWidth / safeHeight)
+    // Bleed off the sides, stay inside the top edge: the tilted disc is 2R wide and 2R*sin(TILT) tall.
+    // Scatter carries stars out to ~1.7 local units, so the fit factor is well under half the frame.
+    this.discRadius = Math.min(visibleWidth * 0.4, (visibleHeight * 0.5) / Math.sin(TILT))
+    this.group.scale.setScalar(this.discRadius)
+    // Sink the bulge below the lyric band so the brightest part never sits behind the text.
+    this.group.position.y = -visibleHeight * 0.15
+    // Match the built-in points attenuation (size * pixelRatio * height/2 / depth) in world units.
+    this.material.uniforms.uSizeScale.value =
+      Math.max(0.5, pixelRatio) * safeHeight * 0.5 * this.discRadius
   }
 
-  setPointer(x: number, y: number, active: boolean): void {
-    this.targetMouse.set(x, 1 - y)
-    this.targetMouseActive = active ? 1 : 0
+  setPointer(_x: number, _y: number, _active: boolean): void {
+    // Deliberately inert: the galaxy is a static composition, so there is no pointer parallax.
   }
 
   update(deltaTime: number): void {
     if (this.disposed) return
-    const dt = Math.max(0, deltaTime)
-    this.elapsed += dt
-    const alpha = 1 - Math.exp(-3.1 * dt)
-    this.smoothMouse.lerp(this.targetMouse, alpha)
-    this.smoothMouseActive += (this.targetMouseActive - this.smoothMouseActive) * alpha
+    this.elapsed += Math.max(0, deltaTime)
+    this.disc.rotation.y = INITIAL_SPIN + this.elapsed * SPIN_SPEED
     this.material.uniforms.uTime.value = this.elapsed
-    this.material.uniforms.uStarSpeed.value = (this.elapsed * 0.5) / 10
-    this.material.uniforms.uMouseActiveFactor.value = this.smoothMouseActive
   }
 
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    this.coreTexture.dispose()
     disposeObjectTree(this.group)
+    this.disc.clear()
     this.group.clear()
   }
 }

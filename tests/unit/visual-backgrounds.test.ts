@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import {
   DYNAMIC_BACKGROUND_DEFINITIONS,
+  DYNAMIC_BACKGROUND_OPTIONS,
   DynamicBackgroundManager,
   isDynamicBackgroundEffect,
   type DynamicBackgroundEffect,
@@ -28,28 +29,39 @@ function fakeDefinition(effect: DynamicBackgroundEffect) {
 }
 
 describe('dynamic background registry', () => {
-  it('exposes Light Rays, Galaxy, and HTML Light and validates persisted values', () => {
+  it('exposes Light Rays, HTML Light and Galaxy and rejects removed persisted values', () => {
     expect(DYNAMIC_BACKGROUND_DEFINITIONS.map(({ effect }) => effect)).toEqual([
       'light-rays',
-      'galaxy',
       'html-light',
+      'galaxy',
     ])
     expect(isDynamicBackgroundEffect('light-rays')).toBe(true)
-    expect(isDynamicBackgroundEffect('galaxy')).toBe(true)
     expect(isDynamicBackgroundEffect('html-light')).toBe(true)
+    expect(isDynamicBackgroundEffect('galaxy')).toBe(true)
     expect(isDynamicBackgroundEffect('cinematic-vista')).toBe(false)
+    expect(isDynamicBackgroundEffect('cover-particles')).toBe(false)
     expect(isDynamicBackgroundEffect(null)).toBe(false)
+  })
+
+  it('labels every effect for the settings select', () => {
+    expect(DYNAMIC_BACKGROUND_OPTIONS.map((option) => option.value)).toEqual(
+      DYNAMIC_BACKGROUND_DEFINITIONS.map(({ effect }) => effect),
+    )
+    for (const option of DYNAMIC_BACKGROUND_OPTIONS) {
+      expect(option.label.length).toBeGreaterThan(0)
+      expect(option.description.length).toBeGreaterThan(0)
+    }
   })
 })
 
 describe('DynamicBackgroundManager lifecycle', () => {
   it('owns one effect, restores viewport/pointer state and disposes replacements once', () => {
     const lightRays = fakeDefinition('light-rays')
-    const galaxy = fakeDefinition('galaxy')
+    const htmlLight = fakeDefinition('html-light')
     const manager = new DynamicBackgroundManager(
       new Map([
         ['light-rays', lightRays.definition],
-        ['galaxy', galaxy.definition],
+        ['html-light', htmlLight.definition],
       ]),
     )
 
@@ -63,15 +75,15 @@ describe('DynamicBackgroundManager lifecycle', () => {
     manager.update(1 / 60)
     expect(lightRays.background.update).toHaveBeenCalledWith(1 / 60)
 
-    manager.setEffect('galaxy')
+    manager.setEffect('html-light')
     expect(lightRays.background.dispose).toHaveBeenCalledOnce()
-    expect(manager.activeEffectId).toBe('galaxy')
+    expect(manager.activeEffectId).toBe('html-light')
     manager.setEffect(null)
-    expect(galaxy.background.dispose).toHaveBeenCalledOnce()
+    expect(htmlLight.background.dispose).toHaveBeenCalledOnce()
     expect(manager.group.children).toHaveLength(0)
     manager.dispose()
     manager.dispose()
-    expect(galaxy.background.dispose).toHaveBeenCalledOnce()
+    expect(htmlLight.background.dispose).toHaveBeenCalledOnce()
   })
 
   it('normalizes and forwards optional pointer lifecycle events only to the active background', () => {
@@ -108,10 +120,8 @@ describe('DynamicBackgroundManager lifecycle', () => {
 })
 
 describe('React Bits shader ports', () => {
-  it.each([
-    ['light-rays', () => new LightRaysBackground()],
-    ['galaxy', () => new GalaxyBackground()],
-  ] as const)('%s owns one fullscreen material and disposes it idempotently', (_name, create) => {
+  it('light-rays owns one fullscreen material and disposes it idempotently', () => {
+    const create = () => new LightRaysBackground()
     const background = create()
     const mesh = background.group.children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>
     const geometryDispose = vi.spyOn(mesh.geometry, 'dispose')
@@ -124,6 +134,99 @@ describe('React Bits shader ports', () => {
     expect(geometryDispose).toHaveBeenCalledOnce()
     expect(materialDispose).toHaveBeenCalledOnce()
     expect(background.group.children).toHaveLength(0)
+  })
+})
+
+describe('Galaxy background', () => {
+  it('generates a deterministic tilted spiral disc that fits the viewport', () => {
+    const background = new GalaxyBackground()
+    const stars = background.group.getObjectByName('galaxy-stars') as THREE.Points<
+      THREE.BufferGeometry,
+      THREE.ShaderMaterial
+    >
+    const disc = background.group.getObjectByName('galaxy-disc')!
+    const positions = stars.geometry.getAttribute('position')
+    expect(positions.count).toBe(80_000)
+    expect(stars.geometry.getAttribute('aRadius').count).toBe(80_000)
+    expect(stars.geometry.getAttribute('aSize').count).toBe(80_000)
+    expect(stars.geometry.getAttribute('aSeed').count).toBe(80_000)
+    // Oblique tilt: neither edge-on (the disc would vanish) nor face-on.
+    expect(background.group.rotation.x).toBeGreaterThan(0.15)
+    expect(background.group.rotation.x).toBeLessThan(Math.PI / 2 - 0.15)
+
+    let maxPlanarRadius = 0
+    let maxThickness = 0
+    for (let index = 0; index < positions.count; index += 1) {
+      maxPlanarRadius = Math.max(maxPlanarRadius, Math.hypot(positions.getX(index), positions.getZ(index)))
+      maxThickness = Math.max(maxThickness, Math.abs(positions.getY(index)))
+    }
+    expect(maxPlanarRadius).toBeGreaterThan(0.9)
+    // Rim plus the widest scatter stays inside 1 + SCATTER_STRENGTH * sqrt(2).
+    expect(maxPlanarRadius).toBeLessThan(1.8)
+    // A lens, not a ball: vertical scatter stays a fraction of the planar scatter.
+    expect(maxThickness).toBeGreaterThan(0.1)
+    expect(maxThickness).toBeLessThan(maxPlanarRadius * 0.35)
+
+    const twin = new GalaxyBackground()
+    const twinStars = twin.group.getObjectByName('galaxy-stars') as THREE.Points
+    expect(
+      Array.from((twinStars.geometry.getAttribute('position').array as Float32Array).slice(0, 300)),
+    ).toEqual(Array.from((positions.array as Float32Array).slice(0, 300)))
+    twin.dispose()
+
+    background.setViewport(1280, 720, 1.25)
+    expect(background.group.scale.x).toBeGreaterThan(4)
+    expect(background.group.position.y).toBeLessThan(0)
+    expect(stars.material.uniforms.uSizeScale.value).toBeGreaterThan(0)
+    background.setViewport(720, 1280, 1.25)
+    expect(background.group.scale.x).toBeLessThan(6)
+
+    // Tuned constants stay free to move: assert the behaviour, not the current INITIAL_SPIN value.
+    const initialSpin = disc.rotation.y
+    expect(initialSpin).toBeGreaterThan(0)
+    background.update(1)
+    expect(disc.rotation.y).toBeGreaterThan(initialSpin)
+    expect(stars.material.uniforms.uTime.value).toBeCloseTo(1)
+    background.dispose()
+  })
+
+  it('tints the rim with the theme accent and releases every owned resource once', () => {
+    const background = new GalaxyBackground()
+    const stars = background.group.getObjectByName('galaxy-stars') as THREE.Points<
+      THREE.BufferGeometry,
+      THREE.ShaderMaterial
+    >
+    const glow = background.group.getObjectByName('galaxy-core-glow') as THREE.Mesh<
+      THREE.PlaneGeometry,
+      THREE.MeshBasicMaterial
+    >
+    const edge = stars.material.uniforms.uEdgeColor.value as THREE.Color
+    const before = edge.clone()
+    background.setAccentColor('#ff3d5a')
+    // The rim leans toward the accent but keeps the reference blue as its base.
+    expect(edge.r).toBeGreaterThan(before.r)
+    expect(edge.b).toBeGreaterThan(edge.r)
+    // The bulge stays essentially white.
+    expect(glow.material.color.r).toBeGreaterThan(glow.material.color.b)
+    expect(glow.material.color.g).toBeGreaterThan(0.9)
+
+    const disposals = [
+      vi.spyOn(stars.geometry, 'dispose'),
+      vi.spyOn(stars.material, 'dispose'),
+      vi.spyOn(glow.geometry, 'dispose'),
+      vi.spyOn(glow.material, 'dispose'),
+      vi.spyOn(glow.material.map!, 'dispose'),
+    ]
+    background.dispose()
+    background.dispose()
+    for (const dispose of disposals) expect(dispose).toHaveBeenCalledOnce()
+    expect(background.group.children).toHaveLength(0)
+
+    const idleTime = stars.material.uniforms.uTime.value
+    background.update(1 / 60)
+    background.setViewport(800, 600, 1)
+    background.setAccentColor('#00f5d4')
+    expect(stars.material.uniforms.uTime.value).toBe(idleTime)
   })
 })
 

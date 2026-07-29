@@ -1,9 +1,10 @@
 import { net, protocol } from 'electron'
 import type { CustomBackgroundService } from '../background/custom-background'
 import { CUSTOM_BACKGROUND_SCHEME } from '@shared/custom-background-contract'
-import { APP_SCHEME, MEDIA_SCHEME } from './constants'
+import { APP_SCHEME, FONT_SCHEME, MEDIA_SCHEME } from './constants'
 import { handleAppAssetRequest } from './static-assets'
 import { AudioHandleStore, handleMediaRequest } from './media'
+import { handleFontRequest } from './fonts'
 
 export function registerPrivilegedSchemes(): void {
   protocol.registerSchemesAsPrivileged([
@@ -18,6 +19,16 @@ export function registerPrivilegedSchemes(): void {
     {
       scheme: CUSTOM_BACKGROUND_SCHEME,
       privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+    },
+    {
+      scheme: FONT_SCHEME,
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+        stream: true,
+      },
     },
   ])
 }
@@ -37,6 +48,7 @@ export function registerProtocolHandlers(options: ProtocolRegistrationOptions): 
     const fileUrl = options.customBackgroundService.resolveRequestUrl(request.url)
     return fileUrl ? net.fetch(fileUrl) : new Response('Not found', { status: 404 })
   })
+  protocol.handle(FONT_SCHEME, (request) => handleFontRequest(request))
 }
 
 export { APP_ENTRY_URL, APP_ORIGIN } from './constants'

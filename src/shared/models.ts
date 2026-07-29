@@ -25,6 +25,7 @@ export interface UnifiedSong {
   artistMid?: string
   albumMid?: string
   playable?: boolean
+  supportedQualities?: QualityLevel[]
 }
 
 export interface UnifiedPlaylist {

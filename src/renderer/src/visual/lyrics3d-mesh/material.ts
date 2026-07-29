@@ -3,12 +3,14 @@ import * as THREE from 'three'
 export interface LyricsMaterialHandle {
   material: THREE.MeshStandardMaterial
   setHighlight(progress: number, activity: number, color: THREE.Color): void
+  setWeight(weight: number): void
 }
 
 export function createLyricsMaterial(color: THREE.ColorRepresentation): LyricsMaterialHandle {
   const highlightProgress = { value: 0 }
   const highlightActivity = { value: 0 }
   const highlightColor = { value: new THREE.Color(color) }
+  const fontWeight = { value: 0 }
   const material = new THREE.MeshStandardMaterial({
     color,
     emissive: color,
@@ -25,11 +27,13 @@ export function createLyricsMaterial(color: THREE.ColorRepresentation): LyricsMa
       uHighlightProgress: highlightProgress,
       uHighlightActivity: highlightActivity,
       uHighlightColor: highlightColor,
+      uFontWeight: fontWeight,
     })
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
         `#include <common>
+         uniform float uFontWeight;
          attribute vec3 glyphCenter;
          attribute float glyphIndex;
          varying float vLyricHighlightCoordinate;`,
@@ -37,6 +41,7 @@ export function createLyricsMaterial(color: THREE.ColorRepresentation): LyricsMa
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
+         transformed += normal * uFontWeight;
          float lyricGlyphX = clamp((position.x - glyphCenter.x) + 0.5, 0.0, 1.0);
          vLyricHighlightCoordinate = glyphIndex + lyricGlyphX;`,
       )
@@ -78,6 +83,9 @@ export function createLyricsMaterial(color: THREE.ColorRepresentation): LyricsMa
       highlightProgress.value = Math.max(0, progress)
       highlightActivity.value = THREE.MathUtils.clamp(activity, 0, 1)
       highlightColor.value.copy(colorValue)
+    },
+    setWeight: (weight) => {
+      fontWeight.value = THREE.MathUtils.clamp(weight, 0, 0.03)
     },
   }
 }

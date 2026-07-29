@@ -23,6 +23,13 @@ export const TAILWIND_COLOR_SWATCHES: readonly ColorSwatch[] = Object.freeze([
   { name: 'rose-500', label: '玫红', value: '#f43f5e' },
 ])
 
+const colorInputClass = [
+  'h-9 rounded-[var(--flux-radius-control)] border border-[var(--flux-glass-border)]',
+  'bg-[color-mix(in_srgb,var(--flux-panel-surface)_64%,transparent)]',
+  'focus-visible:outline-2 focus-visible:outline-offset-2',
+  'focus-visible:outline-[color-mix(in_srgb,var(--flux-accent)_72%,white_8%)]',
+].join(' ')
+
 export function ColorPicker({
   value,
   onChange,
@@ -50,17 +57,22 @@ export function ColorPicker({
   }
 
   return (
-    <div className={cn('color-picker', className)}>
-      <div className="color-picker-heading">
+    <div className={cn('grid gap-2', className)} data-color-picker="">
+      <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-[var(--flux-text)]">
         <label htmlFor={`${id}-native`}>{label}</label>
-        <code>{value.toUpperCase()}</code>
+        <code className="text-[10px] font-normal text-[var(--flux-text-muted)]">{value.toUpperCase()}</code>
       </div>
-      {description ? <small>{description}</small> : null}
-      <div className="color-picker-controls">
+      {description ? (
+        <small className="text-[10px] leading-[1.45] font-normal text-[var(--flux-text-muted)]">
+          {description}
+        </small>
+      ) : null}
+      <div className="grid grid-cols-[40px_minmax(0,1fr)] gap-2">
         <input
           id={`${id}-native`}
           type="color"
           value={value}
+          className={cn(colorInputClass, 'w-10 cursor-pointer p-[3px]')}
           aria-label={`${label}取色器`}
           onChange={(event) => onChange(event.currentTarget.value)}
         />
@@ -69,27 +81,41 @@ export function ColorPicker({
           value={draft}
           maxLength={7}
           spellCheck={false}
+          className={cn(
+            colorInputClass,
+            'min-w-0 px-2.5 text-[11px] leading-none font-medium tracking-[0.06em] text-[var(--flux-text)] uppercase [font-family:var(--flux-font-family)]',
+          )}
           aria-label={`${label}十六进制色值`}
           onChange={(event) => commitDraft(event.currentTarget.value)}
           onBlur={() => setDraft(value.toUpperCase())}
         />
       </div>
       {swatches.length ? (
-        <div className="color-swatch-list" aria-label="Tailwind 默认色">
+        <div className="grid grid-cols-10 gap-1.5" aria-label="Tailwind 默认色" data-color-swatches="">
           {swatches.map((swatch) => {
             const selected = swatch.value.toLowerCase() === value.toLowerCase()
             return (
               <button
                 key={swatch.name}
                 type="button"
-                className="color-swatch"
+                className={cn(
+                  'grid min-w-0 cursor-pointer place-items-center rounded-[7px] border p-0 text-white',
+                  'aspect-square border-[color-mix(in_srgb,var(--swatch-color)_70%,white_30%)] bg-[var(--swatch-color)]',
+                  'shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-[border-color,filter] duration-[var(--motion-duration-fast)]',
+                  'hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2',
+                  'focus-visible:outline-[color-mix(in_srgb,var(--flux-accent)_72%,white_8%)] motion-reduce:transition-none',
+                  selected &&
+                    'border-white shadow-[0_0_0_2px_color-mix(in_srgb,var(--swatch-color)_52%,transparent),inset_0_1px_0_rgba(255,255,255,0.24)]',
+                )}
                 style={{ '--swatch-color': swatch.value } as React.CSSProperties}
                 aria-label={`${swatch.label}，${swatch.name}`}
                 aria-pressed={selected}
                 title={swatch.name}
                 onClick={() => onChange(swatch.value)}
               >
-                {selected ? <Check aria-hidden="true" /> : null}
+                {selected ? (
+                  <Check className="size-3.5 drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]" aria-hidden="true" />
+                ) : null}
               </button>
             )
           })}
