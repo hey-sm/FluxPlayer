@@ -1,4 +1,9 @@
-import type { MusicAuthResult, PlaylistListResult, PlaylistTracksResult } from '@shared/music-contract'
+import type {
+  DiscoverResult,
+  MusicAuthResult,
+  PlaylistListResult,
+  PlaylistTracksResult,
+} from '@shared/music-contract'
 import type {
   LyricDoc,
   NeteaseLoginInfo,
@@ -241,6 +246,8 @@ function mapPlaylist(raw: unknown): UnifiedPlaylist {
     creator: stringValue(creator.nickname),
     subscribed: booleanValue(playlist.subscribed),
     specialType: numberValue(playlist.specialType),
+    // specialType=5 是网易云的「我喜欢的音乐」
+    favorite: numberValue(playlist.specialType) === 5,
   }
 }
 
@@ -318,8 +325,9 @@ export class NeteaseProvider {
     return toAuthResult(await this.loginInfo())
   }
 
-  async search(keywords: string, limit: number): Promise<UnifiedSong[]> {
-    const result = await ncm.cloudsearch({ keywords, limit, cookie: this.cookie })
+  async search(keywords: string, limit: number, page = 1): Promise<UnifiedSong[]> {
+    const offset = Math.max(0, (Math.max(1, Math.floor(page)) - 1) * limit)
+    const result = await ncm.cloudsearch({ keywords, limit, offset, cookie: this.cookie })
     const songs = asArray(at(result.body, 'result', 'songs'))
     let mapped = songs.map(mapSongRecord).filter((song) => song.id !== '' && song.name)
 
@@ -589,5 +597,14 @@ export class NeteaseProvider {
       // Credentials are still cleared locally when upstream logout is unavailable.
     }
     this.saveCookie('')
+  }
+
+  /**
+   * 网易云暂无发现页实现。返回 supported:false 而不是抛错——
+   * MusicService.execute 会把抛错包成 PROVIDER_UNAVAILABLE 弹给用户，
+   * 但"没有这个功能"不是故障，UI 据此隐藏整块即可。
+   */
+  discover(): DiscoverResult {
+    return { provider: 'netease', supported: false, loggedIn: false, sections: [] }
   }
 }

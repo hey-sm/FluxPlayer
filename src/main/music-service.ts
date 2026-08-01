@@ -15,5 +15,6 @@ export function createMainMusicService(credentials: CredentialStore): MainMusicS
     getPlaylists: (request) => service.getPlaylists(request),
     getPlaylistTracks: (request) => service.getPlaylistTracks(request),
     getLikedTracks: (request) => service.getLikedTracks(request),
+    getDiscover: (request) => service.getDiscover(request),
   }
 }

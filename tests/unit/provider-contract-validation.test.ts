@@ -146,8 +146,13 @@ describe.each(providers)('%s provider shared contract validation', (providerId) 
     const tracks = await service.getPlaylistTracks({ provider: providerId, id: 42 })
     const liked = await service.getLikedTracks({ provider: providerId, offset: -4.2, limit: 900 })
 
-    expect(search).toHaveBeenCalledWith('contract', 200)
-    expect(searchResult).toEqual({ provider: providerId, songs: [song(providerId)] })
+    expect(search).toHaveBeenCalledWith('contract', 200, 1)
+    expect(searchResult).toEqual({
+      provider: providerId,
+      songs: [song(providerId)],
+      page: 1,
+      hasMore: false,
+    })
 
     expect(resolvePlayback).toHaveBeenCalledWith(song(providerId), 'hires')
     expect(playbackResult).toMatchObject({

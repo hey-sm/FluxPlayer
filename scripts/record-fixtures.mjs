@@ -57,9 +57,25 @@ async function requestJson(targetUrl, opts = {}, body) {
 // ===== QQ 端点与请求头（与 providers/qq/client.ts 一致）=====
 const QQ_MUSICU_URL = 'https://u.y.qq.com/cgi-bin/musicu.fcg'
 const QQ_SMARTBOX_URL = 'https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg'
+const QQ_SEARCH_URL = 'https://c.y.qq.com/soso/fcgi-bin/client_search_cp'
 const QQ_CDLIST_URL = 'https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg'
 const QQ_DISS_SQUARE_URL = 'https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg'
 const QQ_HEADERS = { Referer: 'https://y.qq.com/', 'User-Agent': UA }
+
+/** 与 providers/qq/client.ts 的 qqCommonParams 保持一字不差 */
+function qqCommonParams(uin = '0') {
+  return {
+    g_tk: '5381',
+    loginUin: String(uin || '0'),
+    hostUin: '0',
+    format: 'json',
+    inCharset: 'utf8',
+    outCharset: 'utf-8',
+    notice: '0',
+    platform: 'yqq.json',
+    needNewCode: '0',
+  }
+}
 
 async function musicuRequest(payload) {
   // 匿名：不带 Cookie（与 QQClient.musicuRequest 在无 cookie 时的行为一致）
@@ -134,20 +150,35 @@ async function run(rel, fn) {
 // ===== QQ =====
 
 async function recordQQ() {
+  await run('qq/client-search.fixture.json', async (rel) => {
+    // 参数照抄 QQProvider.search
+    const params = {
+      ...qqCommonParams(),
+      w: '周杰伦 晴天',
+      p: '1',
+      n: '5',
+      t: '0',
+      aggr: '1',
+      cr: '1',
+      lossless: '0',
+      flag_qc: '0',
+      catZhida: '1',
+      ct: '24',
+      qqmusic_ver: '1298',
+      remoteplace: 'txt.yqq.song',
+    }
+    const u = new URL(QQ_SEARCH_URL)
+    for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v)
+    const json = await requestJson(u.toString(), { headers: QQ_HEADERS })
+    const list = json && json.data && json.data.song && json.data.song.list
+    if (!Array.isArray(list) || !list.length) throw new Error('响应缺 data.song.list（形状漂移或风控）')
+    const trimmed = trimAt(json, 'data.song.list', 5)
+    writeFixture(rel, { endpoint: QQ_SEARCH_URL, method: 'GET', params, trimmed }, json)
+  })
+
   await run('qq/smartbox-search.fixture.json', async (rel) => {
     // 参数照抄 QQProvider.smartboxSearch
-    const params = {
-      format: 'json',
-      key: '周杰伦 晴天',
-      g_tk: '5381',
-      loginUin: '0',
-      hostUin: '0',
-      inCharset: 'utf8',
-      outCharset: 'utf-8',
-      notice: '0',
-      platform: 'yqq.json',
-      needNewCode: '0',
-    }
+    const params = { ...qqCommonParams(), key: '周杰伦 晴天' }
     const u = new URL(QQ_SMARTBOX_URL)
     for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v)
     const json = await requestJson(u.toString(), { headers: QQ_HEADERS })

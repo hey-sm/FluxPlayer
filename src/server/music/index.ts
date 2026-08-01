@@ -1,4 +1,6 @@
 import type {
+  DiscoverRequest,
+  DiscoverResult,
   LikedTracksRequest,
   LikedTracksResult,
   LyricsRequest,
@@ -85,8 +87,12 @@ export class MusicService {
   async search(request: MusicSearchRequest): Promise<MusicSearchResult> {
     const provider = this.select(request.provider)
     const limit = Math.max(1, Math.min(200, Math.floor(request.limit ?? 30)))
-    const songs = await this.execute(request.provider, () => provider.search(request.keywords.trim(), limit))
-    return { provider: request.provider, songs }
+    const page = Math.max(1, Math.floor(request.page ?? 1))
+    const songs = await this.execute(request.provider, () =>
+      provider.search(request.keywords.trim(), limit, page),
+    )
+    // 上游不回总数，用"本页拿满 limit"推断还有下一页；最后一页会多触发一次空请求，可接受。
+    return { provider: request.provider, songs, page, hasMore: songs.length >= limit }
   }
 
   /** Returns an upstream resource only to Electron main. Main must replace it with a flux-media handle before IPC. */
@@ -162,6 +168,12 @@ export class MusicService {
       total: result.total,
       hasMore: result.hasMore,
     }
+  }
+
+  async getDiscover(request: DiscoverRequest): Promise<DiscoverResult> {
+    const provider = this.select(request.provider)
+    const limit = Math.max(1, Math.min(50, Math.floor(request.limit ?? 12)))
+    return this.execute(request.provider, () => provider.discover(limit))
   }
 }
 

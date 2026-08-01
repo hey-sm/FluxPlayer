@@ -39,6 +39,7 @@ export const musicSearchRequestSchema = z.object({
   provider: providerIdSchema,
   keywords: z.string().check(z.minLength(1), z.maxLength(200)),
   limit: positiveLimitSchema,
+  page: z.optional(z.int().check(z.gte(1), z.lte(100))),
 })
 
 export const playbackResolveRequestSchema = z.object({
@@ -70,6 +71,11 @@ export const likedTracksRequestSchema = z.object({
   limit: positiveLimitSchema,
 })
 
+export const discoverRequestSchema = z.object({
+  provider: providerIdSchema,
+  limit: positiveLimitSchema,
+})
+
 export type MusicRequestSchema =
   | typeof musicSearchRequestSchema
   | typeof playbackResolveRequestSchema
@@ -78,3 +84,4 @@ export type MusicRequestSchema =
   | typeof playlistListRequestSchema
   | typeof playlistTracksRequestSchema
   | typeof likedTracksRequestSchema
+  | typeof discoverRequestSchema

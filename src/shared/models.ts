@@ -39,6 +39,8 @@ export interface UnifiedPlaylist {
   creator?: string
   subscribed?: boolean
   specialType?: number
+  /** 平台的「我喜欢」歌单。判据由各 provider 自己给（QQ 认名字、网易云认 specialType=5）。 */
+  favorite?: boolean
   tag?: string
 }
 

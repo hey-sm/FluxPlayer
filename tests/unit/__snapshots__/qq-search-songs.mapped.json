@@ -1,0 +1,157 @@
+[
+  {
+    "provider": "qq",
+    "type": "qq",
+    "id": "0039MnYb0qxYhV",
+    "qqId": 97773,
+    "mid": "0039MnYb0qxYhV",
+    "songmid": "0039MnYb0qxYhV",
+    "mediaMid": "003Qui1q2u1Zho",
+    "name": "晴天",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "id": 4558,
+        "mid": "0025NhlN2yWrP4",
+        "name": "周杰伦"
+      }
+    ],
+    "artistId": 4558,
+    "artistMid": "0025NhlN2yWrP4",
+    "album": "叶惠美",
+    "albumMid": "000MkMni19ClKG",
+    "cover": "https://y.qq.com/music/photo_new/T002R300x300M000000MkMni19ClKG.jpg?max_age=2592000",
+    "duration": 269000,
+    "fee": 1,
+    "playable": false,
+    "supportedQualities": [
+      "lossless",
+      "exhigh",
+      "standard"
+    ]
+  },
+  {
+    "provider": "qq",
+    "type": "qq",
+    "id": "000vsDaJ1FzxMV",
+    "qqId": 573944952,
+    "mid": "000vsDaJ1FzxMV",
+    "songmid": "000vsDaJ1FzxMV",
+    "mediaMid": "001VX4aB4Kgase",
+    "name": "晴天 (0.8x DJ 阿Bo版)",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "id": 0,
+        "mid": "0032fmHO2UDnV3",
+        "name": "周杰伦"
+      }
+    ],
+    "artistId": 0,
+    "artistMid": "0032fmHO2UDnV3",
+    "album": "",
+    "albumMid": "",
+    "cover": "",
+    "duration": 136000,
+    "fee": 0,
+    "playable": false,
+    "supportedQualities": [
+      "lossless",
+      "exhigh",
+      "standard"
+    ]
+  },
+  {
+    "provider": "qq",
+    "type": "qq",
+    "id": "004Fs2FP1EvZYc",
+    "qqId": 244115385,
+    "mid": "004Fs2FP1EvZYc",
+    "songmid": "004Fs2FP1EvZYc",
+    "mediaMid": "002DMfDx1macLz",
+    "name": "晴天 (Live)",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "id": 4558,
+        "mid": "0025NhlN2yWrP4",
+        "name": "周杰伦"
+      }
+    ],
+    "artistId": 4558,
+    "artistMid": "0025NhlN2yWrP4",
+    "album": "周杰伦地表最强世界巡回演唱会",
+    "albumMid": "004fXSyj3bWTMN",
+    "cover": "https://y.qq.com/music/photo_new/T002R300x300M000004fXSyj3bWTMN.jpg?max_age=2592000",
+    "duration": 249000,
+    "fee": 1,
+    "playable": false,
+    "supportedQualities": [
+      "lossless",
+      "exhigh",
+      "standard"
+    ]
+  },
+  {
+    "provider": "qq",
+    "type": "qq",
+    "id": "001398Rf3gykz8",
+    "qqId": 4962974,
+    "mid": "001398Rf3gykz8",
+    "songmid": "001398Rf3gykz8",
+    "mediaMid": "003XEKsj41apvG",
+    "name": "晴天 (Live)",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "id": 4558,
+        "mid": "0025NhlN2yWrP4",
+        "name": "周杰伦"
+      }
+    ],
+    "artistId": 4558,
+    "artistMid": "0025NhlN2yWrP4",
+    "album": "周杰伦 2004 无与伦比 演唱会 Live CD",
+    "albumMid": "0032ezFm3F53yO",
+    "cover": "https://y.qq.com/music/photo_new/T002R300x300M0000032ezFm3F53yO.jpg?max_age=2592000",
+    "duration": 299000,
+    "fee": 1,
+    "playable": false,
+    "supportedQualities": [
+      "lossless",
+      "exhigh",
+      "standard"
+    ]
+  },
+  {
+    "provider": "qq",
+    "type": "qq",
+    "id": "0044SaFh0apuR2",
+    "qqId": 649556362,
+    "mid": "0044SaFh0apuR2",
+    "songmid": "0044SaFh0apuR2",
+    "mediaMid": "0044SaFh0apuR2",
+    "name": "那天下雨了",
+    "artist": "周杰伦",
+    "artists": [
+      {
+        "id": 4558,
+        "mid": "0025NhlN2yWrP4",
+        "name": "周杰伦"
+      }
+    ],
+    "artistId": 4558,
+    "artistMid": "0025NhlN2yWrP4",
+    "album": "太阳之子",
+    "albumMid": "0041WVfh2vtlJE",
+    "cover": "https://y.qq.com/music/photo_new/T002R300x300M0000041WVfh2vtlJE.jpg?max_age=2592000",
+    "duration": 223000,
+    "fee": 1,
+    "playable": false,
+    "supportedQualities": [
+      "lossless",
+      "exhigh",
+      "standard"
+    ]
+  }
+]

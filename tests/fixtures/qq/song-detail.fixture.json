@@ -1,6 +1,6 @@
 {
   "$fixture": {
-    "recordedAt": "2026-07-05T13:01:37.303Z",
+    "recordedAt": "2026-07-31T14:12:39.750Z",
     "provenance": "recorded",
     "endpoint": "https://u.y.qq.com/cgi-bin/musicu.fcg",
     "method": "POST",
@@ -21,9 +21,9 @@
   },
   "response": {
     "code": 0,
-    "ts": 1783256495758,
-    "start_ts": 1783256495655,
-    "traceid": "12201709d57da96e",
+    "ts": 1785507152936,
+    "start_ts": 1785507152838,
+    "traceid": "3e2a60053576fb74",
     "songinfo": {
       "code": 0,
       "data": {

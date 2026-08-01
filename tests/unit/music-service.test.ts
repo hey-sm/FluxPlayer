@@ -71,6 +71,8 @@ describe.each<ProviderId>(['netease', 'qq'])('MusicService %s contract', (provid
       {
         provider: providerId,
         songs: [songs[providerId]],
+        page: 1,
+        hasMore: false,
       },
     )
     const resolved = await service.resolvePlayback({ song: songs[providerId], quality: 'exhigh' })

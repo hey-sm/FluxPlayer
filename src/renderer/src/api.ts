@@ -83,6 +83,7 @@ export const musicClient: FluxMusicApi = {
   getPlaylists: (request) => getMusicBridge().getPlaylists(request),
   getPlaylistTracks: (request) => getMusicBridge().getPlaylistTracks(request),
   getLikedTracks: (request) => getMusicBridge().getLikedTracks(request),
+  getDiscover: (request) => getMusicBridge().getDiscover(request),
 }
 
 export function searchMusic(request: MusicSearchRequest, signal?: AbortSignal): Promise<MusicSearchResult> {

@@ -9,6 +9,8 @@ import { usePlayer } from '../../stores/player'
 import { LibrarySheet } from '../../components/shell/LibrarySheet'
 import { PlaylistDetailSheet } from '../../components/shell/PlaylistDetailSheet'
 import { AnimatedList } from '../../components/react-bits/AnimatedList'
+import { ClockIcon, HeartIcon } from '../../components/Icons'
+import { DiscoverPanel } from '../discover'
 import {
   clearPlaylistIdentity,
   createPlaylistListQuery,
@@ -18,13 +20,14 @@ import {
   prefetchPlaylistWindow,
   PLAYLIST_TRACKS_STALE_TIME,
 } from '../playlist'
-import { fetchLikedTracks } from './api'
+import { fetchAllLikedTracks } from './api'
 import { libraryQueryKeys } from './queries'
 import { readRecentPlays, recordRecentPlay, subscribeRecentPlays } from './recent'
 import {
   libraryRowVariants,
   libraryShortcutVariants,
   libraryStatusVariants,
+  playlistTabVariants,
   providerTabVariants,
 } from './variants'
 
@@ -38,6 +41,12 @@ interface PlaylistDetail {
 }
 
 const DETAIL_ROW_HEIGHT = 58
+
+type PlaylistTabId = 'created' | 'collected'
+const PLAYLIST_TABS: readonly { id: PlaylistTabId; label: string }[] = [
+  { id: 'created', label: '自建歌单' },
+  { id: 'collected', label: '收藏歌单' },
+]
 
 function PlaylistCoverImage({
   candidates,
@@ -183,6 +192,15 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
     staleTime: 5 * 60 * 1000,
   })
   const playlists = useMemo(() => playlistsQuery.data?.playlists ?? [], [playlistsQuery.data])
+  const [playlistTab, setPlaylistTab] = useState<PlaylistTabId>('created')
+  // 「我喜欢」已经在上面的快捷入口里，列表里不再重复一份
+  const ownPlaylists = useMemo(() => playlists.filter((item) => !item.favorite), [playlists])
+  // 自建 vs 收藏：QQ 由 userPlaylists 的两个上游接口分别打标，网易云来自 user_playlist 的 subscribed 字段
+  const createdPlaylists = useMemo(() => ownPlaylists.filter((item) => !item.subscribed), [ownPlaylists])
+  const collectedPlaylists = useMemo(() => ownPlaylists.filter((item) => item.subscribed), [ownPlaylists])
+  const visiblePlaylists = playlistTab === 'created' ? createdPlaylists : collectedPlaylists
+  // 快捷入口的数量取平台「我喜欢」歌单的真实曲目数，不受列表分页影响
+  const likedCount = useMemo(() => playlists.find((item) => item.favorite)?.trackCount ?? 0, [playlists])
 
   useEffect(() => {
     currentScope.current = scope
@@ -221,9 +239,8 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
 
   const prefetchPlaylist = useCallback(
     (playlist: UnifiedPlaylist) => {
-      if (!activeIdentity) return
       void queryClient.prefetchQuery({
-        ...createPlaylistTracksQuery(provider, activeIdentity, playlist.id),
+        ...createPlaylistTracksQuery(provider, activeIdentity || 'guest', playlist.id),
         staleTime: PLAYLIST_TRACKS_STALE_TIME,
       })
     },
@@ -289,14 +306,17 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
 
   const openPlaylist = useCallback(
     (playlist: UnifiedPlaylist) => {
-      if (!activeIdentity) return
-      localStorage.setItem(lastPlaylistStorageKey(provider, activeIdentity), String(playlist.id))
+      // 未登录也允许：发现页的榜单/热门歌单匿名可读，identityToken 与 openTracks 一样退回 'guest'
+      const identityToken = activeIdentity || 'guest'
+      if (activeIdentity) {
+        localStorage.setItem(lastPlaylistStorageKey(provider, activeIdentity), String(playlist.id))
+      }
       const generation = ++requestGeneration.current
-      const query = createPlaylistTracksQuery(provider, activeIdentity, playlist.id)
+      const query = createPlaylistTracksQuery(provider, identityToken, playlist.id)
       const cached = queryClient.getQueryData<PlaylistTracksResult>(query.queryKey)
       setDetail({
         provider,
-        identityToken: activeIdentity,
+        identityToken,
         playlist: cached?.playlist ?? playlist,
         tracks: cached?.tracks ?? [],
         status: cached ? 'success' : 'loading',
@@ -318,7 +338,7 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
           }))
           setDetail({
             provider,
-            identityToken: activeIdentity,
+            identityToken,
             playlist: resolvedPlaylist,
             tracks: result.tracks,
             status: 'success',
@@ -329,7 +349,7 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
           if (cached) return
           setDetail({
             provider,
-            identityToken: activeIdentity,
+            identityToken,
             playlist,
             tracks: [],
             status: 'error',
@@ -355,8 +375,8 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
     setDetailOpen(true)
     void queryClient
       .fetchQuery({
-        queryKey: libraryQueryKeys.liked(provider, activeIdentity, { limit: 200 }),
-        queryFn: ({ signal }) => fetchLikedTracks(provider, { limit: 200 }, signal),
+        queryKey: libraryQueryKeys.liked(provider, activeIdentity, { limit: 0 }),
+        queryFn: ({ signal }) => fetchAllLikedTracks(provider, signal),
         staleTime: 60 * 1000,
       })
       .then((result) => {
@@ -426,28 +446,32 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
             provider={provider}
             className="mr-0 mb-3 min-h-[34px] [&_[data-account-nickname]]:max-w-[135px]"
           />
-          <div className="mb-3 grid grid-cols-2 gap-2" aria-label="快捷歌单" data-library-shortcuts="">
+          <div className="mb-3 grid gap-1" aria-label="快捷歌单" data-library-shortcuts="">
             <button
               className={libraryShortcutVariants()}
               type="button"
               disabled={!loggedIn}
               onClick={openLikedTracks}
+              data-library-shortcut="liked"
             >
-              <strong className="block">我的喜欢</strong>
-              <small className="mt-1 block text-[10px] text-[var(--flux-text-muted)]">
-                {loggedIn ? '平台收藏' : '登录后查看'}
-              </small>
+              <HeartIcon className="size-[18px] shrink-0" />
+              <span className="truncate">我的喜欢</span>
+              <span className="ml-auto text-[11px] text-[var(--flux-text-muted)]">
+                {loggedIn ? (likedCount > 0 ? likedCount : '') : '登录后查看'}
+              </span>
             </button>
             <button
               className={libraryShortcutVariants()}
               type="button"
               disabled={recentTracks.length === 0}
               onClick={() => openTracks('最近播放', recentTracks, 'FluxPlayer 记录')}
+              data-library-shortcut="recent"
             >
-              <strong className="block">最近播放</strong>
-              <small className="mt-1 block text-[10px] text-[var(--flux-text-muted)]">
-                {recentTracks.length ? `${recentTracks.length} 首` : '暂无记录'}
-              </small>
+              <ClockIcon className="size-[18px] shrink-0" />
+              <span className="truncate">最近播放</span>
+              <span className="ml-auto text-[11px] text-[var(--flux-text-muted)]">
+                {recentTracks.length || ''}
+              </span>
             </button>
           </div>
           {playlistsQuery.isFetching ? (
@@ -455,8 +479,37 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
               正在同步歌单…
             </div>
           ) : null}
+          <DiscoverPanel
+            provider={provider}
+            identityToken={activeIdentity}
+            onOpenPlaylist={openPlaylist}
+            onPrefetchPlaylist={prefetchPlaylist}
+          />
+          <div
+            className="mb-2 flex items-center gap-1.5"
+            role="tablist"
+            aria-label="歌单分组"
+            data-library-playlist-tabs=""
+          >
+            {PLAYLIST_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                role="tab"
+                type="button"
+                aria-selected={playlistTab === tab.id}
+                className={playlistTabVariants({ active: playlistTab === tab.id })}
+                data-library-playlist-tab={tab.id}
+                onClick={() => setPlaylistTab(tab.id)}
+              >
+                {tab.label}
+                <span className="ml-1.5 text-[10px] text-[var(--flux-text-muted)]">
+                  {tab.id === 'created' ? createdPlaylists.length : collectedPlaylists.length}
+                </span>
+              </button>
+            ))}
+          </div>
           <AnimatedList
-            items={playlists}
+            items={visiblePlaylists}
             getKey={(playlist) => String(playlist.id)}
             selectedKey={visibleDetail ? String(visibleDetail.playlist.id) : null}
             ariaLabel="歌单列表"

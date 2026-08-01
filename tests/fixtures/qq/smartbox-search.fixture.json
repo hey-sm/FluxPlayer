@@ -1,20 +1,20 @@
 {
   "$fixture": {
-    "recordedAt": "2026-07-05T13:01:36.914Z",
+    "recordedAt": "2026-07-31T14:12:39.338Z",
     "provenance": "recorded",
     "endpoint": "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg",
     "method": "GET",
     "params": {
-      "format": "json",
-      "key": "周杰伦 晴天",
       "g_tk": "5381",
       "loginUin": "0",
       "hostUin": "0",
+      "format": "json",
       "inCharset": "utf8",
       "outCharset": "utf-8",
       "notice": "0",
       "platform": "yqq.json",
-      "needNewCode": "0"
+      "needNewCode": "0",
+      "key": "周杰伦 晴天"
     },
     "anonymous": true
   },
@@ -77,18 +77,18 @@
             "singer": "周杰伦微博台"
           },
           {
-            "docid": "341030119",
-            "id": "341030119",
-            "mid": "0002fGVs2iterI",
-            "name": "晴天 (纯音乐)",
-            "singer": "周杰伦"
-          },
-          {
             "docid": "253970285",
             "id": "253970285",
             "mid": "002QaW6I1ZtJgD",
             "name": "周杰伦 - 晴天（电波版）",
             "singer": "周杰伦微博台"
+          },
+          {
+            "docid": "373283135",
+            "id": "373283135",
+            "mid": "0011I18U4VPP1q",
+            "name": "周杰伦晴天Demo",
+            "singer": "宝藏挖掘机"
           }
         ],
         "name": "单曲",

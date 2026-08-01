@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, globalShortcut, ipcMain } from 'electron'
 import * as z from 'zod/mini'
 import { IPC, type HotkeyBinding, type HotkeyConfigureResult } from '@shared/ipc-contract'
 import type {
+  DiscoverRequest,
   FluxMusicApi,
   LikedTracksRequest,
   LikedTracksResult,
@@ -18,6 +19,7 @@ import type {
   PlaylistTracksResult,
 } from '@shared/music-contract'
 import {
+  discoverRequestSchema,
   likedTracksRequestSchema,
   lyricsRequestSchema,
   musicSearchRequestSchema,
@@ -251,6 +253,9 @@ export function registerIpcHandlers(deps: IpcDeps): void {
   )
   secureHandle(IPC.musicGetLikedTracks, likedTracksRequestSchema, deps, (request) =>
     deps.getMusicService().getLikedTracks(request as LikedTracksRequest),
+  )
+  secureHandle(IPC.musicGetDiscover, discoverRequestSchema, deps, (request) =>
+    deps.getMusicService().getDiscover(request as DiscoverRequest),
   )
 
   secureHandle(IPC.restartApp, noInputSchema, deps, async () => {

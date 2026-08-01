@@ -42,15 +42,15 @@
   {
     "provider": "qq",
     "type": "qq",
-    "id": "0002fGVs2iterI",
-    "qqId": "341030119",
-    "mid": "0002fGVs2iterI",
-    "songmid": "0002fGVs2iterI",
-    "name": "晴天 (纯音乐)",
-    "artist": "周杰伦",
+    "id": "002QaW6I1ZtJgD",
+    "qqId": "253970285",
+    "mid": "002QaW6I1ZtJgD",
+    "songmid": "002QaW6I1ZtJgD",
+    "name": "周杰伦 - 晴天（电波版）",
+    "artist": "周杰伦微博台",
     "artists": [
       {
-        "name": "周杰伦"
+        "name": "周杰伦微博台"
       }
     ],
     "album": "",
@@ -62,15 +62,15 @@
   {
     "provider": "qq",
     "type": "qq",
-    "id": "002QaW6I1ZtJgD",
-    "qqId": "253970285",
-    "mid": "002QaW6I1ZtJgD",
-    "songmid": "002QaW6I1ZtJgD",
-    "name": "周杰伦 - 晴天（电波版）",
-    "artist": "周杰伦微博台",
+    "id": "0011I18U4VPP1q",
+    "qqId": "373283135",
+    "mid": "0011I18U4VPP1q",
+    "songmid": "0011I18U4VPP1q",
+    "name": "周杰伦晴天Demo",
+    "artist": "宝藏挖掘机",
     "artists": [
       {
-        "name": "周杰伦微博台"
+        "name": "宝藏挖掘机"
       }
     ],
     "album": "",

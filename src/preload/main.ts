@@ -31,6 +31,7 @@ const music: FluxMusicApi = {
   getPlaylists: (request) => ipcRenderer.invoke(IPC.musicGetPlaylists, request),
   getPlaylistTracks: (request) => ipcRenderer.invoke(IPC.musicGetPlaylistTracks, request),
   getLikedTracks: (request) => ipcRenderer.invoke(IPC.musicGetLikedTracks, request),
+  getDiscover: (request) => ipcRenderer.invoke(IPC.musicGetDiscover, request),
 }
 
 const api = {

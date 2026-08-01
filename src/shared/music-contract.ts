@@ -34,11 +34,16 @@ export interface MusicSearchRequest {
   provider: ProviderId
   keywords: string
   limit?: number
+  /** 1-based 页码，省略即第一页 */
+  page?: number
 }
 
 export interface MusicSearchResult {
   provider: ProviderId
   songs: UnifiedSong[]
+  page: number
+  /** 上游是否还有下一页；由"本页是否拿满 limit"推断 */
+  hasMore: boolean
 }
 
 export interface PlaybackResolveRequest {
@@ -131,6 +136,27 @@ export interface LikedTracksResult {
   hasMore: boolean
 }
 
+export interface DiscoverRequest {
+  provider: ProviderId
+  limit?: number
+}
+
+/** 一个推荐区块（排行榜 / 分类歌单…）。复用 UnifiedPlaylist，点开走 getPlaylistTracks。 */
+export interface DiscoverSection {
+  id: string
+  title: string
+  playlists: UnifiedPlaylist[]
+}
+
+export interface DiscoverResult {
+  provider: ProviderId
+  /** false = 该 provider 没有发现页实现，UI 隐藏整块，而不是当成错误 */
+  supported: boolean
+  /** false = 需要登录才有内容，UI 提示登录而不是显示空白 */
+  loggedIn: boolean
+  sections: DiscoverSection[]
+}
+
 export interface FluxMusicApi {
   search(request: MusicSearchRequest): Promise<MusicSearchResult>
   resolvePlayback(request: PlaybackResolveRequest): Promise<PlaybackResolveResult>
@@ -141,4 +167,5 @@ export interface FluxMusicApi {
   getPlaylists(request: PlaylistListRequest): Promise<PlaylistListResult>
   getPlaylistTracks(request: PlaylistTracksRequest): Promise<PlaylistTracksResult>
   getLikedTracks(request: LikedTracksRequest): Promise<LikedTracksResult>
+  getDiscover(request: DiscoverRequest): Promise<DiscoverResult>
 }

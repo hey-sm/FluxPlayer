@@ -17,6 +17,7 @@ export const IPC = {
   musicGetPlaylists: 'flux:music:get-playlists',
   musicGetPlaylistTracks: 'flux:music:get-playlist-tracks',
   musicGetLikedTracks: 'flux:music:get-liked-tracks',
+  musicGetDiscover: 'flux:music:get-discover',
   restartApp: 'flux:app:restart',
   configureGlobalHotkeys: 'flux:hotkeys:configure-global',
   globalHotkey: 'flux:hotkeys:triggered',

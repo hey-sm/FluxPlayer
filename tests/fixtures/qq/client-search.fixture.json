@@ -1,0 +1,636 @@
+{
+  "$fixture": {
+    "recordedAt": "2026-07-31T14:12:39.204Z",
+    "provenance": "recorded",
+    "endpoint": "https://c.y.qq.com/soso/fcgi-bin/client_search_cp",
+    "method": "GET",
+    "params": {
+      "g_tk": "5381",
+      "loginUin": "0",
+      "hostUin": "0",
+      "format": "json",
+      "inCharset": "utf8",
+      "outCharset": "utf-8",
+      "notice": "0",
+      "platform": "yqq.json",
+      "needNewCode": "0",
+      "w": "周杰伦 晴天",
+      "p": "1",
+      "n": "5",
+      "t": "0",
+      "aggr": "1",
+      "cr": "1",
+      "lossless": "0",
+      "flag_qc": "0",
+      "catZhida": "1",
+      "ct": "24",
+      "qqmusic_ver": "1298",
+      "remoteplace": "txt.yqq.song"
+    },
+    "anonymous": true
+  },
+  "response": {
+    "code": 0,
+    "data": {
+      "keyword": "周杰伦 晴天",
+      "priority": 0,
+      "qc": [],
+      "semantic": {
+        "curnum": 0,
+        "curpage": 1,
+        "list": [],
+        "totalnum": 0
+      },
+      "song": {
+        "curnum": 7,
+        "curpage": 1,
+        "list": [
+          {
+            "albumid": 8220,
+            "albummid": "000MkMni19ClKG",
+            "albumname": "叶惠美",
+            "albumname_hilight": "叶惠美",
+            "alertid": 41,
+            "belongCD": 0,
+            "cdIdx": 3,
+            "chinesesinger": 0,
+            "docid": "4660176279196411288",
+            "grp": [],
+            "interval": 269,
+            "isonly": 1,
+            "lyric": "",
+            "lyric_hilight": "",
+            "media_mid": "003Qui1q2u1Zho",
+            "msgid": 13,
+            "newStatus": 2,
+            "nt": 4230540145,
+            "pay": {
+              "payalbum": 0,
+              "payalbumprice": 0,
+              "paydownload": 1,
+              "payinfo": 1,
+              "payplay": 1,
+              "paytrackmouth": 1,
+              "paytrackprice": 200
+            },
+            "preview": {
+              "trybegin": 84346,
+              "tryend": 142843,
+              "trysize": 960887
+            },
+            "pubtime": 1059580800,
+            "pure": 0,
+            "singer": [
+              {
+                "id": 4558,
+                "mid": "0025NhlN2yWrP4",
+                "name": "周杰伦",
+                "name_hilight": "<em>周杰伦</em>"
+              }
+            ],
+            "size128": 4317292,
+            "size320": 10792943,
+            "sizeape": 0,
+            "sizeflac": 55397039,
+            "sizeogg": 5860576,
+            "songid": 97773,
+            "songmid": "0039MnYb0qxYhV",
+            "songname": "晴天",
+            "songname_hilight": "<em>晴天</em>",
+            "strMediaMid": "003Qui1q2u1Zho",
+            "stream": 1,
+            "switch": 16881409,
+            "t": 1,
+            "tag": 11,
+            "type": 0,
+            "ver": 0,
+            "vid": "w0026q7f01a"
+          },
+          {
+            "albumid": 0,
+            "albummid": "",
+            "albumname": "",
+            "albumname_hilight": "",
+            "alertid": 11,
+            "belongCD": 0,
+            "cdIdx": -31073,
+            "chinesesinger": 0,
+            "docid": "5199825994567566749",
+            "format": "5:周杰伦;6:周杰伦;",
+            "grp": [],
+            "interval": 136,
+            "isonly": 0,
+            "lyric": "",
+            "lyric_hilight": "",
+            "media_mid": "001VX4aB4Kgase",
+            "msgid": 0,
+            "newStatus": 2,
+            "nt": 3966652971,
+            "pay": {
+              "payalbum": 0,
+              "payalbumprice": 0,
+              "paydownload": 0,
+              "payinfo": 0,
+              "payplay": 0,
+              "paytrackmouth": 0,
+              "paytrackprice": 0
+            },
+            "preview": {
+              "trybegin": 34284,
+              "tryend": 104767,
+              "trysize": 0
+            },
+            "pubtime": 0,
+            "pure": 0,
+            "singer": [
+              {
+                "id": 0,
+                "mid": "0032fmHO2UDnV3",
+                "name": "周杰伦",
+                "name_hilight": "<em>周杰伦</em>"
+              }
+            ],
+            "size128": 2182337,
+            "size320": 5455585,
+            "sizeape": 0,
+            "sizeflac": 16577783,
+            "sizeogg": 3218212,
+            "songid": 573944952,
+            "songmid": "000vsDaJ1FzxMV",
+            "songname": "晴天 (0.8x DJ 阿Bo版)",
+            "songname_hilight": "<em>晴天</em> (0.8x DJ 阿Bo版)",
+            "songurl": "http://y.qq.com/#type=song&id=573944952",
+            "strMediaMid": "001VX4aB4Kgase",
+            "stream": 1,
+            "switch": 81719,
+            "t": 0,
+            "tag": 0,
+            "type": 0,
+            "ver": 28,
+            "vid": ""
+          },
+          {
+            "albumid": 9040723,
+            "albummid": "004fXSyj3bWTMN",
+            "albumname": "周杰伦地表最强世界巡回演唱会",
+            "albumname_hilight": "<em>周杰伦</em>地表最强世界巡回演唱会",
+            "alertid": 2,
+            "belongCD": 0,
+            "cdIdx": 10,
+            "chinesesinger": 0,
+            "docid": "17446851886596147438",
+            "grp": [
+              {
+                "albumid": 1884793,
+                "albummid": "0044GiMq06Bbqc",
+                "albumname": "精彩音乐汇",
+                "albumname_hilight": "精彩音乐汇",
+                "alertid": 42,
+                "belongCD": 0,
+                "cdIdx": 10,
+                "chinesesinger": 0,
+                "docid": "5738165936051682738",
+                "interval": 264,
+                "isonly": 0,
+                "lyric": "",
+                "lyric_hilight": "",
+                "media_mid": "0005FPxp30oStD",
+                "msgid": 13,
+                "newStatus": 2,
+                "nt": 2549857546,
+                "pay": {
+                  "payalbum": 0,
+                  "payalbumprice": 0,
+                  "paydownload": 1,
+                  "payinfo": 1,
+                  "payplay": 1,
+                  "paytrackmouth": 1,
+                  "paytrackprice": 200
+                },
+                "preview": {
+                  "trybegin": 85856,
+                  "tryend": 143393,
+                  "trysize": 960887
+                },
+                "pubtime": 1453651200,
+                "pure": 0,
+                "singer": [
+                  {
+                    "id": 4558,
+                    "mid": "0025NhlN2yWrP4",
+                    "name": "周杰伦",
+                    "name_hilight": "<em>周杰伦</em>"
+                  }
+                ],
+                "size128": 4225763,
+                "size320": 0,
+                "sizeape": 0,
+                "sizeflac": 0,
+                "sizeogg": 0,
+                "songid": 201221465,
+                "songmid": "0033WdXM01VEN0",
+                "songname": "晴天 (Live)",
+                "songname_hilight": "<em>晴天</em> (Live)",
+                "strMediaMid": "0005FPxp30oStD",
+                "stream": 1,
+                "switch": 16881409,
+                "t": 1,
+                "tag": 0,
+                "type": 0,
+                "ver": 3,
+                "vid": ""
+              },
+              {
+                "albumid": 0,
+                "albummid": "",
+                "albumname": "",
+                "albumname_hilight": "",
+                "alertid": 42,
+                "belongCD": 0,
+                "cdIdx": 0,
+                "chinesesinger": 0,
+                "docid": "15321557584304678886",
+                "interval": 360,
+                "isonly": 0,
+                "lyric": "2004第四届全球华语歌曲排行榜颁奖典礼现场",
+                "lyric_hilight": "2004第四届全球华语歌曲排行榜颁奖典礼现场",
+                "media_mid": "002n7cCd0iW9rb",
+                "msgid": 13,
+                "newStatus": 2,
+                "nt": 2549857546,
+                "pay": {
+                  "payalbum": 0,
+                  "payalbumprice": 0,
+                  "paydownload": 1,
+                  "payinfo": 1,
+                  "payplay": 1,
+                  "paytrackmouth": 1,
+                  "paytrackprice": 200
+                },
+                "preview": {
+                  "trybegin": 193711,
+                  "tryend": 252375,
+                  "trysize": 960887
+                },
+                "pubtime": 0,
+                "pure": 0,
+                "singer": [
+                  {
+                    "id": 4558,
+                    "mid": "0025NhlN2yWrP4",
+                    "name": "周杰伦",
+                    "name_hilight": "<em>周杰伦</em>"
+                  }
+                ],
+                "size128": 5763065,
+                "size320": 0,
+                "sizeape": 0,
+                "sizeflac": 0,
+                "sizeogg": 0,
+                "songid": 125597386,
+                "songmid": "004dmXPi0QNuo3",
+                "songname": "晴天 (Live)",
+                "songname_hilight": "<em>晴天</em> (Live)",
+                "strMediaMid": "002n7cCd0iW9rb",
+                "stream": 1,
+                "switch": 16881409,
+                "t": 1,
+                "tag": 0,
+                "type": 0,
+                "ver": 3,
+                "vid": ""
+              }
+            ],
+            "interval": 249,
+            "isonly": 1,
+            "lyric": "",
+            "lyric_hilight": "",
+            "media_mid": "002DMfDx1macLz",
+            "msgid": 13,
+            "newStatus": 2,
+            "nt": 2549857546,
+            "pay": {
+              "payalbum": 0,
+              "payalbumprice": 0,
+              "paydownload": 1,
+              "payinfo": 1,
+              "payplay": 1,
+              "paytrackmouth": 1,
+              "paytrackprice": 200
+            },
+            "preview": {
+              "trybegin": 79623,
+              "tryend": 135110,
+              "trysize": 960887
+            },
+            "pubtime": 1572537600,
+            "pure": 0,
+            "singer": [
+              {
+                "id": 4558,
+                "mid": "0025NhlN2yWrP4",
+                "name": "周杰伦",
+                "name_hilight": "<em>周杰伦</em>"
+              }
+            ],
+            "size128": 3997575,
+            "size320": 9993618,
+            "sizeape": 0,
+            "sizeflac": 54393782,
+            "sizeogg": 5447636,
+            "songid": 244115385,
+            "songmid": "004Fs2FP1EvZYc",
+            "songname": "晴天 (Live)",
+            "songname_hilight": "<em>晴天</em> (Live)",
+            "strMediaMid": "002DMfDx1macLz",
+            "stream": 1,
+            "switch": 16881409,
+            "t": 1,
+            "tag": 0,
+            "type": 0,
+            "ver": 3,
+            "vid": "k0034oyg4ni"
+          },
+          {
+            "albumid": 14323,
+            "albummid": "0032ezFm3F53yO",
+            "albumname": "周杰伦 2004 无与伦比 演唱会 Live CD",
+            "albumname_hilight": "<em>周杰伦</em> 2004 无与伦比 演唱会 Live CD",
+            "alertid": 41,
+            "belongCD": 0,
+            "cdIdx": 4,
+            "chinesesinger": 0,
+            "docid": "5066511491391589847",
+            "grp": [],
+            "interval": 299,
+            "isonly": 1,
+            "lyric": "",
+            "lyric_hilight": "",
+            "media_mid": "003XEKsj41apvG",
+            "msgid": 13,
+            "newStatus": 2,
+            "nt": 4120456321,
+            "pay": {
+              "payalbum": 0,
+              "payalbumprice": 0,
+              "paydownload": 1,
+              "payinfo": 1,
+              "payplay": 1,
+              "paytrackmouth": 1,
+              "paytrackprice": 200
+            },
+            "preview": {
+              "trybegin": 117323,
+              "tryend": 175453,
+              "trysize": 960887
+            },
+            "pubtime": 1106150400,
+            "pure": 0,
+            "singer": [
+              {
+                "id": 4558,
+                "mid": "0025NhlN2yWrP4",
+                "name": "周杰伦",
+                "name_hilight": "<em>周杰伦</em>"
+              }
+            ],
+            "size128": 4790884,
+            "size320": 11976856,
+            "sizeape": 0,
+            "sizeflac": 38044391,
+            "sizeogg": 7135242,
+            "songid": 4962974,
+            "songmid": "001398Rf3gykz8",
+            "songname": "晴天 (Live)",
+            "songname_hilight": "<em>晴天</em> (Live)",
+            "strMediaMid": "003XEKsj41apvG",
+            "stream": 1,
+            "switch": 16881409,
+            "t": 1,
+            "tag": 0,
+            "type": 0,
+            "ver": 3,
+            "vid": "p0013pis1it"
+          },
+          {
+            "albumid": 87495226,
+            "albummid": "0041WVfh2vtlJE",
+            "albumname": "太阳之子",
+            "albumname_hilight": "太阳之子",
+            "alertid": 41,
+            "belongCD": 0,
+            "cdIdx": 3,
+            "chinesesinger": 0,
+            "docid": "3146697658273417066",
+            "grp": [],
+            "interval": 223,
+            "isonly": 1,
+            "lyric": "",
+            "lyric_hilight": "",
+            "media_mid": "0044SaFh0apuR2",
+            "msgid": 13,
+            "newStatus": 2,
+            "nt": 1461917256,
+            "pay": {
+              "payalbum": 1,
+              "payalbumprice": 4000,
+              "paydownload": 1,
+              "payinfo": 1,
+              "payplay": 1,
+              "paytrackmouth": 1,
+              "paytrackprice": 400
+            },
+            "preview": {
+              "trybegin": 80668,
+              "tryend": 105193,
+              "trysize": 960887
+            },
+            "pubtime": 1774368000,
+            "pure": 0,
+            "singer": [
+              {
+                "id": 4558,
+                "mid": "0025NhlN2yWrP4",
+                "name": "周杰伦",
+                "name_hilight": "<em>周杰伦</em>"
+              }
+            ],
+            "size128": 3574593,
+            "size320": 8936173,
+            "sizeape": 0,
+            "sizeflac": 48469290,
+            "sizeogg": 5294076,
+            "songid": 649556362,
+            "songmid": "0044SaFh0apuR2",
+            "songname": "那天下雨了",
+            "songname_hilight": "那天下雨了",
+            "strMediaMid": "0044SaFh0apuR2",
+            "stream": 1,
+            "switch": 16881409,
+            "t": 1,
+            "tag": 11,
+            "type": 0,
+            "ver": 0,
+            "vid": ""
+          }
+        ],
+        "totalnum": 600
+      },
+      "tab": 0,
+      "taglist": [],
+      "totaltime": 0,
+      "zhida": {
+        "type": 1,
+        "zhida_singer": {
+          "albumNum": 43,
+          "hotalbum": [
+            {
+              "albumID": 1458791,
+              "albumMID": "003RMaRI1iFoYd",
+              "albumName": "周杰伦的床边故事",
+              "albumname_hilight": "周杰伦的床边故事"
+            },
+            {
+              "albumID": 33021,
+              "albumMID": "002eFUFm2XYZ7z",
+              "albumName": "我很忙",
+              "albumname_hilight": "我很忙"
+            },
+            {
+              "albumID": 852856,
+              "albumMID": "001uqejs3d6EID",
+              "albumName": "哎呦，不错哦",
+              "albumname_hilight": "哎呦，不错哦"
+            },
+            {
+              "albumID": 194021,
+              "albumMID": "003Ow85E3pnoqi",
+              "albumName": "十二新作",
+              "albumname_hilight": "十二新作"
+            },
+            {
+              "albumID": 36062,
+              "albumMID": "002Neh8l0uciQZ",
+              "albumName": "魔杰座",
+              "albumname_hilight": "魔杰座"
+            },
+            {
+              "albumID": 8218,
+              "albumMID": "000f01724fd7TH",
+              "albumName": "Jay",
+              "albumname_hilight": "Jay"
+            },
+            {
+              "albumID": 56705,
+              "albumMID": "000bviBl4FjTpO",
+              "albumName": "跨时代",
+              "albumname_hilight": "跨时代"
+            },
+            {
+              "albumID": 60671,
+              "albumMID": "0024bjiL2aocxT",
+              "albumName": "十一月的萧邦",
+              "albumname_hilight": "十一月的萧邦"
+            },
+            {
+              "albumID": 8220,
+              "albumMID": "000MkMni19ClKG",
+              "albumName": "叶惠美",
+              "albumname_hilight": "叶惠美"
+            },
+            {
+              "albumID": 8217,
+              "albumMID": "000I5jJB3blWeN",
+              "albumName": "范特西",
+              "albumname_hilight": "范特西"
+            }
+          ],
+          "hotsong": [
+            {
+              "f": "97773|晴天|4558|周杰伦|8220|叶惠美|0|269|-1|1|0|10792943|4317292|0|0|0|55397039|5860576|6519764|0|0039MnYb0qxYhV|0025NhlN2yWrP4|000MkMni19ClKG|0|4009",
+              "songID": 97773,
+              "songMID": "0039MnYb0qxYhV",
+              "songName": "晴天",
+              "songname_hilight": "晴天"
+            },
+            {
+              "f": "102065750|搁浅|4558|周杰伦|20612|七里香|0|240|-1|1|0|9607864|3843167|0|0|0|26174554|5218730|5785073|0|001Bbywq2gicae|0025NhlN2yWrP4|003DFRzD192KKD|0|4009",
+              "songID": 102065750,
+              "songMID": "001Bbywq2gicae",
+              "songName": "搁浅",
+              "songname_hilight": "搁浅"
+            },
+            {
+              "f": "649556362|那天下雨了|4558|周杰伦|87495226|太阳之子|0|223|-1|1|0|8936173|3574593|0|0|0|48469290|5294076|5404853|0|0044SaFh0apuR2|0025NhlN2yWrP4|0041WVfh2vtlJE|0|4009",
+              "songID": 649556362,
+              "songMID": "0044SaFh0apuR2",
+              "songName": "那天下雨了",
+              "songname_hilight": "那天下雨了"
+            },
+            {
+              "f": "102065756|七里香|4558|周杰伦|20612|七里香|0|299|-1|1|0|11970297|4788294|0|0|0|35845646|7078399|7214942|0|004Z8Ihr0JIu5s|0025NhlN2yWrP4|003DFRzD192KKD|0|4009",
+              "songID": 102065756,
+              "songMID": "004Z8Ihr0JIu5s",
+              "songName": "七里香",
+              "songname_hilight": "七里香"
+            },
+            {
+              "f": "718477|夜曲|4558|周杰伦|60671|十一月的萧邦|0|226|-1|1|0|9075745|3630591|0|0|0|26691277|5600056|5499068|0|001zMQr71F1Qo8|0025NhlN2yWrP4|0024bjiL2aocxT|0|4009",
+              "songID": 718477,
+              "songMID": "001zMQr71F1Qo8",
+              "songName": "夜曲",
+              "songname_hilight": "夜曲"
+            },
+            {
+              "f": "410316|青花瓷|4558|周杰伦|33021|我很忙|0|239|-1|1|0|9576656|3830789|0|0|0|26170419|5414761|5795439|0|002qU5aY3Qu24y|0025NhlN2yWrP4|002eFUFm2XYZ7z|0|4009",
+              "songID": 410316,
+              "songMID": "002qU5aY3Qu24y",
+              "songName": "青花瓷",
+              "songname_hilight": "青花瓷"
+            },
+            {
+              "f": "449205|稻香|4558|周杰伦|36062|魔杰座|0|223|-1|1|0|8941053|3576668|0|0|0|26012257|5136737|5431599|0|003aAYrm3GE0Ac|0025NhlN2yWrP4|002Neh8l0uciQZ|0|4009",
+              "songID": 449205,
+              "songMID": "003aAYrm3GE0Ac",
+              "songName": "稻香",
+              "songname_hilight": "稻香"
+            },
+            {
+              "f": "5177680|红尘客栈|4558|周杰伦|194021|十二新作|0|274|-1|1|0|10965357|4386261|0|0|0|28520892|6045347|6629124|0|003xv4w313tZHV|0025NhlN2yWrP4|003Ow85E3pnoqi|0|4009",
+              "songID": 5177680,
+              "songMID": "003xv4w313tZHV",
+              "songName": "红尘客栈",
+              "songname_hilight": "红尘客栈"
+            },
+            {
+              "f": "449198|花海|4558|周杰伦|36062|魔杰座|0|264|-1|1|0|10587098|4234954|0|0|0|29671753|5768743|6415536|0|003cI52o4daJJL|0025NhlN2yWrP4|002Neh8l0uciQZ|0|4009",
+              "songID": 449198,
+              "songMID": "003cI52o4daJJL",
+              "songName": "花海",
+              "songname_hilight": "花海"
+            },
+            {
+              "f": "5105986|一路向北|4558|周杰伦|14311|J III MP3 Player|0|294|-1|1|0|11772042|4708950|0|0|0|61646557|6747357|7123849|0|001xd0HI0X9GNq|0025NhlN2yWrP4|002MAeob3zLXwZ|0|4009",
+              "songID": 5105986,
+              "songMID": "001xd0HI0X9GNq",
+              "songName": "一路向北",
+              "songname_hilight": "一路向北"
+            }
+          ],
+          "mvNum": 1422,
+          "singerID": 4558,
+          "singerMID": "0025NhlN2yWrP4",
+          "singerName": "周杰伦",
+          "singerPic": "http://y.gtimg.cn/music/photo_new/T001R150x150M0000025NhlN2yWrP4.jpg",
+          "singername_hilight": "周杰伦",
+          "songNum": 2956
+        }
+      }
+    },
+    "message": "",
+    "notice": "",
+    "subcode": 0,
+    "time": 1785507152,
+    "tips": ""
+  }
+}

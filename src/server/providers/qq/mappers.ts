@@ -54,43 +54,49 @@ export function mapQQSmartSong(raw: unknown): UnifiedSong {
   }
 }
 
+/**
+ * 兼容两种上游形态：
+ * - 嵌套（music.pf_song_detail_svr 的 track_info）：mid / album.mid / file.media_mid
+ * - 扁平（client_search_cp 的 data.song.list）：songmid / albummid / strMediaMid
+ * 搜索接口把高亮词放在独立的 *_hilight 字段里，songname/singer[].name 本身是干净的。
+ */
 export function mapQQTrack(raw: unknown, fallback: Partial<UnifiedSong> = {}): UnifiedSong {
   const track = asRecord(raw)
   const album = asRecord(track.album)
   const file = asRecord(track.file)
   const artists = mapQQArtists(track.singer)
-  const mid = stringValue(track.mid ?? fallback.mid ?? fallback.songmid)
-  const albumMid = stringValue(album.mid ?? album.pmid)
+  const mid = stringValue(track.mid ?? track.songmid ?? fallback.mid ?? fallback.songmid)
+  const albumMid = stringValue(album.mid ?? album.pmid ?? track.albummid)
   const pay = asRecord(track.pay)
   const supportedQualities = qqSupportedQualities({ ...track, ...file }) ?? fallback.supportedQualities
   return {
     provider: 'qq',
     type: 'qq',
     id: mid,
-    qqId: identifier(track.id ?? fallback.qqId ?? fallback.id) ?? '',
+    qqId: identifier(track.id ?? track.songid ?? fallback.qqId ?? fallback.id) ?? '',
     mid,
     songmid: mid,
     mediaMid: stringValue(file.media_mid ?? track.strMediaMid ?? track.media_mid),
-    name: stringValue(track.name ?? track.title ?? fallback.name),
+    name: stringValue(track.name ?? track.title ?? track.songname ?? fallback.name),
     artist: artists.map((artist) => artist.name).join(' / ') || fallback.artist || '',
     artists: artists.length ? artists : (fallback.artists ?? []),
     artistId: artists[0]?.id ?? artists[0]?.mid,
     artistMid: artists[0]?.mid,
-    album: stringValue(album.name ?? album.title ?? fallback.album),
+    album: stringValue(album.name ?? album.title ?? track.albumname ?? fallback.album),
     albumMid,
     cover: qqAlbumCover(albumMid) || fallback.cover || '',
     duration: numberValue(track.interval) * 1000,
-    fee: numberValue(pay.pay_play) ? 1 : 0,
+    fee: numberValue(pay.pay_play ?? pay.payplay) ? 1 : 0,
     playable: false,
     ...(supportedQualities ? { supportedQualities } : {}),
   }
 }
 
 const QQ_QUALITY_SIZE_FIELDS: readonly [QualityLevel, readonly string[]][] = [
-  ['hires', ['size_hires', 'sizeHires']],
-  ['lossless', ['size_flac', 'size_ape', 'sizeFlac', 'sizeApe']],
-  ['exhigh', ['size_320mp3', 'size320mp3', 'size_320']],
-  ['standard', ['size_128mp3', 'size_96aac', 'size_48aac', 'size128mp3', 'size_128']],
+  ['hires', ['size_hires', 'sizeHires', 'sizehires']],
+  ['lossless', ['size_flac', 'size_ape', 'sizeFlac', 'sizeApe', 'sizeflac', 'sizeape']],
+  ['exhigh', ['size_320mp3', 'size320mp3', 'size_320', 'size320']],
+  ['standard', ['size_128mp3', 'size_96aac', 'size_48aac', 'size128mp3', 'size_128', 'size128']],
 ]
 
 export function qqSupportedQualities(file: Record<string, unknown>): QualityLevel[] | undefined {
@@ -136,20 +142,32 @@ export function mapQQPlaylistTrack(raw: unknown): UnifiedSong {
   }
 }
 
+/**
+ * 兼容三种歌单来源的字段命名：
+ * - fcg_user_created_diss / order_asset：diss_name / diss_cover / listen_num，creator 是字符串
+ * - fcg_get_diss_by_tag（发现页）：dissname / imgurl / listennum，creator 是 { name } 对象
+ */
 export function mapQQPlaylist(raw: unknown, kind?: string): UnifiedPlaylist {
   const playlist = asRecord(raw)
   const id = identifier(playlist.dissid ?? playlist.tid ?? playlist.dirid ?? playlist.id ?? playlist.diss_id)
+  const creator = playlist.creator
+  const creatorName =
+    creator && typeof creator === 'object' ? stringValue(asRecord(creator).name) : stringValue(creator)
   return {
     provider: 'qq',
     type: 'playlist',
     id: id === undefined ? '' : String(id),
-    name: stringValue(playlist.diss_name ?? playlist.name ?? playlist.title),
-    cover: stringValue(playlist.diss_cover ?? playlist.logo ?? playlist.picurl ?? playlist.cover),
+    name: stringValue(playlist.diss_name ?? playlist.dissname ?? playlist.name ?? playlist.title),
+    cover: stringValue(
+      playlist.diss_cover ?? playlist.logo ?? playlist.picurl ?? playlist.imgurl ?? playlist.cover,
+    ),
     trackCount: numberValue(
       playlist.song_cnt ?? playlist.songnum ?? playlist.total_song_num ?? playlist.song_count,
     ),
-    playCount: numberValue(playlist.listen_num ?? playlist.visitnum ?? playlist.play_count),
-    creator: stringValue(playlist.hostname ?? playlist.nick ?? playlist.creator, 'QQ 音乐'),
+    playCount: numberValue(
+      playlist.listen_num ?? playlist.listennum ?? playlist.visitnum ?? playlist.play_count,
+    ),
+    creator: stringValue(playlist.hostname ?? playlist.nick, '') || creatorName || 'QQ 音乐',
     subscribed: kind === 'collect' || booleanValue(playlist.subscribed),
     specialType: 0,
   }

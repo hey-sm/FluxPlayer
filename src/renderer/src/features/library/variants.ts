@@ -14,12 +14,27 @@ export const providerTabVariants = cva(
   },
 )
 
+/** 歌单分组（自建/收藏）标签；比 providerTabVariants 更矮，不跟平台 tab 抢视觉层级 */
+export const playlistTabVariants = cva(
+  'h-7 cursor-pointer rounded-[var(--flux-radius-control)] border px-2.5 text-[11px] transition-colors duration-[var(--motion-duration-fast)]',
+  {
+    variants: {
+      active: {
+        true: 'border-[color-mix(in_srgb,var(--flux-accent)_28%,transparent)] bg-[var(--flux-accent-soft)] text-[var(--flux-text)]',
+        false:
+          'border-transparent bg-transparent text-[var(--flux-text-muted)] hover:text-[var(--flux-text)]',
+      },
+    },
+    defaultVariants: { active: false },
+  },
+)
+
+/** 快捷入口：图标 + 名称 + 右侧数量的一行；和歌单行一样保持无边框，只靠背景反馈 */
 export const libraryShortcutVariants = cva([
-  'min-h-[58px] cursor-pointer rounded-[13px] border border-[var(--flux-panel-border)]',
-  'bg-[color-mix(in_srgb,var(--flux-panel-border)_5%,transparent)] px-3 py-2.5 text-left text-[var(--flux-text)]',
-  'transition-colors duration-[var(--motion-duration-fast)] hover:border-[color-mix(in_srgb,var(--flux-accent)_34%,transparent)] hover:bg-[var(--flux-accent-soft)]',
-  'disabled:cursor-default disabled:opacity-45 disabled:hover:border-[var(--flux-panel-border)]',
-  'disabled:hover:bg-[color-mix(in_srgb,var(--flux-panel-border)_5%,transparent)]',
+  'flex min-h-[38px] cursor-pointer items-center gap-2.5 rounded-[10px]',
+  'bg-transparent px-2.5 py-1.5 text-left text-[13px] text-[var(--flux-text)]',
+  'transition-colors duration-[var(--motion-duration-fast)] hover:bg-[var(--flux-accent-soft)]',
+  'disabled:cursor-default disabled:opacity-45 disabled:hover:bg-transparent',
 ])
 
 export const libraryRowVariants = cva(

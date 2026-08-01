@@ -84,3 +84,14 @@ export const ChevronRightIcon = (props: IconProps) => (
     <path d="m9 18 6-6-6-6" />
   </IconBase>
 )
+export const HeartIcon = (props: IconProps) => (
+  <IconBase {...props}>
+    <path d="M12 20s-7-4.35-7-9a4 4 0 0 1 7-2.65A4 4 0 0 1 19 11c0 4.65-7 9-7 9z" />
+  </IconBase>
+)
+export const ClockIcon = (props: IconProps) => (
+  <IconBase {...props}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 1.8" />
+  </IconBase>
+)

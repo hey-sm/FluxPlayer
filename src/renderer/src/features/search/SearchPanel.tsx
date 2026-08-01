@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import type { ProviderId } from '@shared/models'
 import { coverProxyUrl, musicErrorMessage } from '../../api'
 import { glassSurfaceVariants } from '../../components/glass'
@@ -20,6 +20,10 @@ import { createSearchQuery } from './queries'
 import { useDebounced } from './useDebounced'
 
 const PROVIDER_ORDER_KEY = 'fluxplayer-search-provider-order-v1'
+/** 两个 provider 用同一页大小，避免两个 tab 结果数看起来不一致 */
+const SEARCH_PAGE_SIZE = 20
+/** 距底部多少像素触发下一页 */
+const SEARCH_LOAD_MORE_THRESHOLD = 160
 
 function readProviderOrder(): ProviderId[] {
   try {
@@ -65,16 +69,37 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
     'classic-search-glass-svg-ok',
   )
 
-  const neteaseSearch = useQuery({
-    ...createSearchQuery('netease', debouncedKeyword, 20),
+  const neteaseSearch = useInfiniteQuery({
+    ...createSearchQuery('netease', debouncedKeyword, SEARCH_PAGE_SIZE),
     enabled: debouncedKeyword.length > 0,
   })
-  const qqSearch = useQuery({
-    ...createSearchQuery('qq', debouncedKeyword, 12),
+  const qqSearch = useInfiniteQuery({
+    ...createSearchQuery('qq', debouncedKeyword, SEARCH_PAGE_SIZE),
     enabled: debouncedKeyword.length > 0,
   })
   const activeSearch = provider === 'qq' ? qqSearch : neteaseSearch
-  const songs = useMemo(() => activeSearch.data?.songs ?? [], [activeSearch.data?.songs])
+  const songs = useMemo(
+    () => activeSearch.data?.pages.flatMap((page) => page.songs) ?? [],
+    [activeSearch.data?.pages],
+  )
+  const neteaseCount = useMemo(
+    () => neteaseSearch.data?.pages.reduce((total, page) => total + page.songs.length, 0) ?? 0,
+    [neteaseSearch.data?.pages],
+  )
+  const qqCount = useMemo(
+    () => qqSearch.data?.pages.reduce((total, page) => total + page.songs.length, 0) ?? 0,
+    [qqSearch.data?.pages],
+  )
+
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = activeSearch
+  const handleResultsScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      if (!hasNextPage || isFetchingNextPage) return
+      const { scrollTop, scrollHeight, clientHeight } = event.currentTarget
+      if (scrollHeight - scrollTop - clientHeight <= SEARCH_LOAD_MORE_THRESHOLD) void fetchNextPage()
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage],
+  )
   const resultAnimationKey = songs.map((song) => `${song.provider}:${song.id}`).join('|')
   const providerOrderKey = providerOrder.join('|')
 
@@ -166,15 +191,20 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
   useGSAP(
     () => {
       if (!searchOpen || !resultsRef.current) return
-      const rows = resultsRef.current.querySelectorAll<HTMLElement>('[data-search-result]')
-      if (!rows.length) return
-      gsap.killTweensOf(rows)
+      // 只动画"还没入过场"的行：滚动加载追加下一页时，已在屏幕上的行必须原地不动，
+      // 否则整列表会重新从 autoAlpha:0 淡入，视觉上就是一次闪烁。
+      // 新搜索的行是全新 DOM 节点（key 变了），自然没有标记，会照常整体入场。
+      const fresh = Array.from(
+        resultsRef.current.querySelectorAll<HTMLElement>('[data-search-result]:not([data-row-shown])'),
+      )
+      if (!fresh.length) return
+      for (const row of fresh) row.setAttribute('data-row-shown', '')
       if (reducedMotion) {
-        gsap.set(rows, { autoAlpha: 1, y: 0 })
+        gsap.set(fresh, { autoAlpha: 1, y: 0 })
         return
       }
       gsap.fromTo(
-        rows,
+        fresh,
         { autoAlpha: 0, y: 8 },
         {
           autoAlpha: 1,
@@ -185,12 +215,13 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
           overwrite: 'auto',
         },
       )
-      return () => gsap.killTweensOf(rows)
+      return () => gsap.killTweensOf(fresh)
     },
     {
       scope: resultsRef,
       dependencies: [provider, reducedMotion, resultAnimationKey, searchOpen],
-      revertOnUpdate: true,
+      // 不能 revert：revert 会把已入场行的内联样式还原，追加下一页时又是一次闪烁
+      revertOnUpdate: false,
     },
   )
 
@@ -344,9 +375,7 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
                   >
                     {item === 'netease' ? '网易云' : 'QQ 音乐'}
                     <small className="ml-[7px] text-[10px] text-[var(--flux-text-muted)]">
-                      {item === 'netease'
-                        ? (neteaseSearch.data?.songs.length ?? 0)
-                        : (qqSearch.data?.songs.length ?? 0)}
+                      {item === 'netease' ? neteaseCount : qqCount}
                     </small>
                   </button>
                 ))}
@@ -358,6 +387,7 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
                 ref={resultsRef}
                 data-search-results=""
                 data-scroll-region
+                onScroll={handleResultsScroll}
                 className={cn(
                   'max-h-[min(510px,calc(100vh-266px))] min-h-0 w-full overflow-y-auto border-0 bg-transparent',
                   '[scrollbar-color:color-mix(in_srgb,var(--flux-panel-border)_18%,transparent)_transparent] [scrollbar-width:thin]',
@@ -375,49 +405,66 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
                           : '准备搜索…'}
                   </div>
                 ) : (
-                  songs.map((song, index) => {
-                    const key = `${song.provider}-${song.id}`
-                    const active = current && `${current.provider}-${current.id}` === key
-                    return (
-                      <button
-                        type="button"
-                        key={`${key}-${index}`}
-                        data-search-result=""
-                        data-active={active || undefined}
-                        className={cn(
-                          'flex min-h-[62px] w-full cursor-pointer items-center gap-3 border-0 border-b border-[color-mix(in_srgb,var(--flux-panel-border)_55%,transparent)] bg-transparent px-3.5 py-2.5 text-left text-[var(--flux-text)]',
-                          'hover:bg-[var(--flux-accent-soft)] focus-visible:bg-[var(--flux-accent-soft)] focus-visible:outline-none',
-                          active && 'bg-[var(--flux-accent-soft)]',
-                        )}
-                        onClick={() => {
-                          dismissSearch()
-                          setKeyword('')
-                          void setQueue([...songs], index)
-                        }}
+                  <>
+                    {songs.map((song, index) => {
+                      const key = `${song.provider}-${song.id}`
+                      const active = current && `${current.provider}-${current.id}` === key
+                      return (
+                        <button
+                          type="button"
+                          key={`${key}-${index}`}
+                          data-search-result=""
+                          data-active={active || undefined}
+                          className={cn(
+                            'flex min-h-[62px] w-full cursor-pointer items-center gap-3 border-0 border-b border-[color-mix(in_srgb,var(--flux-panel-border)_55%,transparent)] bg-transparent px-3.5 py-2.5 text-left text-[var(--flux-text)]',
+                            'hover:bg-[var(--flux-accent-soft)] focus-visible:bg-[var(--flux-accent-soft)] focus-visible:outline-none',
+                            active && 'bg-[var(--flux-accent-soft)]',
+                          )}
+                          onClick={() => {
+                            dismissSearch()
+                            setKeyword('')
+                            void setQueue([...songs], index)
+                          }}
+                        >
+                          {song.cover ? (
+                            <img
+                              className="size-[42px] shrink-0 rounded-[10px] bg-[color-mix(in_srgb,var(--flux-panel-border)_9%,transparent)] object-cover"
+                              src={coverProxyUrl(song.cover)}
+                              alt=""
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="size-[42px] shrink-0 rounded-[10px] bg-[color-mix(in_srgb,var(--flux-panel-border)_9%,transparent)]" />
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <strong className="block truncate text-sm">{song.name}</strong>
+                            <small className="mt-1 block truncate text-xs text-[var(--flux-text-muted)]">
+                              {song.artist}
+                              {song.album ? ` · ${song.album}` : ''}
+                            </small>
+                          </span>
+                          <span className="text-[11px] text-[var(--flux-text-muted)]">
+                            {song.provider === 'qq' ? 'QQ' : '网易云'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                    {isFetchingNextPage ? (
+                      <div
+                        className="px-0 py-3 text-center text-[12px] text-[var(--flux-text-muted)]"
+                        data-search-loading-more=""
                       >
-                        {song.cover ? (
-                          <img
-                            className="size-[42px] shrink-0 rounded-[10px] bg-[color-mix(in_srgb,var(--flux-panel-border)_9%,transparent)] object-cover"
-                            src={coverProxyUrl(song.cover)}
-                            alt=""
-                            loading="lazy"
-                          />
-                        ) : (
-                          <span className="size-[42px] shrink-0 rounded-[10px] bg-[color-mix(in_srgb,var(--flux-panel-border)_9%,transparent)]" />
-                        )}
-                        <span className="min-w-0 flex-1">
-                          <strong className="block truncate text-sm">{song.name}</strong>
-                          <small className="mt-1 block truncate text-xs text-[var(--flux-text-muted)]">
-                            {song.artist}
-                            {song.album ? ` · ${song.album}` : ''}
-                          </small>
-                        </span>
-                        <span className="text-[11px] text-[var(--flux-text-muted)]">
-                          {song.provider === 'qq' ? 'QQ' : '网易云'}
-                        </span>
-                      </button>
-                    )
-                  })
+                        正在加载更多…
+                      </div>
+                    ) : !hasNextPage ? (
+                      <div
+                        className="px-0 py-3 text-center text-[12px] text-[var(--flux-text-muted)]"
+                        data-search-list-end=""
+                      >
+                        没有更多结果了
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </div>
             </section>
