@@ -104,6 +104,8 @@ export interface SettingsPanelProps {
   lyricsDragEnabled: boolean
   lyricsAnimationMode: LyricsAnimationMode
   onLyricsAnimationModeChange(mode: LyricsAnimationMode): void
+  lyricsFocusOnly: boolean
+  onLyricsFocusOnlyChange(focusOnly: boolean): void
   onLyricsDragEnabledChange(enabled: boolean): void
   onResetLyricsPosition(): void
 }
@@ -127,6 +129,8 @@ export default function SettingsPanel({
   lyricsDragEnabled,
   lyricsAnimationMode,
   onLyricsAnimationModeChange,
+  lyricsFocusOnly,
+  onLyricsFocusOnlyChange,
   onLyricsDragEnabledChange,
   onResetLyricsPosition,
 }: SettingsPanelProps): React.JSX.Element | null {
@@ -248,6 +252,16 @@ export default function SettingsPanel({
                 <small className="text-[10px] leading-[1.45] text-[var(--flux-text-muted)]">
                   {activeLyricsAnimation?.description}
                 </small>
+                <div className="flex min-h-[30px] items-center gap-2">
+                  <SettingsSwitch
+                    checked={lyricsFocusOnly}
+                    label="只显示当前歌词"
+                    onCheckedChange={onLyricsFocusOnlyChange}
+                  />
+                  <span className="text-[10px] text-[var(--flux-text-muted)]">
+                    {lyricsFocusOnly ? '隐藏上下文' : '显示前后各两句'}
+                  </span>
+                </div>
               </div>
 
               <div className="mb-[13px] grid gap-[7px] text-[11px] text-[var(--flux-text-muted)]">

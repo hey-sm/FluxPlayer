@@ -14,6 +14,7 @@ export interface StageCanvasProps {
   backgroundEnabled?: boolean
   lyricsDragEnabled?: boolean
   lyricsAnimationMode?: LyricsAnimationMode
+  lyricsFocusOnly?: boolean
   lyricsOffset?: LyricsOffset
   onLyricsOffsetChange?(offset: LyricsOffset): void
   className?: string
@@ -32,6 +33,7 @@ export function StageCanvas({
   backgroundEnabled = true,
   lyricsDragEnabled = false,
   lyricsAnimationMode = 'compact',
+  lyricsFocusOnly = false,
   lyricsOffset = { x: 0, y: 0 },
   onLyricsOffsetChange,
   className,
@@ -45,6 +47,7 @@ export function StageCanvas({
   const accentColorRef = useRef(accentColor)
   const lyricsDragEnabledRef = useRef(lyricsDragEnabled)
   const lyricsAnimationModeRef = useRef(lyricsAnimationMode)
+  const lyricsFocusOnlyRef = useRef(lyricsFocusOnly)
   const lyricsOffsetRef = useRef(lyricsOffset)
   const onLyricsOffsetChangeRef = useRef(onLyricsOffsetChange)
 
@@ -64,6 +67,7 @@ export function StageCanvas({
       stage.setBackgroundEnabled(backgroundEnabledRef.current)
       stage.setLyricsDragEnabled(lyricsDragEnabledRef.current)
       stage.setLyricsAnimationMode(lyricsAnimationModeRef.current)
+      stage.setLyricsFocusOnly(lyricsFocusOnlyRef.current)
       stage.setLyricsOffset(lyricsOffsetRef.current.x, lyricsOffsetRef.current.y)
       const stop = stage.start()
       let pointerId: number | null = null
@@ -250,6 +254,11 @@ export function StageCanvas({
   }, [lyricsAnimationMode])
 
   useEffect(() => {
+    lyricsFocusOnlyRef.current = lyricsFocusOnly
+    stageRef.current?.setLyricsFocusOnly(lyricsFocusOnly)
+  }, [lyricsFocusOnly])
+
+  useEffect(() => {
     lyricsOffsetRef.current = lyricsOffset
     stageRef.current?.setLyricsOffset(lyricsOffset.x, lyricsOffset.y)
   }, [lyricsOffset])
@@ -266,6 +275,7 @@ export function StageCanvas({
       data-lyrics-draggable={lyricsDragEnabled || undefined}
       data-lyrics-interaction={lyricsDragEnabled ? 'move' : 'rotate'}
       data-lyrics-animation-mode={lyricsAnimationMode}
+      data-lyrics-focus-only={lyricsFocusOnly || undefined}
       style={{ width: '100%', height: '100%', ...style }}
     />
   )

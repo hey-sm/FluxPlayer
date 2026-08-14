@@ -80,11 +80,24 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
   const lyricsAnimation = page.getByRole('combobox', { name: '歌词动画' })
   await expect(lyricsAnimation).toContainText('紧凑滚动')
   await lyricsAnimation.click()
-  await page.getByRole('option', { name: '仅当前歌词' }).click()
-  await expect(page.locator('[data-stage-background]')).toHaveAttribute('data-lyrics-animation-mode', 'focus')
+  await page.getByRole('option', { name: '逐字浮现' }).click()
+  await expect(page.locator('[data-stage-background]')).toHaveAttribute(
+    'data-lyrics-animation-mode',
+    'cascade',
+  )
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem('flux-lyrics-animation-mode-v1')))
-    .toBe('focus')
+    .toBe('cascade')
+  // 「只显示当前歌词」是独立开关，能叠加在任意动画模式上
+  const focusOnlySwitch = page.getByRole('switch', { name: '只显示当前歌词' })
+  await expect(focusOnlySwitch).toHaveAttribute('aria-checked', 'false')
+  await focusOnlySwitch.click()
+  await expect(focusOnlySwitch).toHaveAttribute('aria-checked', 'true')
+  await expect(page.locator('[data-stage-background]')).toHaveAttribute('data-lyrics-focus-only', 'true')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('flux-lyrics-focus-only-v1'))).toBe('1')
+  // 关回去，后面的可见性断言仍在默认的多行状态下跑
+  await focusOnlySwitch.click()
+  await expect(focusOnlySwitch).toHaveAttribute('aria-checked', 'false')
   const lyricsDragSwitch = page.getByRole('switch', { name: '允许拖拽歌词' })
   await expect(lyricsDragSwitch).toHaveAttribute('aria-checked', 'false')
   await lyricsDragSwitch.click()
@@ -116,6 +129,22 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
   const desktopSignal = await canvasSignal(desktopShot)
   expect(desktopSignal.range).toBeGreaterThan(40)
   expect(desktopSignal.deviation).toBeGreaterThan(8)
+
+  // 只显示当前歌词：上下文行消失，画面墨水量必须明显下降（且不能整块变黑）
+  await page.getByRole('button', { name: '设置' }).click()
+  await page.getByRole('switch', { name: '只显示当前歌词' }).click()
+  await page.getByRole('button', { name: '关闭', exact: true }).click()
+  await page.waitForTimeout(700)
+  const focusOnlyShot = await canvas.screenshot()
+  await page.screenshot({ path: testInfo.outputPath('lyrics-focus-only-stage.png') })
+  const focusOnlySignal = await canvasSignal(focusOnlyShot)
+  expect(focusOnlySignal.range).toBeGreaterThan(40)
+  expect(await canvasDelta(desktopShot, focusOnlyShot), '开关没有改变画面').toBeGreaterThan(1)
+
+  await page.getByRole('button', { name: '设置' }).click()
+  await page.getByRole('switch', { name: '只显示当前歌词' }).click()
+  await page.getByRole('button', { name: '关闭', exact: true }).click()
+  await page.waitForTimeout(500)
 
   await window.evaluate((browserWindow) => browserWindow.setSize(900, 650))
   await page.waitForTimeout(500)

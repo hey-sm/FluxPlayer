@@ -161,7 +161,7 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
       return {
         background: style.backgroundColor,
         backdropFilter: style.backdropFilter,
-        boxShadow: style.boxShadow.replaceAll(' ', ''),
+        boxShadow: style.boxShadow,
         borderRadius: [
           style.borderTopLeftRadius,
           style.borderTopRightRadius,
@@ -179,7 +179,7 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
     const expected = {
       background: probeStyle.backgroundColor,
       backdropFilter: probeStyle.backdropFilter,
-      boxShadow: probeStyle.boxShadow.replaceAll(' ', ''),
+      ringLayer: probeStyle.boxShadow.split(', ')[0],
     }
     probe.remove()
     return { left: read('left'), right: read('right'), expected }
@@ -189,7 +189,11 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   for (const side of [edgeGlassStyle.left, edgeGlassStyle.right]) {
     expect(side.background).toBe(edgeGlassStyle.expected.background)
     expect(side.backdropFilter).toBe(edgeGlassStyle.expected.backdropFilter)
-    expect(side.boxShadow).toBe(edgeGlassStyle.expected.boxShadow)
+    // box-shadow 是唯一不继承 classicPanel 的那项：边栏只描底边，而 classicPanel 自带一圈
+    // inset ring 会和底边描边打架，所以 HoverEdgeSheet 刻意整条覆盖掉。这里断言"没继承那圈
+    // ring、但有底边描边"—— 别照着上面两行改回 toBe(expected.boxShadow)。
+    expect(side.boxShadow).not.toContain(edgeGlassStyle.expected.ringLayer)
+    expect(side.boxShadow).toMatch(/0px -1px 0px 0px inset/)
   }
   await expect(page.locator('[data-search-motion]')).toHaveAttribute('data-animation-direction', 'vertical')
   await expect(page.locator('[data-search-motion]')).toHaveAttribute('data-animation-reverse', 'true')

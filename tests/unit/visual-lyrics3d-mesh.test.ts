@@ -18,6 +18,22 @@ describe('lyrics3d-mesh static material', () => {
     expect(handle.material.onBeforeCompile).toBeTypeOf('function')
     handle.material.dispose()
   })
+
+  it('never writes depth by default so fading lines cannot ghost over each other', () => {
+    // transparent + depthWrite 会让正在淡出的旧句把新句挖掉（切句残影）。
+    // 深度写入只由图层对"完全不透明的当前句"逐帧打开，材质默认必须是关的。
+    const handle = createLyricsMaterial('#ffffff')
+    expect(handle.material.transparent).toBe(true)
+    expect(handle.material.depthWrite).toBe(false)
+    handle.material.dispose()
+  })
+
+  it('clamps the per-glyph cascade inputs', () => {
+    const handle = createLyricsMaterial('#ffffff')
+    expect(() => handle.setCascade(-1, -1, 0)).not.toThrow()
+    expect(() => handle.setCascade(2, 0.5, 12)).not.toThrow()
+    handle.material.dispose()
+  })
 })
 
 describe('lyrics3d-mesh display tuning', () => {

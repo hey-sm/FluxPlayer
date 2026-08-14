@@ -1,4 +1,4 @@
-export const LYRICS_ANIMATION_MODES = ['compact', 'fade', 'lift', 'focus'] as const
+export const LYRICS_ANIMATION_MODES = ['compact', 'cascade', 'cinematic'] as const
 
 export type LyricsAnimationMode = (typeof LYRICS_ANIMATION_MODES)[number]
 
@@ -20,6 +20,11 @@ export interface LyricsAnimationProfile {
   readonly duration: number
   readonly enterEase: string
   readonly exitEase: string
+  /**
+   * 逐字浮现的位移幅度（em，0 = 关闭）。靠 geometry 自带的 glyphIndex 属性在顶点着色器里
+   * 给每个字错开延迟，纯 GPU 计算，不额外拆 mesh。
+   */
+  readonly glyphCascade: number
 }
 
 export const LYRICS_ANIMATION_OPTIONS: ReadonlyArray<{
@@ -33,25 +38,18 @@ export const LYRICS_ANIMATION_OPTIONS: ReadonlyArray<{
     description: '显示前后歌词，以更紧凑的行距平滑滚动。',
   },
   {
-    value: 'fade',
-    label: '柔和淡入',
-    description: '弱化空间位移，让当前歌词以淡入聚焦。',
+    value: 'cascade',
+    label: '逐字浮现',
+    description: '当前句的每个字依次向上浮起点亮，逐字歌词观感最强。',
   },
   {
-    value: 'lift',
-    label: '上浮切换',
-    description: '新歌词从下方进入，旧歌词向上退出。',
-  },
-  {
-    value: 'focus',
-    label: '仅当前歌词',
-    description: '隐藏上下文，新旧歌词使用覆盖交叉过渡。',
+    value: 'cinematic',
+    label: '景深推进',
+    description: '新歌词自远景推近，旧歌词越过镜头淡出，纵深感更强。',
   },
 ]
 
-export const LYRICS_ANIMATION_PROFILES: Readonly<
-  Record<LyricsAnimationMode, LyricsAnimationProfile>
-> = {
+export const LYRICS_ANIMATION_PROFILES: Readonly<Record<LyricsAnimationMode, LyricsAnimationProfile>> = {
   compact: {
     radius: 2,
     lineGap: 0.46,
@@ -70,65 +68,77 @@ export const LYRICS_ANIMATION_PROFILES: Readonly<
     duration: 0.3,
     enterEase: 'power2.out',
     exitEase: 'power1.in',
+    glyphCascade: 0,
   },
-  fade: {
-    radius: 2,
-    lineGap: 0.44,
-    contextOpacity: 0.22,
-    contextOpacityStep: 0.05,
-    activeZ: 0.12,
-    inactiveZ: -0.05,
-    depthStep: 0.06,
-    rotationStep: 0,
-    enterOffsetY: 0,
-    enterOffsetZ: -0.04,
-    enterScale: 0.98,
-    exitOffsetY: 0,
-    exitOffsetZ: -0.06,
-    exitScale: 0.98,
-    duration: 0.26,
-    enterEase: 'power1.out',
-    exitEase: 'power1.in',
-  },
-  lift: {
+  cascade: {
     radius: 2,
     lineGap: 0.46,
     contextOpacity: 0.24,
-    contextOpacityStep: 0.06,
-    activeZ: 0.16,
+    contextOpacityStep: 0.07,
+    activeZ: 0.2,
     inactiveZ: -0.08,
-    depthStep: 0.1,
-    rotationStep: 0.025,
-    enterOffsetY: -0.18,
-    enterOffsetZ: -0.08,
-    enterScale: 0.95,
-    exitOffsetY: 0.18,
-    exitOffsetZ: -0.12,
-    exitScale: 0.97,
-    duration: 0.32,
-    enterEase: 'power2.out',
-    exitEase: 'power2.in',
-  },
-  focus: {
-    radius: 0,
-    lineGap: 0,
-    contextOpacity: 0,
-    contextOpacityStep: 0,
-    activeZ: 0.18,
-    inactiveZ: 0.18,
-    depthStep: 0,
-    rotationStep: 0,
-    enterOffsetY: -0.06,
-    enterOffsetZ: -0.03,
-    enterScale: 0.94,
-    exitOffsetY: 0.06,
-    exitOffsetZ: 0.03,
-    exitScale: 1.04,
-    duration: 0.28,
+    depthStep: 0.11,
+    rotationStep: 0.03,
+    // 行整体几乎不位移，位移交给逐字动画，否则两层运动会互相打架
+    enterOffsetY: -0.03,
+    enterOffsetZ: -0.06,
+    enterScale: 0.98,
+    exitOffsetY: 0.1,
+    exitOffsetZ: -0.14,
+    exitScale: 0.96,
+    duration: 0.42,
     enterEase: 'power2.out',
     exitEase: 'power1.in',
+    glyphCascade: 0.5,
+  },
+  cinematic: {
+    radius: 2,
+    lineGap: 0.52,
+    contextOpacity: 0.18,
+    contextOpacityStep: 0.06,
+    activeZ: 0.34,
+    inactiveZ: -0.34,
+    depthStep: 0.2,
+    rotationStep: 0.07,
+    enterOffsetY: -0.1,
+    enterOffsetZ: -0.75,
+    enterScale: 0.72,
+    // 退出往镜头方向推并放大，像从镜头旁掠过
+    exitOffsetY: 0.12,
+    exitOffsetZ: 0.5,
+    exitScale: 1.18,
+    duration: 0.46,
+    enterEase: 'power3.out',
+    exitEase: 'power2.in',
+    glyphCascade: 0,
   },
 }
+
+/**
+ * 「只显示当前歌词」下的切句编排。
+ *
+ * 窗口模式里当前句从不真正退出 —— 它滚到 -1 槽位，只有窗口最外沿那句（opacity 已经掉到
+ * contextOpacity 的底部）才走 exit 补间，所以 profile 的 exitOffsetY（compact 0.08，约行距的
+ * 17%）完全够用。焦点模式没有邻居接手：退出的就是屏幕正中那句满不透明的行，而新句也停在
+ * relativeIndex 0，同一套参数等于"原地淡出"—— 补间中段两句都还有 ~0.7 alpha 精确叠在一起，
+ * 这就是切句残影。
+ *
+ * 所以焦点模式单开一套：位移放大到真正让出一个行位，alpha 抢在位移前面走完，新句 alpha 再
+ * 延后一点点，保证任何一帧只有一句是可读的。方向和 z/scale 仍沿用各模式自己的 exit* 参数，
+ * 景深推进的"掠过镜头"观感不受影响。
+ */
+export const LYRICS_FOCUS_SWITCH = {
+  /** 退出位移 = lineGap × 此系数 */
+  exitSpan: 1.25,
+  /** 退出补间时长 = profile.duration × 此系数 */
+  exitDuration: 0.7,
+  /** 退出 alpha 只占退出时长的这一段，剩下的位移在不可见状态下跑完 */
+  exitFadeRatio: 0.5,
+  /** 入场 alpha 延迟 = profile.duration × 此系数 */
+  enterFadeDelay: 0.24,
+  /** alpha 要"立刻掉、立刻起"，必须用 out 系；in 系会让旧句在高 alpha 上多挂一阵 */
+  fadeEase: 'power2.out',
+} as const
 
 export function isLyricsAnimationMode(value: unknown): value is LyricsAnimationMode {
   return typeof value === 'string' && LYRICS_ANIMATION_MODES.includes(value as LyricsAnimationMode)

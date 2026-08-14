@@ -184,6 +184,10 @@ export class VisualStage {
     this.lyricsLayer.setAnimationMode(mode)
   }
 
+  setLyricsFocusOnly(focusOnly: boolean): void {
+    this.lyricsLayer.setFocusOnly(focusOnly)
+  }
+
   setLyricsOffset(x: number, y: number): void {
     const bounds = this.lyricsOffsetBounds()
     this.lyricsLayer.setOffset(

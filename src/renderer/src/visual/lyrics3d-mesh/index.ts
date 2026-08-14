@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { Text } from 'three-text'
-import type { LyricWord } from '@shared/models'
+import type { LyricLine, LyricWord } from '@shared/models'
 import { gsap } from '../../motion'
 import {
   EMPTY_LYRICS_3D_STATE,
@@ -18,6 +18,7 @@ import { createLyricsMaterial, type LyricsMaterialHandle } from './material'
 import {
   isLyricsAnimationMode,
   lyricsAnimationProfile,
+  LYRICS_FOCUS_SWITCH,
   type LyricsAnimationMode,
 } from './animation'
 
@@ -32,6 +33,12 @@ const ACTIVE_COLOR = '#8fffe0'
 const INACTIVE_COLOR = '#c4ced2'
 const PENDING_COLOR = '#7f8d91'
 const GEOMETRY_CACHE_LIMIT = 48
+/**
+ * 提前形状化的行数（从窗口末尾往后数）。焦点模式窗口只有一行，不预热的话每次切句都是
+ * cache miss，整个切换要等 Text.create 把下一句的挤出字形 tessellate 完 —— 旧句因此挂在满
+ * 不透明上越过节拍，然后所有补间挤在同一帧里启动，这就是"不利落"。
+ */
+const PREFETCH_AHEAD = 2
 const BASE_Y = 0.24
 
 interface RenderedLine {
@@ -53,6 +60,10 @@ interface RenderedLine {
   activity: number
   exiting: boolean
   exitOrigin: { y: number; z: number; scale: number } | null
+  /** 逐字浮现进度 0→1；非 cascade 模式恒为 1 */
+  enter: number
+  /** 该行是否已经播过一次逐字入场（只在首次成为当前句时播） */
+  cascaded: boolean
 }
 
 interface DesiredLine {
@@ -95,6 +106,8 @@ export class Lyrics3DMeshLayer {
   readonly group = new THREE.Group()
 
   private readonly geometryCache = new Map<string, CachedGeometry>()
+  /** 同一条几何的并发请求（可见路径 + 预热）必须共用一个 Text.create，否则重复形状化且泄漏 */
+  private readonly geometryRequests = new Map<string, Promise<CachedGeometry | null>>()
   private state: Lyrics3DState = { ...EMPTY_LYRICS_3D_STATE }
   private rendered: RenderedLine[] = []
   private signature = ''
@@ -111,6 +124,7 @@ export class Lyrics3DMeshLayer {
   private readonly whiteColor = new THREE.Color(0xffffff)
   private readonly offset = new THREE.Vector2()
   private animationMode: LyricsAnimationMode = 'compact'
+  private focusOnly = false
   private reducedMotion = false
   private lastFrame: StageLyricsFrame | null = null
 
@@ -152,6 +166,18 @@ export class Lyrics3DMeshLayer {
     if (this.lastFrame) this.setFrame(this.lastFrame)
   }
 
+  /** 只显示当前句：与动画模式正交，靠把取词半径压到 0 实现，上下各留 0 行。 */
+  setFocusOnly(focusOnly: boolean): void {
+    if (this.focusOnly === focusOnly) return
+    this.focusOnly = focusOnly
+    this.signature = ''
+    if (this.lastFrame) this.setFrame(this.lastFrame)
+  }
+
+  private windowRadius(profile: { readonly radius: number }): number {
+    return this.focusOnly ? 0 : profile.radius
+  }
+
   setReducedMotion(reduced: boolean): void {
     if (this.reducedMotion === reduced) return
     this.reducedMotion = reduced
@@ -164,7 +190,8 @@ export class Lyrics3DMeshLayer {
 
     const previousTrackKey = this.state.trackKey
     const profile = lyricsAnimationProfile(this.animationMode)
-    const nextState = deriveLyrics3DState(this.state, frame, profile.radius)
+    const radius = this.windowRadius(profile)
+    const nextState = deriveLyrics3DState(this.state, frame, radius)
     const trackChanged = previousTrackKey !== nextState.trackKey
     const nextSignature = this.signatureFor(frame, nextState)
 
@@ -185,13 +212,10 @@ export class Lyrics3DMeshLayer {
 
     if (nextSignature && nextSignature !== this.signature) {
       this.signature = nextSignature
-      const window = selectLyricWindow(
-        frame.lines,
-        nextState.activeIndex,
-        profile.radius,
-        profile.radius,
-      )
-      void this.reconcileWindow(window)
+      const window = selectLyricWindow(frame.lines, nextState.activeIndex, radius, radius)
+      const lines = frame.lines
+      const windowEnd = nextState.windowEnd
+      void this.reconcileWindow(window).then(() => this.prefetchAhead(lines, windowEnd))
     }
     this.group.visible = this.rendered.length > 0
   }
@@ -200,6 +224,7 @@ export class Lyrics3DMeshLayer {
     if (this.disposed || !Number.isFinite(deltaTime)) return
     if (this.rendered.length === 0) return
 
+    const profile = lyricsAnimationProfile(this.animationMode)
     for (const line of this.rendered) {
       const distance = Math.abs(line.relativeIndex)
       const active = distance === 0 && !line.exiting
@@ -210,11 +235,15 @@ export class Lyrics3DMeshLayer {
       material.emissive.copy(this.accentColor)
       material.emissiveIntensity = 0.025 + line.activity * 0.055
       material.opacity = line.opacity
+      // 只有完全不透明的当前句写深度：正在淡入/淡出的行一旦写深度，就会把与它
+      // 空间重叠的另一行挖掉，切句瞬间看到的"残影"就是这么来的。
+      material.depthWrite = active && line.opacity > 0.98
       line.handle.setHighlight(
         active ? lyricGlyphProgress(line.words, this.playbackPosition, line.glyphCount) : 0,
         line.activity,
         this.activeColor,
       )
+      line.handle.setCascade(line.enter, profile.glyphCascade, line.glyphCount)
       line.mesh.scale.setScalar(line.scale)
       line.mesh.rotation.x = line.rotationX
       line.mesh.position.set(
@@ -232,6 +261,7 @@ export class Lyrics3DMeshLayer {
     this.clearRenderedLines()
     for (const cached of this.geometryCache.values()) cached.geometry.dispose()
     this.geometryCache.clear()
+    this.geometryRequests.clear()
     this.group.visible = false
     this.group.parent?.remove(this.group)
   }
@@ -242,7 +272,7 @@ export class Lyrics3DMeshLayer {
       .slice(state.windowStart, state.windowEnd + 1)
       .map((line) => `${line.time}${line.text}`)
       .join('')
-    return `${this.animationMode}@${frame.trackKey ?? ''}@${state.activeIndex}@${content}`
+    return `${this.animationMode}${this.focusOnly ? ':focus' : ''}@${frame.trackKey ?? ''}@${state.activeIndex}@${content}`
   }
 
   private async reconcileWindow(window: readonly Lyrics3DWindowEntry[]): Promise<void> {
@@ -330,7 +360,7 @@ export class Lyrics3DMeshLayer {
     this.group.visible = this.rendered.length > 0
   }
 
-  private async resolveGeometry(
+  private resolveGeometry(
     text: string,
     fontKey: LyricsFontKey,
     font: ArrayBuffer,
@@ -341,9 +371,23 @@ export class Lyrics3DMeshLayer {
     if (existing) {
       this.geometryCache.delete(cacheKey)
       this.geometryCache.set(cacheKey, existing)
-      return existing
+      return Promise.resolve(existing)
     }
+    const inflight = this.geometryRequests.get(cacheKey)
+    if (inflight) return inflight
 
+    const request = this.shapeGeometry(cacheKey, text, font).finally(() => {
+      this.geometryRequests.delete(cacheKey)
+    })
+    this.geometryRequests.set(cacheKey, request)
+    return request
+  }
+
+  private async shapeGeometry(
+    cacheKey: string,
+    text: string,
+    font: ArrayBuffer,
+  ): Promise<CachedGeometry | null> {
     const info = await Text.create({
       text,
       font,
@@ -386,6 +430,44 @@ export class Lyrics3DMeshLayer {
 
   private isGeometryInUse(geometry: THREE.BufferGeometry): boolean {
     return this.rendered.some((line) => line.mesh.geometry === geometry)
+  }
+
+  /**
+   * 把窗口之后的几句提前形状化进 geometry cache，让真正切句时 `resolveGeometry` 同步命中，
+   * 整个切换只剩补间。只在可见路径 reconcile 完成后才启动，避免和当前句抢主线程。
+   * 预热失败一律吞掉：真正需要这行时可见路径会自己再报一次错。
+   */
+  private prefetchAhead(lines: readonly LyricLine[], fromIndex: number): void {
+    if (this.disposed || this.fontErrors.has('harfbuzz') || fromIndex < 0) return
+    const pending: string[] = []
+    for (let offset = 1; offset <= PREFETCH_AHEAD; offset += 1) {
+      const line = lines[fromIndex + offset]
+      if (!line) break
+      const text = normalizedText(line.text)
+      if (text) pending.push(text)
+    }
+    if (pending.length === 0) return
+
+    void (async () => {
+      try {
+        await ensureHarfBuzz()
+      } catch {
+        return
+      }
+      for (const text of pending) {
+        if (this.disposed) return
+        const fontKey = resolveFontKey(text)
+        if (this.fontErrors.has(fontKey)) continue
+        if (this.geometryCache.has(`${fontKey}\n${text}`)) continue
+        try {
+          const font = await fetchFace(fontKey)
+          if (this.disposed) return
+          await this.resolveGeometry(text, fontKey, font)
+        } catch {
+          continue
+        }
+      }
+    })()
   }
 
   private addLine(entry: Readonly<DesiredLine>, cached: CachedGeometry): void {
@@ -431,6 +513,9 @@ export class Lyrics3DMeshLayer {
       activity: 0,
       exiting: false,
       exitOrigin: null,
+      // 上下文行直接呈完整字形，只有成为当前句时才播逐字入场
+      enter: 1,
+      cascaded: false,
     })
     this.animateLine(this.rendered[this.rendered.length - 1])
   }
@@ -445,19 +530,32 @@ export class Lyrics3DMeshLayer {
     const stableScale =
       Math.min(baseScale, MAX_LINE_WIDTH / Math.max(line.width, 1)) * this.viewportScale
     const exitOrigin = line.exitOrigin ?? { y: line.y, z: line.z, scale: line.scale }
-    const target = line.exiting
+    // 首次成为当前句时，把逐字进度打回 0，让它随本次补间重新铺开
+    if (profile.glyphCascade > 0 && active && !line.cascaded) {
+      line.cascaded = true
+      line.enter = 0
+    } else if (profile.glyphCascade <= 0) {
+      line.enter = 1
+    }
+    // 焦点模式下退出的是屏幕正中那句满不透明的行，profile.exitOffsetY 是按"窗口边缘的
+    // 近透明行"调的，用在这里等于原地淡出 —— 位移必须放大到真正让出一个行位。
+    const exitSpanY = this.focusOnly
+      ? profile.lineGap * LYRICS_FOCUS_SWITCH.exitSpan
+      : profile.exitOffsetY
+    const opacity = line.exiting
+      ? 0
+      : active
+        ? 1
+        : Math.max(0.06, profile.contextOpacity - distance * profile.contextOpacityStep)
+    const motion = line.exiting
       ? {
-          opacity: 0,
-          y: exitOrigin.y + profile.exitOffsetY,
+          y: exitOrigin.y + exitSpanY,
           z: exitOrigin.z + profile.exitOffsetZ,
           scale: exitOrigin.scale * profile.exitScale,
           rotationX: 0,
           activity: 0,
         }
       : {
-          opacity: active
-            ? 1
-            : Math.max(0.06, profile.contextOpacity - distance * profile.contextOpacityStep),
           y: -line.relativeIndex * profile.lineGap,
           z: active ? profile.activeZ : profile.inactiveZ - distance * profile.depthStep,
           scale: stableScale,
@@ -467,23 +565,44 @@ export class Lyrics3DMeshLayer {
             0.1,
           ),
           activity: active ? 1 : 0,
+          enter: 1,
         }
 
     gsap.killTweensOf(line)
-    line.mesh.renderOrder = active ? 43 : line.exiting ? 44 : 41
+    // 淡出的行必须排在当前句下面：排在上面等于把正在消失的旧句盖在新句上，也是残影来源之一
+    line.mesh.renderOrder = active ? 43 : line.exiting ? 42 : 41
     if (this.reducedMotion) {
-      Object.assign(line, target)
+      Object.assign(line, motion, { opacity })
       if (line.exiting) this.removeLine(line)
       return
     }
-    gsap.to(line, {
-      ...target,
-      duration: line.exiting ? profile.duration * 0.78 : profile.duration,
+
+    const motionDuration = line.exiting
+      ? profile.duration * (this.focusOnly ? LYRICS_FOCUS_SWITCH.exitDuration : 0.78)
+      : profile.duration
+    const settle = {
+      duration: motionDuration,
       ease: line.exiting ? profile.exitEase : profile.enterEase,
-      overwrite: 'auto',
+      overwrite: 'auto' as const,
       onComplete: () => {
         if (line.exiting) this.removeLine(line)
       },
+    }
+    if (!this.focusOnly) {
+      gsap.to(line, { ...motion, opacity, ...settle })
+      return
+    }
+    // 焦点模式：alpha 从位移里拆出来单独补间。两句共用同一个槽位，只有把两条 alpha 曲线
+    // 错开（旧句先掉完，新句再起）才不会在中段读出两层字。位移继续按各模式的 ease 跑完。
+    gsap.to(line, { ...motion, ...settle })
+    gsap.to(line, {
+      opacity,
+      duration: line.exiting
+        ? motionDuration * LYRICS_FOCUS_SWITCH.exitFadeRatio
+        : profile.duration * (1 - LYRICS_FOCUS_SWITCH.enterFadeDelay),
+      delay: line.exiting ? 0 : profile.duration * LYRICS_FOCUS_SWITCH.enterFadeDelay,
+      ease: LYRICS_FOCUS_SWITCH.fadeEase,
+      overwrite: 'auto',
     })
   }
 

@@ -25,6 +25,7 @@ const LEGACY_UI_MOTION_KEY = 'flux-ui-motion'
 const LYRICS_DRAG_KEY = 'flux-lyrics-drag-enabled'
 const LYRICS_OFFSET_KEY = 'flux-lyrics-offset'
 const LYRICS_ANIMATION_KEY = 'flux-lyrics-animation-mode-v1'
+const LYRICS_FOCUS_ONLY_KEY = 'flux-lyrics-focus-only-v1'
 const BACKGROUND_MODE_KEY = 'fluxplayer-background-mode-v1'
 
 function initialLyricsDragEnabled(): boolean {
@@ -63,6 +64,14 @@ function initialLyricsAnimationMode(): LyricsAnimationMode {
     return isLyricsAnimationMode(raw) ? raw : 'compact'
   } catch {
     return 'compact'
+  }
+}
+
+function initialLyricsFocusOnly(): boolean {
+  try {
+    return localStorage.getItem(LYRICS_FOCUS_ONLY_KEY) === '1'
+  } catch {
+    return false
   }
 }
 
@@ -188,6 +197,7 @@ export default function App(): React.JSX.Element {
   const [lyricsDragEnabled, setLyricsDragEnabled] = useState(initialLyricsDragEnabled)
   const [lyricsAnimationMode, setLyricsAnimationMode] =
     useState<LyricsAnimationMode>(initialLyricsAnimationMode)
+  const [lyricsFocusOnly, setLyricsFocusOnly] = useState(initialLyricsFocusOnly)
   const [lyricsOffset, setLyricsOffset] = useState<LyricsOffset>(initialLyricsOffset)
   const [customBackground, setCustomBackground] = useState<CustomBackground | null>(null)
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode | null>(initialBackgroundMode)
@@ -275,6 +285,14 @@ export default function App(): React.JSX.Element {
       // Keep the selected lyric motion for this session when persistence is unavailable.
     }
   }, [lyricsAnimationMode])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LYRICS_FOCUS_ONLY_KEY, lyricsFocusOnly ? '1' : '0')
+    } catch {
+      // Keep the setting for this session when persistence is unavailable.
+    }
+  }, [lyricsFocusOnly])
 
   useEffect(() => {
     try {
@@ -416,6 +434,7 @@ export default function App(): React.JSX.Element {
           backgroundEnabled={effectiveBackgroundMode === 'dynamic'}
           lyricsDragEnabled={lyricsDragEnabled}
           lyricsAnimationMode={lyricsAnimationMode}
+          lyricsFocusOnly={lyricsFocusOnly}
           lyricsOffset={lyricsOffset}
           onLyricsOffsetChange={setLyricsOffset}
         />
@@ -467,6 +486,8 @@ export default function App(): React.JSX.Element {
             lyricsDragEnabled={lyricsDragEnabled}
             lyricsAnimationMode={lyricsAnimationMode}
             onLyricsAnimationModeChange={setLyricsAnimationMode}
+            lyricsFocusOnly={lyricsFocusOnly}
+            onLyricsFocusOnlyChange={setLyricsFocusOnly}
             onLyricsDragEnabledChange={setLyricsDragEnabled}
             onResetLyricsPosition={() => setLyricsOffset({ x: 0, y: 0 })}
           />
