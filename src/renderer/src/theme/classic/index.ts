@@ -10,13 +10,6 @@ const CLASSIC_GOLD_VISUAL_PARAMS = Object.freeze({
   danger: '#d95b67',
   panelSurface: '#000000',
   panelBorder: '#ffffff',
-  blur: 12,
-  saturation: 180,
-  backgroundOpacity: 0.1,
-  borderOpacity: 0,
-  distortion: 0,
-  chromaticAberration: 0,
-  radius: 50,
   fontFamily:
     "'Noto Sans SC', 'PingFang SC', 'HarmonyOS Sans SC', 'Alibaba PuHuiTi', Inter, system-ui, sans-serif",
   fontScale: 1,

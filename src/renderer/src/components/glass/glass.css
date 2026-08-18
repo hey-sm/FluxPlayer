@@ -1,14 +1,159 @@
-.flux-liquid-glass {
+.flux-glass-surface {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
   color: var(--flux-text);
+  overflow: visible;
+  font-family: var(--flux-font-family);
+  font-size: calc(1em * var(--flux-font-scale));
 }
-.flux-liquid-glass > * {
+
+.flux-glass-surface > .flux-glass-surface__card {
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+  transform: none !important;
+  transition: none !important;
+  will-change: auto !important;
+  user-select: text;
+}
+
+.flux-glass-surface[data-edge='left'] > .flux-glass-surface__card {
+  position: absolute !important;
+  inset-block: 0;
+  left: calc(-1 * var(--flux-glass-radius));
+  right: 0;
+  width: calc(100% + var(--flux-glass-radius)) !important;
+}
+
+.flux-glass-surface[data-edge='right'] > .flux-glass-surface__card {
+  position: absolute !important;
+  inset-block: 0;
+  left: 0;
+  right: calc(-1 * var(--flux-glass-radius));
+  width: calc(100% + var(--flux-glass-radius)) !important;
+}
+
+.flux-glass-surface > .flux-glass-surface__card > .flux-glass-surface__content {
+  box-sizing: border-box;
   width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  user-select: text;
 }
-.flux-liquid-glass__content {
-  width: 100%;
+
+.flux-glass-surface[data-edge='left'] .flux-glass-surface__content {
+  padding-left: var(--flux-glass-radius) !important;
 }
-@media (prefers-reduced-motion: reduce) {
-  .flux-liquid-glass {
-    --glass-flexibility: 0;
-  }
+
+.flux-glass-surface[data-edge='right'] .flux-glass-surface__content {
+  padding-right: var(--flux-glass-radius) !important;
+}
+
+.flux-glass-surface .glass-ui-background-layer,
+.flux-glass-surface .glass-ui-inner-light,
+.flux-glass-surface .glass-ui-outer-light,
+.flux-glass-surface .glass-ui-distortion-layer {
+  transition: none !important;
+  will-change: auto !important;
+}
+
+/* The clipping node must also own the backdrop sampling in Chromium. A
+   descendant backdrop-filter under an animated clip-path is computed but
+   does not render, then switches sampling roots when the animation ends. */
+[data-edge-sheet] {
+  -webkit-backdrop-filter: blur(var(--flux-glass-blur)) saturate(var(--flux-glass-saturation))
+    brightness(var(--flux-glass-brightness));
+  backdrop-filter: blur(var(--flux-glass-blur)) saturate(var(--flux-glass-saturation))
+    brightness(var(--flux-glass-brightness));
+}
+
+.flux-glass-surface[data-edge='left'] .glass-ui-distortion-layer,
+.flux-glass-surface[data-edge='right'] .glass-ui-distortion-layer {
+  filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* react-glass-ui ships filter layers at z-index:-1. Keeping them in the card's
+   normal stack lets backdrop-filter sample the app scene without isolation. */
+.flux-glass-surface .glass-ui-background-layer,
+.flux-glass-surface .glass-ui-distortion-layer,
+.flux-glass-surface .glass-ui-outer-light,
+.flux-glass-surface .glass-ui-svg {
+  z-index: 0 !important;
+}
+
+.flux-glass-surface .glass-ui-card-content,
+.flux-glass-surface .glass-ui-border-layer,
+.flux-glass-surface .glass-ui-inner-light {
+  z-index: 1;
+}
+
+.flux-glass-surface[data-elevation='raised'] > .flux-glass-surface__card {
+  /* A CSS filter here creates a Backdrop Root and prevents the descendant
+     distortion layer from sampling the application scene. */
+  box-shadow: var(--flux-shadow-panel);
+}
+
+/* The player keeps the pre-global-glass geometry and ordinary control colors. */
+.playerbar {
+  --flux-radius-shell: var(--flux-player-radius);
+  --flux-glass-border: var(--flux-player-border);
+  --flux-glass-background: var(--flux-player-background);
+}
+
+/* The approved golden SVG displacement is restricted to the compact player strip. */
+.control-glass-filter-svg {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.playerbar.classic-control-glass {
+  position: relative;
+  border: 0;
+  border-radius: var(--saved-panel-glass-radius);
+  background: var(--saved-panel-glass-bg);
+  -webkit-backdrop-filter: var(--saved-panel-glass-filter);
+  backdrop-filter: var(--saved-panel-glass-filter);
+  box-shadow: var(--saved-panel-glass-shadow);
+}
+
+html.classic-control-glass-svg-ok .playerbar.classic-control-glass {
+  background: var(--saved-panel-glass-bg);
+  -webkit-backdrop-filter: url(#mineradio-control-glass-filter) saturate(1);
+  backdrop-filter: url(#mineradio-control-glass-filter) saturate(1);
+}
+
+::view-transition-group(root),
+::view-transition-image-pair(root),
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-group(flux-search-shell-vt),
+::view-transition-image-pair(flux-search-shell-vt),
+::view-transition-old(flux-search-shell-vt),
+::view-transition-new(flux-search-shell-vt) {
+  animation: none !important;
+}
+
+::view-transition-old(root) {
+  display: none;
+}
+
+::view-transition-new(root),
+::view-transition-old(flux-search-shell-vt),
+::view-transition-new(flux-search-shell-vt) {
+  mix-blend-mode: normal;
+}
+
+::view-transition-image-pair(flux-search-shell-vt) {
+  isolation: auto;
 }

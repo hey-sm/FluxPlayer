@@ -9,13 +9,6 @@ export interface ThemeVisualParams {
   danger: string
   panelSurface: string
   panelBorder: string
-  blur: number
-  saturation: number
-  backgroundOpacity: number
-  borderOpacity: number
-  distortion: number
-  chromaticAberration: number
-  radius: number
   fontFamily: string
   fontScale: number
 }

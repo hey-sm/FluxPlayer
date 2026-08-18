@@ -1,4 +1,5 @@
 import { BrowserWindow, screen, shell } from 'electron'
+import type { Rectangle } from 'electron'
 import type { DesktopWindowState, DisplayState } from '@shared/ipc-contract'
 import { IPC } from '@shared/ipc-contract'
 import { APP_ENTRY_URL } from '../protocols'
@@ -11,6 +12,8 @@ const MIN_WINDOWED_HEIGHT = 540
 
 let htmlFullscreenActive = false
 let windowFullscreenActive = false
+let windowedBoundsBeforeFullscreen: Rectangle | null = null
+let fullscreenFallbackTimer: NodeJS.Timeout | null = null
 let stateTimer: NodeJS.Timeout | null = null
 
 function rectsOverlapOnY(
@@ -147,18 +150,41 @@ function applyWindowedBounds(win: BrowserWindow | null): void {
   sendWindowState(win)
 }
 
+function clearFullscreenFallbackTimer(): void {
+  if (!fullscreenFallbackTimer) return
+  clearTimeout(fullscreenFallbackTimer)
+  fullscreenFallbackTimer = null
+}
+
+function restoreWindowedBounds(win: BrowserWindow | null): void {
+  if (!win || win.isDestroyed()) return
+  if (windowedBoundsBeforeFullscreen) {
+    const bounds = windowedBoundsBeforeFullscreen
+    windowedBoundsBeforeFullscreen = null
+    if (win.isMaximized()) win.unmaximize()
+    win.setMinimumSize(MIN_WINDOWED_WIDTH, MIN_WINDOWED_HEIGHT)
+    win.setBounds(bounds, false)
+    sendWindowState(win)
+    return
+  }
+  applyWindowedBounds(win)
+}
+
 export function exitFullscreenToWindow(win: BrowserWindow | null): void {
   if (!win || win.isDestroyed()) return
+  clearFullscreenFallbackTimer()
+  const wasWindowFullscreenActive = windowFullscreenActive
   windowFullscreenActive = false
   if (!win.isFullScreen()) {
-    applyWindowedBounds(win)
+    if (wasWindowFullscreenActive) win.setFullScreen(false)
+    restoreWindowedBounds(win)
     return
   }
   let applied = false
   const applyOnce = () => {
     if (applied || !win || win.isDestroyed() || win.isFullScreen()) return
     applied = true
-    applyWindowedBounds(win)
+    restoreWindowedBounds(win)
   }
   win.once('leave-full-screen', () => setTimeout(applyOnce, 50))
   win.setFullScreen(false)
@@ -171,8 +197,20 @@ export function toggleFullscreen(win: BrowserWindow | null): void {
     exitFullscreenToWindow(win)
     return
   }
+  clearFullscreenFallbackTimer()
+  windowedBoundsBeforeFullscreen = win.getBounds()
   windowFullscreenActive = true
   win.setFullScreen(true)
+  // Transparent, frameless windows on some Windows/Electron combinations do
+  // not enter native fullscreen even though the call succeeds. Keep the
+  // logical fullscreen state and fall back to the monitor's physical bounds.
+  fullscreenFallbackTimer = setTimeout(() => {
+    fullscreenFallbackTimer = null
+    if (!win || win.isDestroyed() || !windowFullscreenActive || win.isFullScreen()) return
+    const display = screen.getDisplayMatching(win.getBounds())
+    win.setBounds(display.bounds, false)
+    sendWindowState(win)
+  }, 350)
   sendWindowState(win)
 }
 
@@ -182,6 +220,8 @@ export interface MainWindowOptions {
   /** 开发模式下 electron-vite 提供的 renderer dev server 地址 */
   devRendererUrl?: string
   onStateChange?: (win: BrowserWindow) => void
+  /** Stops native wallpaper sessions before a renderer process is discarded. */
+  onRendererGone?: (win: BrowserWindow, reason: string) => void
   /** Called synchronously before loadURL so startup IPC can verify the primary renderer sender. */
   onCreated?: (win: BrowserWindow) => void
 }
@@ -190,6 +230,8 @@ export interface MainWindowOptions {
 export async function createMainWindow(options: MainWindowOptions): Promise<BrowserWindow> {
   htmlFullscreenActive = false
   windowFullscreenActive = false
+  windowedBoundsBeforeFullscreen = null
+  clearFullscreenFallbackTimer()
   return buildAndLoad(options)
 }
 
@@ -225,7 +267,8 @@ function buildWindow(options: MainWindowOptions): BrowserWindow {
     show: false,
     frame: false,
     fullscreen: false,
-    backgroundColor: '#0b0d12',
+    transparent: true,
+    backgroundColor: '#00000000',
     hasShadow: true,
     autoHideMenuBar: true,
     title: 'FluxPlayer',
@@ -242,6 +285,7 @@ function buildWindow(options: MainWindowOptions): BrowserWindow {
 
   win.webContents.on('render-process-gone', (_event, details) => {
     console.warn('[FluxPlayer] renderer gone:', details.reason, details.exitCode)
+    options.onRendererGone?.(win, details.reason)
   })
 
   const allowedUrl = new URL(options.devRendererUrl || APP_ENTRY_URL)
@@ -280,7 +324,7 @@ function buildWindow(options: MainWindowOptions): BrowserWindow {
     if (
       input.type === 'keyDown' &&
       (input.key === 'Escape' || input.code === 'Escape') &&
-      win.isFullScreen()
+      (win.isFullScreen() || windowFullscreenActive)
     ) {
       event.preventDefault()
       exitFullscreenToWindow(win)
@@ -312,12 +356,17 @@ function buildWindow(options: MainWindowOptions): BrowserWindow {
   win.on('move', notifyDebounced)
   win.on('resize', notifyDebounced)
   win.on('enter-full-screen', () => {
-    windowFullscreenActive = true
+    clearFullscreenFallbackTimer()
+    if (!windowFullscreenActive) {
+      win.setFullScreen(false)
+      return
+    }
     notify()
   })
   win.on('leave-full-screen', () => {
+    clearFullscreenFallbackTimer()
     windowFullscreenActive = false
-    setTimeout(() => applyWindowedBounds(win), 50)
+    setTimeout(() => restoreWindowedBounds(win), 50)
   })
   win.on('enter-html-full-screen', () => {
     htmlFullscreenActive = true
@@ -328,6 +377,8 @@ function buildWindow(options: MainWindowOptions): BrowserWindow {
     setTimeout(() => applyWindowedBounds(win), 50)
   })
   win.on('closed', () => {
+    clearFullscreenFallbackTimer()
+    windowedBoundsBeforeFullscreen = null
     if (stateTimer) {
       clearTimeout(stateTimer)
       stateTimer = null

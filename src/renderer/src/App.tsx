@@ -1,6 +1,13 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import type { CustomBackground, WallpaperEngineProject } from '@shared/custom-background-contract'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CustomBackground } from '@shared/custom-background-contract'
 import type { ProviderId } from '@shared/models'
+import {
+  DEFAULT_WALLPAPER_ENGINE_STATE,
+  type WallpaperEngineLibrarySnapshot,
+  type WallpaperEngineProject,
+  type WallpaperEngineRuntimeStatus,
+  type WallpaperEngineState,
+} from '@shared/wallpaper-engine-contract'
 import { AppTopBar, FocusModeExitControls } from './components/shell/AppTopBar'
 import { FallbackNotice, PlayerBar } from './components/player/PlayerBar'
 import { LibraryWorkspace } from './features/library'
@@ -13,6 +20,7 @@ import { isDynamicBackgroundEffect, type DynamicBackgroundEffect } from './visua
 import { parseBackgroundMode, type BackgroundMode } from './visual/background-mode'
 import type { LyricsOffset } from './visual/StageCanvas'
 import { isLyricsAnimationMode, type LyricsAnimationMode } from './visual/lyrics3d-mesh/animation'
+import { WallpaperEngineLayer } from './features/settings/WallpaperEngineLayer'
 
 const SettingsPanel = lazy(() => import('./features/settings/SettingsPanel'))
 const StageCanvas = lazy(() =>
@@ -204,7 +212,28 @@ export default function App(): React.JSX.Element {
   const [backgroundMediaFailed, setBackgroundMediaFailed] = useState(false)
   const [backgroundBusy, setBackgroundBusy] = useState(false)
   const [backgroundError, setBackgroundError] = useState('')
-  const [wallpaperProjects, setWallpaperProjects] = useState<WallpaperEngineProject[]>([])
+  const [wallpaperEngineState, setWallpaperEngineState] = useState<WallpaperEngineState>(() => ({
+    version: DEFAULT_WALLPAPER_ENGINE_STATE.version,
+    selection: { ...DEFAULT_WALLPAPER_ENGINE_STATE.selection },
+    favorites: [],
+    hidden: [],
+  }))
+  const [wallpaperEngineSnapshot, setWallpaperEngineSnapshot] =
+    useState<WallpaperEngineLibrarySnapshot | null>(null)
+  const [wallpaperEngineRuntimeStatus, setWallpaperEngineRuntimeStatus] =
+    useState<WallpaperEngineRuntimeStatus>({
+      ok: true,
+      active: false,
+      mode: 'none',
+      phase: 'idle',
+      sessionId: '',
+      projectId: '',
+      glassSamplerAvailable: false,
+      error: '',
+    })
+  const [wallpaperEngineReady, setWallpaperEngineReady] = useState(false)
+  const [wallpaperSuspended, setWallpaperSuspended] = useState(false)
+  const customBackgroundVideoRef = useRef<HTMLVideoElement>(null)
   const appRef = useRef<HTMLDivElement>(null)
   const reducedMotion = useReducedMotion()
 
@@ -243,8 +272,40 @@ export default function App(): React.JSX.Element {
     if (!desktop) return
     return desktop.onWindowState((state) => {
       if (!state.isFullScreen) setFocusMode(false)
+      setWallpaperSuspended(state.isMinimized || !state.isVisible)
     })
   }, [])
+
+  useEffect(() => {
+    const desktop = window.fluxDesktop
+    if (!desktop || !wallpaperEngineState.selection.active) {
+      setWallpaperEngineRuntimeStatus((current) =>
+        current.active || current.mode !== 'none'
+          ? {
+              ok: true,
+              active: false,
+              mode: 'none',
+              phase: 'idle',
+              sessionId: '',
+              projectId: '',
+              glassSamplerAvailable: false,
+              error: '',
+            }
+          : current,
+      )
+      return
+    }
+    let cancelled = false
+    void desktop
+      .getWallpaperEngineRuntimeStatus()
+      .then((status) => {
+        if (!cancelled) setWallpaperEngineRuntimeStatus(status)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [wallpaperEngineState.selection])
 
   useEffect(() => {
     const desktop = window.fluxDesktop
@@ -255,6 +316,39 @@ export default function App(): React.JSX.Element {
     }
     void desktop.getCustomBackground().then(applyCustomBackground)
     return desktop.onCustomBackgroundChanged(applyCustomBackground)
+  }, [])
+
+  useEffect(() => {
+    const desktop = window.fluxDesktop
+    if (!desktop) return
+    let cancelled = false
+    const applyState = (next: WallpaperEngineState): void => {
+      if (!cancelled) setWallpaperEngineState(next)
+    }
+    void desktop
+      .getWallpaperEngineState()
+      .then(async (next) => {
+        applyState(next)
+        if (next.selection.active) {
+          const result = await desktop.listWallpaperEngineProjects(false)
+          if (!cancelled) {
+            setWallpaperEngineSnapshot(result)
+            applyState(result.state)
+          }
+        }
+      })
+      .catch(() => {
+        // A browser preview or an early startup race simply keeps the default state.
+      })
+    const unsubscribe = desktop.onWallpaperEngineStateChanged(applyState)
+    const unsubscribeRuntime = desktop.onWallpaperEngineRuntimeChanged((status) => {
+      if (!cancelled) setWallpaperEngineRuntimeStatus(status)
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+      unsubscribeRuntime()
+    }
   }, [])
 
   useEffect(() => setBackgroundMediaFailed(false), [customBackground?.url])
@@ -323,7 +417,6 @@ export default function App(): React.JSX.Element {
         setCustomBackground(result.background)
         setBackgroundMode(result.background ? 'wallpaper' : 'dynamic')
         setBackgroundMediaFailed(false)
-        setWallpaperProjects([])
       } catch (error) {
         setBackgroundError(error instanceof Error ? error.message : '背景导入失败')
       } finally {
@@ -333,27 +426,71 @@ export default function App(): React.JSX.Element {
     [],
   )
 
-  const scanWallpaperEngine = useCallback(async () => {
-    const desktop = window.fluxDesktop
-    if (!desktop) return
-    setBackgroundBusy(true)
-    setBackgroundError('')
-    try {
-      const result = await desktop.scanWallpaperEngineProjects()
-      if (!result.ok) throw new Error(result.error || 'Wallpaper Engine 扫描失败')
-      setWallpaperProjects(result.projects)
-      if (!result.projects.length) {
-        setBackgroundError('未找到可直接导入的视频壁纸；网页与 scene 项目不受支持。')
-      }
-    } catch (error) {
-      setBackgroundError(error instanceof Error ? error.message : 'Wallpaper Engine 扫描失败')
-    } finally {
-      setBackgroundBusy(false)
-    }
-  }, [])
-
   const effectiveBackgroundMode: BackgroundMode =
     backgroundMode === 'wallpaper' && customBackground && !backgroundMediaFailed ? 'wallpaper' : 'dynamic'
+
+  const selectedWallpaperEngineProject = useMemo<WallpaperEngineProject | null>(() => {
+    const id = wallpaperEngineState.selection.id
+    return id ? (wallpaperEngineSnapshot?.projects.find((project) => project.id === id) ?? null) : null
+  }, [wallpaperEngineSnapshot, wallpaperEngineState.selection.id])
+
+  const handleWallpaperEngineStateChange = useCallback((next: WallpaperEngineState): void => {
+    setWallpaperEngineState(next)
+  }, [])
+
+  const handleWallpaperEngineSnapshotChange = useCallback((next: WallpaperEngineLibrarySnapshot): void => {
+    setWallpaperEngineSnapshot(next)
+  }, [])
+
+  const handleWallpaperEngineDeactivate = useCallback((): void => {
+    const desktop = window.fluxDesktop
+    if (!desktop) return
+    setWallpaperEngineReady(false)
+    setWallpaperEngineRuntimeStatus({
+      ok: true,
+      active: false,
+      mode: 'none',
+      phase: 'idle',
+      sessionId: '',
+      projectId: '',
+      glassSamplerAvailable: false,
+      error: '',
+    })
+    void desktop
+      .setWallpaperEngineState({ action: 'clear' })
+      .then(setWallpaperEngineState)
+      .catch(() => undefined)
+  }, [])
+
+  const handleWallpaperEngineFailure = useCallback((id: string, error: string): void => {
+    const desktop = window.fluxDesktop
+    setWallpaperEngineReady(false)
+    setWallpaperEngineRuntimeStatus({
+      ok: false,
+      active: false,
+      mode: 'none',
+      phase: 'failed',
+      sessionId: '',
+      projectId: id,
+      glassSamplerAvailable: false,
+      error,
+    })
+    if (!desktop) return
+    void desktop
+      .setWallpaperEngineState({ action: 'runtime-error', id, error })
+      .then(setWallpaperEngineState)
+      .catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    const video = customBackgroundVideoRef.current
+    if (!video) return
+    if (wallpaperEngineReady || wallpaperSuspended) {
+      video.pause()
+      return
+    }
+    void video.play().catch(() => undefined)
+  }, [customBackground?.url, wallpaperEngineReady, wallpaperSuspended])
 
   useGSAP(
     () => {
@@ -391,14 +528,30 @@ export default function App(): React.JSX.Element {
     <div
       ref={appRef}
       className="app group/app relative flex h-full flex-col overflow-hidden bg-[var(--flux-bg)]"
+      style={{
+        backgroundColor:
+          wallpaperEngineRuntimeStatus.active &&
+          wallpaperEngineRuntimeStatus.mode === 'dwm' &&
+          wallpaperEngineRuntimeStatus.phase === 'active'
+            ? 'transparent'
+            : undefined,
+      }}
       data-app-root=""
       data-background-mode={effectiveBackgroundMode}
+      data-wallpaper-dwm-active={
+        wallpaperEngineRuntimeStatus.active &&
+        wallpaperEngineRuntimeStatus.mode === 'dwm' &&
+        wallpaperEngineRuntimeStatus.phase === 'active'
+          ? ''
+          : undefined
+      }
       data-focus-mode={focusMode || undefined}
     >
-      {effectiveBackgroundMode === 'wallpaper' && customBackground ? (
+      {effectiveBackgroundMode === 'wallpaper' && customBackground && !wallpaperEngineReady ? (
         <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
           {customBackground.kind === 'video' ? (
             <video
+              ref={customBackgroundVideoRef}
               key={customBackground.url}
               src={customBackground.url}
               muted
@@ -427,11 +580,19 @@ export default function App(): React.JSX.Element {
           )}
         </div>
       ) : null}
+      <WallpaperEngineLayer
+        project={selectedWallpaperEngineProject}
+        selection={wallpaperEngineState.selection}
+        runtimeStatus={wallpaperEngineRuntimeStatus}
+        suspended={wallpaperSuspended}
+        onReadyChange={setWallpaperEngineReady}
+        onFailure={handleWallpaperEngineFailure}
+      />
       <Suspense fallback={null}>
         <StageCanvas
           className="pointer-events-auto absolute inset-0 z-[1]"
           backgroundEffect={dynamicBackground}
-          backgroundEnabled={effectiveBackgroundMode === 'dynamic'}
+          backgroundEnabled={effectiveBackgroundMode === 'dynamic' && !wallpaperEngineReady}
           lyricsDragEnabled={lyricsDragEnabled}
           lyricsAnimationMode={lyricsAnimationMode}
           lyricsFocusOnly={lyricsFocusOnly}
@@ -469,19 +630,15 @@ export default function App(): React.JSX.Element {
             customBackground={customBackground}
             backgroundBusy={backgroundBusy}
             backgroundError={backgroundError}
-            wallpaperProjects={wallpaperProjects}
+            wallpaperEngineSelection={wallpaperEngineState.selection}
+            onWallpaperEngineStateChange={handleWallpaperEngineStateChange}
+            onWallpaperEngineSnapshotChange={handleWallpaperEngineSnapshotChange}
+            onWallpaperEngineDeactivate={handleWallpaperEngineDeactivate}
             onChooseBackground={() =>
               void runBackgroundCommand(() => window.fluxDesktop?.chooseCustomBackgroundFile())
             }
             onClearBackground={() =>
               void runBackgroundCommand(() => window.fluxDesktop?.clearCustomBackground())
-            }
-            onScanWallpaperEngine={() => void scanWallpaperEngine()}
-            onChooseWallpaperEngine={() =>
-              void runBackgroundCommand(() => window.fluxDesktop?.chooseWallpaperEngineProject())
-            }
-            onImportWallpaperEngine={(projectId) =>
-              void runBackgroundCommand(() => window.fluxDesktop?.importWallpaperEngineProject(projectId))
             }
             lyricsDragEnabled={lyricsDragEnabled}
             lyricsAnimationMode={lyricsAnimationMode}

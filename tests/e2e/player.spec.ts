@@ -146,6 +146,10 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
     'data-animation-reverse',
     'true',
   )
+  await expect(page.locator('[data-edge-sheet][data-side="left"]')).toHaveAttribute(
+    'data-animation-effect',
+    'live-clip-reveal',
+  )
   await expect(page.locator('[data-edge-sheet][data-side="right"]')).toHaveAttribute(
     'data-animation-direction',
     'horizontal',
@@ -154,47 +158,85 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
     'data-animation-reverse',
     'false',
   )
-  const edgeGlassStyle = await page.evaluate(() => {
-    const read = (side: 'left' | 'right') => {
-      const element = document.querySelector<HTMLElement>(`[data-edge-sheet][data-side="${side}"]`)!
-      const style = getComputedStyle(element)
+  await expect(page.locator('[data-edge-sheet][data-side="right"]')).toHaveAttribute(
+    'data-animation-effect',
+    'live-clip-reveal',
+  )
+  const edgeGlassStyle = await page.evaluate(async () => {
+    const readSheet = (side: 'left' | 'right') => {
+      const sheet = document.querySelector<HTMLElement>(`[data-edge-sheet][data-side="${side}"]`)!
+      const surface = sheet.querySelector<HTMLElement>('[data-flux-glass-surface]')!
+      const card = surface.querySelector<HTMLElement>('.glass-ui-container')!
+      const border = card.querySelector<HTMLElement>('.glass-ui-border-layer')!
+      const distortion = card.querySelector<HTMLElement>('.glass-ui-distortion-layer')!
+      const displacement = card.querySelector<SVGFEDisplacementMapElement>('feDisplacementMap')!
       return {
-        background: style.backgroundColor,
-        backdropFilter: style.backdropFilter,
-        boxShadow: style.boxShadow,
-        borderRadius: [
-          style.borderTopLeftRadius,
-          style.borderTopRightRadius,
-          style.borderBottomRightRadius,
-          style.borderBottomLeftRadius,
-        ],
+        config: surface.dataset.glassConfig,
+        surfaceBackground: getComputedStyle(surface).backgroundColor,
+        surfaceOverflow: getComputedStyle(surface).overflow,
+        sheetTransform: getComputedStyle(sheet).transform,
+        cardRadius: getComputedStyle(card).borderRadius,
+        cardTransform: getComputedStyle(card).transform,
+        borderWidth: Number.parseFloat(getComputedStyle(border).borderTopWidth),
+        borderColor: getComputedStyle(border).borderTopColor,
+        borderOpacity: getComputedStyle(border).opacity,
+        backdropFilter: getComputedStyle(sheet).backdropFilter,
+        childBackdropFilter: getComputedStyle(distortion).backdropFilter,
+        displacement: displacement.getAttribute('scale'),
+        hasSvgFilter: Boolean(card.querySelector('svg filter')),
       }
     }
-    const probe = document.createElement('div')
-    probe.style.background = 'var(--saved-panel-glass-bg)'
-    probe.style.backdropFilter = 'var(--saved-panel-glass-filter)'
-    probe.style.boxShadow = 'var(--saved-panel-glass-shadow)'
-    document.body.append(probe)
-    const probeStyle = getComputedStyle(probe)
-    const expected = {
-      background: probeStyle.backgroundColor,
-      backdropFilter: probeStyle.backdropFilter,
-      ringLayer: probeStyle.boxShadow.split(', ')[0],
+    const card = document.querySelector<HTMLElement>(
+      '[data-edge-sheet][data-side="left"] .glass-ui-container',
+    )!
+    const hoverStyleBefore = {
+      transition: card.style.transition,
+      willChange: card.style.willChange,
     }
-    probe.remove()
-    return { left: read('left'), right: read('right'), expected }
+    for (let index = 0; index < 8; index += 1) {
+      card.dispatchEvent(
+        new MouseEvent('mousemove', {
+          bubbles: true,
+          clientX: 80 + index * 4,
+          clientY: 180 + index * 3,
+        }),
+      )
+    }
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
+    const hoverStyleAfter = {
+      transition: card.style.transition,
+      willChange: card.style.willChange,
+    }
+    return {
+      left: readSheet('left'),
+      right: readSheet('right'),
+      hoverStyleBefore,
+      hoverStyleAfter,
+    }
   })
-  expect(edgeGlassStyle.left.borderRadius).toEqual(['0px', '15px', '15px', '0px'])
-  expect(edgeGlassStyle.right.borderRadius).toEqual(['15px', '0px', '0px', '15px'])
-  for (const side of [edgeGlassStyle.left, edgeGlassStyle.right]) {
-    expect(side.background).toBe(edgeGlassStyle.expected.background)
-    expect(side.backdropFilter).toBe(edgeGlassStyle.expected.backdropFilter)
-    // box-shadow 是唯一不继承 classicPanel 的那项：边栏只描底边，而 classicPanel 自带一圈
-    // inset ring 会和底边描边打架，所以 HoverEdgeSheet 刻意整条覆盖掉。这里断言"没继承那圈
-    // ring、但有底边描边"—— 别照着上面两行改回 toBe(expected.boxShadow)。
-    expect(side.boxShadow).not.toContain(edgeGlassStyle.expected.ringLayer)
-    expect(side.boxShadow).toMatch(/0px -1px 0px 0px inset/)
+  expect(edgeGlassStyle.left.config).toBe(edgeGlassStyle.right.config)
+  for (const sheet of [edgeGlassStyle.left, edgeGlassStyle.right]) {
+    expect(sheet).toEqual(
+      expect.objectContaining({
+        surfaceBackground: 'rgba(0, 0, 0, 0)',
+        surfaceOverflow: 'visible',
+        sheetTransform: 'none',
+        cardRadius: '30px',
+        cardTransform: 'none',
+        borderColor: 'rgb(255, 255, 255)',
+        borderOpacity: '0',
+        backdropFilter: 'blur(10px) saturate(1) brightness(1)',
+        childBackdropFilter: 'none',
+        displacement: '40',
+        hasSvgFilter: true,
+      }),
+    )
+    expect(sheet.borderWidth).toBeGreaterThan(0)
   }
+  expect(edgeGlassStyle.hoverStyleBefore).toEqual({ transition: '', willChange: '' })
+  expect(edgeGlassStyle.hoverStyleAfter).toEqual({ transition: '', willChange: '' })
   await expect(page.locator('[data-search-motion]')).toHaveAttribute('data-animation-direction', 'vertical')
   await expect(page.locator('[data-search-motion]')).toHaveAttribute('data-animation-reverse', 'true')
 
@@ -204,16 +246,18 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(settingsDialog).toHaveAttribute('data-state', 'open')
   await expect(page.getByRole('combobox', { name: '界面动效' })).toHaveCount(0)
   await expect(page.getByRole('combobox', { name: '音乐视觉' })).toHaveCount(0)
+  await page.getByRole('tab', { name: '歌词', exact: true }).click()
   const lyricsColorSwitch = page.getByRole('switch', { name: '歌词高亮色跟随主题' })
   await lyricsColorSwitch.focus()
   await page.keyboard.press('Space')
   await expect(lyricsColorSwitch).toHaveAttribute('aria-checked', 'false')
   await page.keyboard.press('Space')
   await expect(lyricsColorSwitch).toHaveAttribute('aria-checked', 'true')
+  await page.getByRole('tab', { name: '背景', exact: true }).click()
   const backgroundSelect = page.getByRole('combobox', { name: '动态背景' })
   await expect(backgroundSelect).toContainText('光线')
   await backgroundSelect.click()
-  await expect(page.locator('[data-glass-select-content] .flux-liquid-glass')).toBeVisible()
+  await expect(page.locator('[data-glass-select-surface]')).toBeVisible()
   await expect(page.getByRole('option', { name: '星河' })).toHaveCount(0)
   await page.getByRole('option', { name: '吊灯' }).click()
   await expect(backgroundSelect).toContainText('吊灯')
@@ -285,7 +329,7 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
         transform: getComputedStyle(element).transform,
       })),
     )
-    .toEqual({ opacity: '1', transform: 'matrix(1, 0, 0, 1, 0, 0)' })
+    .toEqual({ opacity: '1', transform: 'none' })
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await expect(song).toBeVisible()
   await expect
@@ -339,8 +383,102 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   })
   expect(Math.max(...playerAlignment) - Math.min(...playerAlignment)).toBeLessThan(1)
 
+  await page.evaluate(() => {
+    const style = document.createElement('style')
+    style.dataset.glassMotionPixelFixture = ''
+    style.textContent = `
+      [data-app-root] {
+        background: repeating-conic-gradient(#20242c 0 25%, #0b0d12 0 50%) 0 0 / 18px 18px !important;
+      }
+      [data-stage-background], [data-wallpaper-engine-layer] {
+        visibility: hidden !important;
+      }
+    `
+    document.head.append(style)
+  })
   await page.locator('[data-edge-sheet-sensor][data-side="left"]').hover()
-  await expect(page.locator('[data-edge-sheet][data-side="left"]')).not.toHaveAttribute('aria-hidden', 'true')
+  const librarySheet = page.locator('[data-edge-sheet][data-side="left"]')
+  await expect(librarySheet).not.toHaveAttribute('aria-hidden', 'true')
+  await expect(librarySheet).toHaveAttribute('data-animation-state', 'enter')
+  expect(
+    await page.evaluate(() =>
+      document.getAnimations({ subtree: true }).some((animation) => {
+        const effect = animation.effect
+        return (
+          effect instanceof KeyframeEffect &&
+          /flux-(?:library|detail)-panel-vt/.test(effect.pseudoElement ?? '')
+        )
+      }),
+    ),
+  ).toBe(false)
+  const libraryBackgroundDuringMotion = await page.screenshot({
+    clip: { x: 420, y: 100, width: 500, height: 400 },
+  })
+  const libraryClipTimeline = await librarySheet.evaluate(async (element) => {
+    const read = () => {
+      const style = getComputedStyle(element)
+      return {
+        transform: style.transform,
+        clipPath: style.clipPath,
+        visibility: style.visibility,
+        glassTransform: getComputedStyle(element.querySelector<HTMLElement>('.glass-ui-container')!)
+          .transform,
+        backdropFilter: style.backdropFilter,
+      }
+    }
+    const start = read()
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    const middle = read()
+    return { start, middle }
+  })
+  expect(libraryClipTimeline.start.clipPath).not.toBe(libraryClipTimeline.middle.clipPath)
+  for (const frame of Object.values(libraryClipTimeline)) {
+    expect(frame.transform).toBe('none')
+    expect(frame.glassTransform).toBe('none')
+    expect(frame.backdropFilter).toContain('blur(10px)')
+  }
+  await expect(librarySheet).not.toHaveAttribute('data-animation-state')
+  const libraryBackgroundAtRest = await page.screenshot({
+    clip: { x: 420, y: 100, width: 500, height: 400 },
+  })
+  await page.evaluate(() => document.querySelector('[data-glass-motion-pixel-fixture]')?.remove())
+  expect(await imageDelta(libraryBackgroundDuringMotion, libraryBackgroundAtRest)).toBeLessThan(4)
+  const libraryRestingStyle = await librarySheet.evaluate((element) => ({
+    transform: getComputedStyle(element).transform,
+    glassTransform: getComputedStyle(element.querySelector<HTMLElement>('.glass-ui-container')!).transform,
+  }))
+  expect(libraryRestingStyle).toEqual({ transform: 'none', glassTransform: 'none' })
+
+  const libraryStructure = await librarySheet.evaluate((sheet) => {
+    const surface = sheet.querySelector<HTMLElement>('[data-flux-glass-surface]')!
+    const card = surface.querySelector<HTMLElement>('.glass-ui-container')!
+    const content = card.querySelector<HTMLElement>('.glass-ui-card-content')!
+    const panel = content.querySelector<HTMLElement>('[data-library-panel]')!
+    const cardRect = card.getBoundingClientRect()
+    const contentRect = content.getBoundingClientRect()
+    const panelRect = panel.getBoundingClientRect()
+    return {
+      sheetChildCount: sheet.children.length,
+      surfaceIsDirectChild: sheet.firstElementChild === surface,
+      cardIsDirectChild: surface.firstElementChild === card,
+      panelIsDirectChild: content.firstElementChild === panel,
+      bottomDelta: Math.max(
+        Math.abs(cardRect.bottom - contentRect.bottom),
+        Math.abs(contentRect.bottom - panelRect.bottom),
+      ),
+      listGradientCount: panel.querySelectorAll('[data-animated-list-gradient]').length,
+    }
+  })
+  expect(libraryStructure).toEqual({
+    sheetChildCount: 1,
+    surfaceIsDirectChild: true,
+    cardIsDirectChild: true,
+    panelIsDirectChild: true,
+    bottomDelta: expect.any(Number),
+    listGradientCount: 0,
+  })
+  expect(libraryStructure.bottomDelta).toBeLessThan(1)
+
   const safePlayerLayout = await page.evaluate(() => {
     const library = document
       .querySelector<HTMLElement>('[data-edge-sheet][data-side="left"]')!
@@ -350,6 +488,53 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   })
   expect(safePlayerLayout.libraryBottom).toBeLessThanOrEqual(safePlayerLayout.playerTop)
   expect(safePlayerLayout.playerWidth).toBeLessThanOrEqual(861)
+
+  const playerStyle = await page.locator('[data-playerbar]').evaluate((player) => {
+    const readStyle = () => {
+      const style = getComputedStyle(player)
+      return {
+        radius: style.borderRadius,
+        borderColor: style.borderColor,
+        backgroundColor: style.backgroundColor,
+        boxShadow: style.boxShadow,
+        backdropFilter: style.backdropFilter,
+        classic: player.classList.contains('classic-control-glass'),
+        filterSvg: Boolean(player.querySelector('.control-glass-filter-svg')),
+        filter: Boolean(
+          player.querySelector('.control-glass-filter-svg filter#mineradio-control-glass-filter'),
+        ),
+      }
+    }
+    const before = readStyle()
+    const root = document.documentElement
+    const previousGlassValues = {
+      radius: root.style.getPropertyValue('--flux-glass-radius'),
+      borderOpacity: root.style.getPropertyValue('--flux-glass-border-opacity'),
+      backgroundOpacity: root.style.getPropertyValue('--flux-glass-bg-opacity'),
+    }
+    root.style.setProperty('--flux-glass-radius', '60px')
+    root.style.setProperty('--flux-glass-border-opacity', '1')
+    root.style.setProperty('--flux-glass-bg-opacity', '1')
+    const after = readStyle()
+    root.style.setProperty('--flux-glass-radius', previousGlassValues.radius)
+    root.style.setProperty('--flux-glass-border-opacity', previousGlassValues.borderOpacity)
+    root.style.setProperty('--flux-glass-bg-opacity', previousGlassValues.backgroundOpacity)
+    return {
+      before,
+      after,
+      hasGlobalGlassSurface: player.hasAttribute('data-flux-glass-surface'),
+      hasGlassLayers: Boolean(player.querySelector('.glass-ui-container')),
+    }
+  })
+  expect(playerStyle.hasGlobalGlassSurface).toBe(false)
+  expect(playerStyle.hasGlassLayers).toBe(false)
+  expect(playerStyle.before).toEqual(playerStyle.after)
+  expect(playerStyle.before).toEqual(
+    expect.objectContaining({ radius: '50px', classic: true, filterSvg: true, filter: true }),
+  )
+  expect(playerStyle.before.backgroundColor).not.toBe('rgba(0, 0, 0, 0)')
+  expect(playerStyle.before.boxShadow).not.toBe('none')
+  await page.locator('[data-playerbar]').screenshot({ path: testInfo.outputPath('player-restored.png') })
 
   await expect.poll(async () => (await inspectTrackedAudio(page)).exists).toBe(true)
   await expect.poll(async () => (await inspectTrackedAudio(page)).paused).toBe(false)
@@ -438,11 +623,7 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(page.locator('[data-focus-exit-zone]')).toHaveCount(2)
   await expect
     .poll(() =>
-      app.evaluate(({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().some(
-          (window) => /FluxPlayer/i.test(window.getTitle()) && window.isFullScreen(),
-        ),
-      ),
+      page.evaluate(async () => (await window.fluxDesktop?.getWindowState())?.isFullScreen ?? false),
     )
     .toBe(true)
   const leftExitZone = page.locator('[data-focus-exit-zone][data-side="left"]')
@@ -459,11 +640,7 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(page.locator('[data-app-root]')).not.toHaveAttribute('data-focus-mode', 'true')
   await expect
     .poll(() =>
-      app.evaluate(({ BrowserWindow }) =>
-        BrowserWindow.getAllWindows().some(
-          (window) => /FluxPlayer/i.test(window.getTitle()) && window.isFullScreen(),
-        ),
-      ),
+      page.evaluate(async () => (await window.fluxDesktop?.getWindowState())?.isFullScreen ?? false),
     )
     .toBe(false)
 
@@ -478,7 +655,9 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(leaveFullscreen).toHaveCount(0)
 
   // Retry the resize: a setSize() that lands while the window is still leaving fullscreen is dropped.
-  await expect.poll(() => resizeMainWindow(app, page, 960, 720)).toBeLessThanOrEqual(960)
+  // Chromium can round the minimum content width up by one CSS pixel under
+  // the host display scale (960 outer pixels -> 961 inner pixels).
+  await expect.poll(() => resizeMainWindow(app, page, 960, 720)).toBeLessThanOrEqual(961)
   await captureVisual(page, stageCanvas, testInfo, 'html-light-narrow')
 
   await page.getByRole('button', { name: '设置' }).click()

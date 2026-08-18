@@ -513,6 +513,7 @@ export function LibraryWorkspace({ provider, onProviderChange }: LibraryWorkspac
             getKey={(playlist) => String(playlist.id)}
             selectedKey={visibleDetail ? String(visibleDetail.playlist.id) : null}
             ariaLabel="歌单列表"
+            showGradients={false}
             className="min-h-0 flex-1 overflow-hidden"
             itemClassName={libraryRowVariants({ layout: 'playlist' })}
             getItemAriaLabel={(playlist) => `${playlist.name}，${playlist.trackCount} 首`}

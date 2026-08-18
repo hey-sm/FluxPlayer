@@ -69,7 +69,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     data-dialog-motion-overlay=""
-    className={cn('fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm', className)}
+    className={cn('fixed inset-0 z-[80] bg-black/40', className)}
     {...props}
   />
 ))
@@ -118,10 +118,6 @@ const DialogContent = React.forwardRef<
           gsap.set(overlay, { autoAlpha: 0 })
           gsap.set(content, {
             autoAlpha: 0,
-            xPercent: -50,
-            yPercent: -50,
-            y: reducedMotion ? 0 : -10,
-            scale: reducedMotion ? 1 : 0.985,
           })
         }
         enteredRef.current = true
@@ -140,10 +136,6 @@ const DialogContent = React.forwardRef<
             content,
             {
               autoAlpha: 1,
-              xPercent: -50,
-              yPercent: -50,
-              y: 0,
-              scale: 1,
               duration: reducedMotion ? 0 : motionDurations.emphasized,
               ease: motionEases.enter,
               overwrite: 'auto',
@@ -156,10 +148,6 @@ const DialogContent = React.forwardRef<
             content,
             {
               autoAlpha: 0,
-              xPercent: -50,
-              yPercent: -50,
-              y: reducedMotion ? 0 : 8,
-              scale: reducedMotion ? 1 : 0.985,
               duration: reducedMotion ? 0 : motionDurations.base,
               ease: motionEases.exit,
               overwrite: 'auto',
@@ -203,7 +191,7 @@ const DialogContent = React.forwardRef<
         forceMount
         data-dialog-motion-content=""
         className={cn(
-          'fixed left-1/2 top-1/2 z-[81] grid max-h-[calc(100dvh-48px)] w-[min(960px,calc(100vw-36px))] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl border border-border bg-popover p-5 text-popover-foreground shadow-2xl backdrop-blur-2xl outline-none',
+          'fixed left-1/2 top-1/2 z-[81] grid max-h-[calc(100dvh-48px)] w-[min(960px,calc(100vw-36px))] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-visible border-0 bg-transparent p-0 text-popover-foreground shadow-none outline-none',
           className,
         )}
         {...props}

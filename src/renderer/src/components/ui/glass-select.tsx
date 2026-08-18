@@ -2,7 +2,7 @@ import * as React from 'react'
 import * as SelectPrimitive from '@radix-ui/react-select'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Check, ChevronDown } from 'lucide-react'
-import { LiquidGlassSurface } from '@/components/glass'
+import { GlassSurface } from '@/components/glass'
 import { cn } from '@/lib/utils'
 import { gsap, motionDurations, motionEases, useGSAP, useReducedMotion } from '@/motion'
 
@@ -16,7 +16,7 @@ export interface GlassSelectOption {
 export const glassSelectTriggerVariants = cva(
   [
     'inline-flex h-[34px] w-full cursor-pointer items-center justify-between gap-2 rounded-[var(--flux-radius-control)] border px-2.5',
-    'border-[var(--flux-glass-border)] bg-[color-mix(in_srgb,var(--flux-panel-surface)_72%,transparent)]',
+    'border-[var(--flux-glass-border)] bg-[var(--flux-glass-background)]',
     'text-[11px] text-[var(--flux-text)] outline-none [font-family:var(--flux-font-family)]',
     'transition-[border-color,background-color,color] duration-[var(--motion-duration-fast)] motion-reduce:transition-none',
     'hover:border-[color-mix(in_srgb,var(--flux-accent)_42%,var(--flux-glass-border))]',
@@ -94,28 +94,23 @@ export function GlassSelect({
       })
 
       if (!content) return
-      const hiddenY = side === 'top' ? 4 : -4
       if (open) {
         gsap.fromTo(
           content,
-          { autoAlpha: 0, y: hiddenY, scale: 0.98 },
+          { autoAlpha: 0 },
           {
             autoAlpha: 1,
-            y: 0,
-            scale: 1,
             duration: reducedMotion ? 0 : motionDurations.base,
             ease: motionEases.enter,
             overwrite: 'auto',
           },
         )
       } else if (reducedMotion) {
-        gsap.set(content, { autoAlpha: 0, y: hiddenY, scale: 0.98 })
+        gsap.set(content, { autoAlpha: 0 })
         setContentMounted(false)
       } else {
         gsap.to(content, {
           autoAlpha: 0,
-          y: hiddenY,
-          scale: 0.98,
           duration: motionDurations.fast,
           ease: motionEases.exit,
           overwrite: 'auto',
@@ -177,7 +172,11 @@ export function GlassSelect({
             )}
             data-glass-select-content=""
           >
-            <LiquidGlassSurface className="flex max-h-[min(280px,var(--radix-select-content-available-height))] w-full flex-col overflow-hidden">
+            <GlassSurface
+              elevation="raised"
+              className="flex max-h-[min(280px,var(--radix-select-content-available-height))] w-full flex-col"
+              data-glass-select-surface=""
+            >
               <SelectPrimitive.Viewport
                 className={cn(
                   'min-h-0 w-full max-h-[min(280px,var(--radix-select-content-available-height))] overflow-y-auto',
@@ -213,7 +212,7 @@ export function GlassSelect({
                   </SelectPrimitive.Item>
                 ))}
               </SelectPrimitive.Viewport>
-            </LiquidGlassSurface>
+            </GlassSurface>
           </SelectPrimitive.Content>
         </SelectPrimitive.Portal>
       ) : null}

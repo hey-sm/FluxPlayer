@@ -1,80 +1,44 @@
-import { cva, type VariantProps } from 'class-variance-authority'
-import { forwardRef, type HTMLAttributes } from 'react'
+import { GlassCard } from 'react-glass-ui'
+import { forwardRef, type CSSProperties, type HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
+import { useGlassStore } from './store'
 
-export type GlassTreatment = 'theme' | 'classicPanel'
 export type GlassEdge = 'none' | 'left' | 'right'
 
-export const glassSurfaceVariants = cva(
-  [
-    'text-[var(--flux-text)]',
-    '[font-family:var(--flux-font-family)]',
-    '[font-size:calc(1em*var(--flux-font-scale))]',
-    '[filter:none]',
-  ],
-  {
-    variants: {
-      treatment: {
-        theme: [
-          'border border-[var(--flux-glass-border)] bg-[var(--flux-glass-background)]',
-          '[-webkit-backdrop-filter:blur(var(--flux-glass-blur))_saturate(var(--flux-glass-saturation))]',
-          '[backdrop-filter:blur(var(--flux-glass-blur))_saturate(var(--flux-glass-saturation))]',
-          '[box-shadow:inset_0_1px_0_color-mix(in_srgb,var(--flux-panel-border)_5%,transparent)]',
-        ],
-        classicPanel: [
-          'border-0 bg-[var(--saved-panel-glass-bg)]',
-          '[-webkit-backdrop-filter:var(--saved-panel-glass-filter)]',
-          '[backdrop-filter:var(--saved-panel-glass-filter)]',
-          '[box-shadow:var(--saved-panel-glass-shadow)]',
-        ],
-      },
-      elevation: {
-        flat: '',
-        raised: '[box-shadow:var(--flux-shadow-raised)]',
-      },
-      interactive: {
-        false: '',
-        true: [
-          'transition-[border-color,background-color] duration-[var(--motion-duration-fast)]',
-          'hover:[border-color:color-mix(in_srgb,var(--flux-panel-border)_16%,transparent)]',
-          'motion-reduce:transition-none',
-        ],
-      },
-      edge: {
-        none: 'rounded-[var(--flux-glass-radius)]',
-        left: 'rounded-l-none rounded-r-[15px]',
-        right: 'rounded-r-none rounded-l-[15px]',
-      },
-    },
-    defaultVariants: {
-      treatment: 'theme',
-      elevation: 'flat',
-      interactive: false,
-      edge: 'none',
-    },
-  },
-)
+export interface GlassSurfaceProps extends HTMLAttributes<HTMLDivElement> {
+  edge?: GlassEdge
+  contentClassName?: string
+  elevation?: 'flat' | 'raised'
+}
 
-export interface GlassSurfaceProps
-  extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof glassSurfaceVariants> {}
-
-/**
- * CSS-only glass for top bars, sidebars, player bars, sheets, and other large
- * surfaces. This component never renders SVG and never uses displacement maps.
- */
+/** The only project adapter allowed to render react-glass-ui's GlassCard. */
 export const GlassSurface = forwardRef<HTMLDivElement, GlassSurfaceProps>(function GlassSurface(
-  { className, elevation, interactive, treatment, edge, ...props },
+  { children, className, contentClassName, edge = 'none', elevation = 'flat', style, ...props },
   ref,
 ) {
+  const config = useGlassStore((state) => state.config)
+  const localStyle = { ...style, '--flux-text': config.color } as CSSProperties
+
   return (
     <div
       {...props}
       ref={ref}
-      className={cn(glassSurfaceVariants({ elevation, interactive, treatment, edge }), className)}
+      className={cn('flux-glass-surface', className)}
+      style={localStyle}
       data-flux-glass-surface=""
-      data-elevation={elevation ?? 'flat'}
-      data-treatment={treatment ?? 'theme'}
-      data-edge={edge ?? 'none'}
-    />
+      data-glass-scope="global"
+      data-glass-config={JSON.stringify(config)}
+      data-elevation={elevation}
+      data-edge={edge}
+    >
+      <GlassCard
+        {...config}
+        padding="0"
+        className="flux-glass-surface__card"
+        contentClassName={cn('flux-glass-surface__content', contentClassName)}
+      >
+        {children}
+      </GlassCard>
+    </div>
   )
 })

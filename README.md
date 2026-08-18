@@ -47,6 +47,7 @@ FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云�
 - **智能播放容错**：音质自动降级重试、跨 provider 同名同歌手自动换源、失败黑名单、试听片段截断。
 - **多档音质**：超清母带 / 高清臻音 / 无损 / 极高 / 标准，跨 provider 归一化。
 - **动态背景与 3D 歌词**：内置 Light Rays 光线、HTML Light 吊灯与 Galaxy 螺旋星系背景，歌词继续使用 Three.js 网格渲染并支持旋转、拖拽和缩放。
+- **全局液态玻璃**：左右栏、PlayerBar、搜索、设置与浮层统一使用可实时调节和持久化的 react-glass-ui 配置。
 - **自定义背景**：支持导入本地图片/视频，以及 Wallpaper Engine 视频项目。
 - **全局快捷键**：播放控制、切歌、音量、全屏。
 - **系统媒体集成**：Media Session（系统媒体控制中心 / 键盘媒体键）。
@@ -143,7 +144,7 @@ src/
     ├── visual/            # Three.js 动态背景与 3D 歌词（stage/backgrounds/lyrics3d-mesh）
     ├── perf/ticker.ts     # 全局唯一 RAF 注册表
     ├── features/          # 业务模块：search / library / playlist / lyrics / settings
-    ├── components/        # 通用组件（glass 包装层 / ui / shell / player）
+    ├── components/        # 通用组件（glass 全局配置与唯一适配层 / ui / shell / player）
     └── theme/             # 主题系统
 
 tests/
@@ -258,6 +259,7 @@ Three.js 动态背景遵循「单一实例」原则，避免资源泄漏与多�
 - **三种动态背景** —— Light Rays 使用全屏 shader；HTML Light 使用可拖拽物理吊灯、暖色聚光灯和程序化承光平面；Galaxy 使用 8 万颗加色混合星点组成的螺旋星系（固定种子、白色核球 + 随主题色微调的蓝色外圈、极慢自转）。三者由 `DynamicBackgroundManager` 懒加载并在切换时释放旧 GPU 资源。
 - **独立歌词数据流** —— `stageLyricsChannel` 只向 3D 歌词层发布当前歌词窗口和播放位置；动态背景不接入音频频谱。
 - **自定义背景优先** —— 本地图片、视频或 Wallpaper Engine 背景启用时释放动态 shader，3D 歌词仍由同一个 Stage 渲染。
+- **单层液态玻璃** —— `components/glass` 是配置、持久化、CSS 变量和 `react-glass-ui` 的唯一入口；设置面板“玻璃”Tab 实时控制所有真实表面。实现和动画禁令见 [docs/liquid-glass-system.md](docs/liquid-glass-system.md)。
 
 > `src/renderer/src/visual/**` 被 oxfmt 忽略以保留 shader 排版，改动视觉代码仍需通过 typecheck 与 lint。
 
@@ -301,7 +303,7 @@ e2e 下 `FLUX_E2E=1` 触发网络防护（阻断非 loopback），Playwright 配
 ## 开发约定
 
 - **格式化/校验用 oxfmt + oxlint**，不是 Prettier/ESLint。提交前 `pnpm format:write && pnpm lint`。
-- **玻璃组件必须经 `@/components/glass` 包装层**使用——oxlint 禁止业务代码直接 import `react-glass-ui`（glass 目录自身豁免）。
+- **玻璃组件必须经 `@/components/glass` 的 `GlassSurface` 使用**；业务代码不得直接 import `react-glass-ui`、嵌套真实玻璃或动态 transform 玻璃祖先。完整约定见 [docs/liquid-glass-system.md](docs/liquid-glass-system.md)。
 - shadcn 组件遵循 components.json（new-york 风格，CSS 变量），UI 图标用 lucide-react。
 - **改动多进程共享代码后跑 `pnpm typecheck`**（两套 tsconfig 都要过）。
 - UI 文案使用简体中文。

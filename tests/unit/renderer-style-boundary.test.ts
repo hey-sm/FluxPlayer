@@ -150,6 +150,7 @@ describe('renderer style migration boundary', () => {
     expect(settingsSource).toContain('role="switch"')
     expect(colorPickerSource).toContain('data-color-picker=""')
     expect(selectSource).toContain('glassSelectTriggerVariants = cva(')
+    expect(selectSource).toContain('elevation="raised"')
     expect(selectSource).toContain('useGSAP(')
     expect(selectSource).toContain('onComplete: () => setContentMounted(false)')
     expect(selectSource).toContain('reducedMotion ? 0 : motionDurations.base')
@@ -210,6 +211,7 @@ describe('renderer style migration boundary', () => {
     expect(buttonSource).toContain("import { buttonVariants } from './button-variants'")
     expect(buttonVariantsSource).toContain('glassSoft: [')
     expect(buttonVariantsSource).toContain('glassRaised: [')
+    expect(buttonVariantsSource).not.toContain('backdrop-blur')
     expect(buttonVariantsSource).toContain('emphasis: {')
     expect(dialogSource).toContain("buttonVariants({ variant: 'ghost', size: 'icon-sm' })")
     expect(sheetSource).toContain("buttonVariants({ variant: 'ghost', size: 'icon-sm' })")
@@ -230,6 +232,12 @@ describe('renderer style migration boundary', () => {
     const appSource = projectFile('src/renderer/src/App.tsx')
 
     expect(playerSource).toContain('max-w-[860px]')
+    expect(playerSource).toContain('data-playerbar=""')
+    expect(playerSource).not.toContain('<GlassSurface')
+    expect(playerSource).toContain('rounded-[var(--flux-radius-shell)]')
+    expect(playerSource).toContain('border-[var(--flux-glass-border)]')
+    expect(playerSource).toContain('classic-control-glass')
+    expect(playerSource).toContain('CLASSIC_GLASS_FILTER_SVG')
     expect(libraryVariants).not.toContain('border border-transparent')
     expect(libraryVariants).not.toContain('data-[selected=true]:border-')
     expect(libraryVariants).not.toContain('data-[focused=true]:border-')
@@ -276,7 +284,6 @@ describe('renderer style migration boundary', () => {
     const tokens = projectFile('src/renderer/src/theme/tokens.css')
     const shadcn = projectFile('src/renderer/src/styles/shadcn.css')
     const global = projectFile('src/renderer/src/styles/global.css')
-    const effects = projectFile('src/renderer/src/styles/effects.css')
     const motion = projectFile('src/renderer/src/motion/preferences.ts')
     const rendererSources = [
       projectFile('src/renderer/src/components/player/PlayerBar.tsx'),
@@ -295,14 +302,18 @@ describe('renderer style migration boundary', () => {
       '--flux-shadow-panel',
       '--motion-duration-fast',
       '--motion-duration-base',
-      '--saved-panel-glass-filter',
+      '--flux-glass-background-color',
+      '--flux-glass-brightness',
+      '--flux-player-radius',
+      '--flux-player-border',
+      '--flux-player-background',
     ]) {
       expect(tokens).toContain(token)
     }
     expect(shadcn).toContain('--radius-control: var(--flux-radius-control)')
     expect(shadcn).toContain('--shadow-control: var(--flux-shadow-control)')
-    expect(global).not.toContain('--saved-panel-glass-filter:')
-    expect(effects).toContain('border-radius: var(--flux-search-glass-radius)')
+    expect(global).not.toContain('--flux-glass-blur:')
+    expect(existsSync(new URL('../../src/renderer/src/styles/effects.css', import.meta.url))).toBe(false)
     expect(motion).toContain("durationFromToken('--motion-duration-fast', 0.14)")
     expect(rendererSources).not.toMatch(/duration-(?:150|\[(?:130|160)ms\])/)
 
@@ -320,36 +331,127 @@ describe('renderer style migration boundary', () => {
     }
   })
 
-  it('locks edge glass to reusable variants and a 15px inner radius', () => {
+  it('keeps edge geometry and live clip motion on the canonical glass adapter', () => {
     const surfaceSource = projectFile('src/renderer/src/components/glass/surface.tsx')
     const sheetSource = projectFile('src/renderer/src/components/shell/HoverEdgeSheet.tsx')
+    const snapshotSource = projectFile('src/renderer/src/components/react-bits/SnapshotAnimatedContent.tsx')
+    const glassStyles = projectFile('src/renderer/src/components/glass/glass.css')
 
-    expect(surfaceSource).toContain('classicPanel: [')
-    expect(surfaceSource).toContain("left: 'rounded-l-none rounded-r-[15px]'")
-    expect(surfaceSource).toContain("right: 'rounded-r-none rounded-l-[15px]'")
-    expect(sheetSource).toContain("glassSurfaceVariants({ treatment: 'classicPanel', edge: side })")
+    expect(surfaceSource).toContain("import { GlassCard } from 'react-glass-ui'")
+    expect(surfaceSource).toContain('data-edge={edge}')
+    expect(surfaceSource).toContain('data-glass-scope="global"')
+    expect(surfaceSource).not.toContain('glassConfig')
+    expect(sheetSource).toContain('<GlassSurface edge={side}')
     expect(sheetSource).toContain('data-edge-sheet=""')
     expect(sheetSource).toContain('data-edge-sheet-sensor=""')
     expect(sheetSource).toContain('[@media(max-height:560px)]:bottom-[88px]')
+    expect(sheetSource).not.toContain('<div className="flex h-full">')
+    expect(sheetSource).not.toContain('<SnapshotAnimatedContent')
+    expect(sheetSource).toContain('data-animation-effect="live-clip-reveal"')
+    expect(sheetSource).toContain("clipPath: open ? 'inset(0 0% 0 0)' : closedClip")
+    expect(sheetSource).toContain('gsap.killTweensOf(sheet)')
+    expect(snapshotSource).toContain('document.startViewTransition')
+    expect(snapshotSource).toContain('{ translate: displaced, opacity: 0 }')
+    expect(snapshotSource).not.toContain('{ transform: displaced')
+    expect(snapshotSource).toContain('pseudoElement: `::view-transition-group(${transitionName})`')
+    expect(snapshotSource).toContain('run.tween = gsap.to(driver')
+    expect(snapshotSource).toContain("overwrite: 'auto'")
+    expect(snapshotSource).toContain('activeViewTransition?.skipTransition()')
+    expect(snapshotSource).toContain('element.style.viewTransitionName = transitionName')
+    expect(snapshotSource).toContain("element.style.removeProperty('view-transition-name')")
+    expect(snapshotSource).not.toContain('viewTransitionName: transitionName')
+    expect(snapshotSource).toContain('gsap.fromTo(\n          element,\n          { autoAlpha: 0 }')
+    expect(glassStyles).not.toContain('::view-transition-group(flux-library-panel-vt)')
+    expect(glassStyles).not.toContain('::view-transition-group(flux-detail-panel-vt)')
+    expect(glassStyles).toContain('left: calc(-1 * var(--flux-glass-radius));')
+    expect(glassStyles).toContain('right: calc(-1 * var(--flux-glass-radius));')
+    expect(glassStyles).toContain('::view-transition-old(root) {\n  display: none;')
   })
 
-  it('loads complex effects separately and keeps preview distinct from HMR development', () => {
+  it('formalizes one global react-glass-ui adapter and removes all preview/classic paths', () => {
+    const configSource = projectFile('src/renderer/src/components/glass/config.ts')
+    const rendererRoot = fileURLToPath(new URL('../../src/renderer/src', import.meta.url))
+
+    for (const setting of [
+      'blur: 10',
+      'distortion: 40',
+      'flexibility: 0',
+      'borderRadius: 30',
+      'borderOpacity: 0',
+      "backgroundColor: '#000000ff'",
+      'backgroundOpacity: 0',
+      'chromaticAberration: 0',
+      'onHoverScale: 1',
+      'saturation: 100',
+      'brightness: 100',
+    ]) {
+      expect(configSource).toContain(setting)
+    }
+    for (const removedFile of ['demo.tsx', 'liquid.tsx']) {
+      expect(existsSync(join(rendererRoot, 'components', 'glass', removedFile))).toBe(false)
+    }
+    const directImports = readRendererTree(new Set(['.ts', '.tsx']))
+      .split('\n')
+      .filter((line) => line.includes("from 'react-glass-ui'"))
+    expect(directImports).toEqual(["import { GlassCard } from 'react-glass-ui'"])
+  })
+
+  it('patches static GlassCard instances out of hover-driven compositor updates', () => {
+    const packageJson = JSON.parse(projectFile('package.json')) as {
+      pnpm: { patchedDependencies: Record<string, string> }
+    }
+    const patchPath = packageJson.pnpm.patchedDependencies['react-glass-ui@1.2.2']
+    const glassPatch = projectFile(patchPath)
+
+    expect(patchPath).toBe('patches/react-glass-ui@1.2.2.patch')
+    expect(glassPatch).toContain('const hasHoverTransform = cardProps.flexibility > 0;')
+    expect(glassPatch).toContain('if (!card || !hasHoverTransform) return;')
+    expect(glassPatch).toContain('onMouseEnter: hasHoverTransform ? handleOnMouseEnter : void 0')
+    expect(glassPatch).toContain('willChange: hasHoverTransform ? "transform" : void 0')
+    expect(glassPatch).toContain('const staticStyle = {')
+    expect(glassPatch).toContain('if (!hasHoverTransform) return;')
+    expect(glassPatch).toContain('hasHoverTransform ? style : staticStyle')
+    expect(glassPatch).toContain('-  }, [style]);')
+    expect(glassPatch).not.toContain('+  }, [style]);')
+  })
+
+  it('removes the legacy effects entry and keeps preview distinct from HMR development', () => {
     const mainSource = projectFile('src/renderer/src/main.tsx')
     const packageJson = JSON.parse(projectFile('package.json')) as {
       scripts: Record<string, string>
     }
 
-    expect(mainSource).toContain("import './styles/effects.css'")
+    expect(mainSource).not.toContain("import './styles/effects.css'")
     expect(mainSource.indexOf("import './styles/shadcn.css'")).toBeLessThan(
       mainSource.indexOf("import './theme/tokens.css'"),
     )
     expect(mainSource.indexOf("import './theme/tokens.css'")).toBeLessThan(
       mainSource.indexOf("import './styles/global.css'"),
     )
-    expect(mainSource.indexOf("import './styles/global.css'")).toBeLessThan(
-      mainSource.indexOf("import './styles/effects.css'"),
-    )
+    expect(existsSync(new URL('../../src/renderer/src/styles/effects.css', import.meta.url))).toBe(false)
     expect(packageJson.scripts.start).toBe('pnpm dev')
     expect(packageJson.scripts.preview).toBe('electron-vite preview')
+  })
+
+  it('keeps live glass roots transform-stable and native container blur out of structural primitives', () => {
+    const glassStyles = projectFile('src/renderer/src/components/glass/glass.css')
+    const dialogSource = projectFile('src/renderer/src/components/ui/dialog.tsx')
+    const sheetSource = projectFile('src/renderer/src/components/ui/sheet.tsx')
+    const cardSource = projectFile('src/renderer/src/components/ui/card.tsx')
+    const searchSource = projectFile('src/renderer/src/features/search/SearchPanel.tsx')
+    const selectSource = projectFile('src/renderer/src/components/ui/glass-select.tsx')
+
+    expect(glassStyles).toContain('transform: none !important;')
+    expect(glassStyles).toContain('transition: none !important;')
+    expect(glassStyles).not.toContain('isolation: isolate;')
+    expect(glassStyles).not.toContain('filter: drop-shadow')
+    expect(glassStyles).toContain('box-shadow: var(--flux-shadow-panel);')
+    expect(glassStyles).toContain('z-index: 0 !important;')
+    for (const source of [dialogSource, sheetSource, cardSource]) {
+      expect(source).not.toContain('backdrop-blur')
+    }
+    expect(searchSource).toContain('gsap.fromTo(\n        popover,\n        { autoAlpha: 0 },')
+    expect(selectSource).not.toContain('scale: 0.98')
+    expect(selectSource).not.toContain('y: hiddenY')
   })
 })

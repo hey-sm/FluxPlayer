@@ -30,7 +30,9 @@ import {
 } from '@shared/music-schema'
 import type { ProviderId } from '@shared/models'
 import type { UpdaterCommandResult, UpdaterState } from '@shared/updater-contract'
-import type { WallpaperEngineImportRequest } from '@shared/custom-background-contract'
+import type { WallpaperEngineLibrary } from './background/wallpaper-engine-library'
+import type { WallpaperEngineStore } from './background/wallpaper-engine-store'
+import type { WallpaperEngineRuntime } from './background/wallpaper-engine-runtime'
 import type { CustomBackgroundService } from './background/custom-background'
 import type { AudioHandleStore } from './protocols'
 import { exitFullscreenToWindow, getWindowState, toggleFullscreen } from './windows/main-window'
@@ -50,7 +52,17 @@ const hotkeyBindingsSchema = z.array(
     accelerator: z.string().check(z.minLength(1), z.maxLength(100)),
   }),
 )
-const wallpaperImportSchema = z.object({ projectId: z.string().check(z.minLength(1), z.maxLength(200)) })
+const wallpaperEngineListSchema = z.object({ force: z.optional(z.boolean()) })
+const wallpaperEngineIdSchema = z.object({ id: z.string().check(z.minLength(1), z.maxLength(64)) })
+const wallpaperEngineStateSchema = z.object({
+  action: z.string().check(z.minLength(1), z.maxLength(32)),
+  id: z.optional(z.string().check(z.minLength(1), z.maxLength(64))),
+  active: z.optional(z.boolean()),
+  error: z.optional(z.string().check(z.maxLength(240))),
+})
+const wallpaperEngineGlassSamplerSchema = z.object({
+  sessionId: z.string().check(z.minLength(1), z.maxLength(96)),
+})
 
 export interface MainPlaybackResolution extends Omit<PlaybackResolveResult, 'url'> {
   /** Upstream URL. It exists only in main and is exchanged for an opaque flux-media handle. */
@@ -68,6 +80,9 @@ export interface IpcDeps {
   getMainWindow: () => BrowserWindow | null
   getPrimaryRendererOrigin: () => string
   getCustomBackgroundService: () => CustomBackgroundService
+  getWallpaperEngineLibrary: () => WallpaperEngineLibrary
+  getWallpaperEngineStore: () => WallpaperEngineStore
+  getWallpaperEngineRuntime: () => WallpaperEngineRuntime
   getUpdaterController: () => UpdaterController | null
   getUpdaterFallbackState: () => UpdaterState
   getMusicService: () => MainMusicService
@@ -325,30 +340,93 @@ export function registerIpcHandlers(deps: IpcDeps): void {
     if (result.ok) deps.getMainWindow()?.webContents.send(IPC.customBackgroundChanged, null)
     return result
   })
-  secureHandle(IPC.customBackgroundScanWallpaperEngine, noInputSchema, deps, () =>
-    deps.getCustomBackgroundService().scanWallpaperEngine(),
-  )
-  secureHandle(IPC.customBackgroundImportWallpaperEngine, wallpaperImportSchema, deps, (request) => {
-    const result = deps
-      .getCustomBackgroundService()
-      .importScannedProject((request as WallpaperEngineImportRequest).projectId)
-    if (result.ok) deps.getMainWindow()?.webContents.send(IPC.customBackgroundChanged, result.background)
-    return result
+  const broadcastWallpaperState = () => {
+    deps
+      .getMainWindow()
+      ?.webContents.send(IPC.wallpaperEngineStateChanged, deps.getWallpaperEngineStore().get())
+  }
+
+  const reconcileWallpaperSelection = (projectIds: ReadonlySet<string>) => {
+    const store = deps.getWallpaperEngineStore()
+    const current = store.get()
+    if (!current.selection.active || projectIds.has(current.selection.id)) return current
+    const next = store.deactivateSelection(current.selection.id, 'WALLPAPER_ENGINE_PROJECT_OFFLINE')
+    broadcastWallpaperState()
+    return next
+  }
+
+  secureHandle(IPC.wallpaperEngineList, wallpaperEngineListSchema, deps, async ({ force }) => {
+    const snapshot = await deps.getWallpaperEngineLibrary().list(force === true)
+    const state = reconcileWallpaperSelection(new Set(snapshot.projects.map((project) => project.id)))
+    if (!state.selection.active) await deps.getWallpaperEngineRuntime().stop()
+    return { ...snapshot, state }
   })
-  secureHandle(IPC.customBackgroundChooseWallpaperEngine, noInputSchema, deps, async () => {
+  secureHandle(IPC.wallpaperEngineChooseDirectory, noInputSchema, deps, async () => {
     const owner = deps.getMainWindow() ?? undefined
-    const choice = await dialog.showOpenDialog(owner as BrowserWindow, {
-      title: '导入 Wallpaper Engine 视频项目',
-      properties: ['openFile', 'openDirectory'],
-      filters: [{ name: 'Wallpaper Engine project.json', extensions: ['json'] }],
+    const result = await dialog.showOpenDialog(owner as BrowserWindow, {
+      title: '识别并导入 Wallpaper Engine 项目目录',
+      buttonLabel: '识别此目录',
+      properties: ['openDirectory'],
     })
-    if (choice.canceled || !choice.filePaths[0]) {
-      return { ok: false, background: deps.getCustomBackgroundService().getCurrent(), canceled: true }
-    }
-    const result = deps.getCustomBackgroundService().importProjectPath(choice.filePaths[0])
-    if (result.ok) deps.getMainWindow()?.webContents.send(IPC.customBackgroundChanged, result.background)
-    return result
+    if (result.canceled || !result.filePaths[0]) return { ok: true, canceled: true }
+    const snapshot = await deps.getWallpaperEngineLibrary().addManualRoot(result.filePaths[0])
+    return { ok: true, snapshot, state: deps.getWallpaperEngineStore().get() }
   })
+  secureHandle(IPC.wallpaperEngineChooseProjectFile, noInputSchema, deps, async () => {
+    const owner = deps.getMainWindow() ?? undefined
+    const result = await dialog.showOpenDialog(owner as BrowserWindow, {
+      title: '选择 Wallpaper Engine 的 project.json 或场景包',
+      buttonLabel: '导入此项目',
+      properties: ['openFile'],
+      filters: [{ name: 'Wallpaper Engine 项目', extensions: ['json', 'pkg', 'pak'] }],
+    })
+    if (result.canceled || !result.filePaths[0]) return { ok: true, canceled: true }
+    const snapshot = await deps.getWallpaperEngineLibrary().addManualProjectFile(result.filePaths[0])
+    return { ok: true, snapshot, state: deps.getWallpaperEngineStore().get() }
+  })
+  secureHandle(IPC.wallpaperEngineRemoveDirectory, wallpaperEngineIdSchema, deps, async ({ id }) => {
+    const snapshot = await deps.getWallpaperEngineLibrary().removeManualRoot(id)
+    return { ok: true, snapshot, state: deps.getWallpaperEngineStore().get() }
+  })
+  secureHandle(IPC.wallpaperEngineProjectDetails, wallpaperEngineIdSchema, deps, (request) =>
+    deps.getWallpaperEngineLibrary().getProjectDetails(request.id),
+  )
+  secureHandle(IPC.wallpaperEngineGetState, noInputSchema, deps, () => deps.getWallpaperEngineStore().get())
+  secureHandle(IPC.wallpaperEngineSetState, wallpaperEngineStateSchema, deps, async (request) => {
+    const store = deps.getWallpaperEngineStore()
+    const id = request.id ?? ''
+    let state
+    if (request.action === 'select') {
+      const selection = await deps.getWallpaperEngineLibrary().resolveSelection(id)
+      const project = await deps.getWallpaperEngineLibrary().getProject(id)
+      const runtime = await deps.getWallpaperEngineRuntime().activate(project, selection)
+      state =
+        runtime.projectId !== project.id
+          ? store.get()
+          : store.setSelection({ ...selection, active: runtime.active, runtimeError: runtime.error })
+    } else if (request.action === 'clear') {
+      await deps.getWallpaperEngineRuntime().stop()
+      state = store.clearSelection()
+    } else if (request.action === 'favorite') state = store.setFavorite(id, request.active === true)
+    else if (request.action === 'hide') state = store.setProjectVisibility(id, true)
+    else if (request.action === 'unhide') state = store.setProjectVisibility(id, false)
+    else if (request.action === 'restore-hidden') state = store.clearHidden()
+    else if (request.action === 'runtime-error') {
+      await deps.getWallpaperEngineRuntime().stop()
+      state = store.deactivateSelection(id, request.error || 'WALLPAPER_ENGINE_RUNTIME_FAILED')
+    } else throw new Error('INVALID_WALLPAPER_ENGINE_STATE_ACTION')
+    broadcastWallpaperState()
+    return state
+  })
+  secureHandle(IPC.wallpaperEngineRuntimeStatus, noInputSchema, deps, () =>
+    deps.getWallpaperEngineRuntime().getStatus(),
+  )
+  secureHandle(
+    IPC.wallpaperEngineGlassSamplerPrepare,
+    wallpaperEngineGlassSamplerSchema,
+    deps,
+    ({ sessionId }) => deps.getWallpaperEngineRuntime().prepareGlassSampler(sessionId),
+  )
 }
 
 // Exported type anchors make the provider adapter contract easy to implement without importing renderer code.

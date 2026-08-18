@@ -7,12 +7,16 @@ import {
 } from '@shared/ipc-contract'
 import type { FluxMusicApi } from '@shared/music-contract'
 import type { PerfState } from '@shared/perf-state'
-import type {
-  CustomBackground,
-  CustomBackgroundResult,
-  WallpaperEngineScanResult,
-} from '@shared/custom-background-contract'
+import type { CustomBackground, CustomBackgroundResult } from '@shared/custom-background-contract'
 import type { UpdaterCommandResult, UpdaterState } from '@shared/updater-contract'
+import type {
+  WallpaperEngineCommandResult,
+  WallpaperEngineLibrarySnapshot,
+  WallpaperEngineProjectDetails,
+  WallpaperEngineRuntimeStatus,
+  WallpaperEngineState,
+  WallpaperEngineStateCommand,
+} from '@shared/wallpaper-engine-contract'
 
 function bind<Payload>(channel: string, callback: (payload: Payload) => void): () => void {
   if (typeof callback !== 'function') return () => undefined
@@ -61,14 +65,33 @@ const api = {
   chooseCustomBackgroundFile: (): Promise<CustomBackgroundResult> =>
     ipcRenderer.invoke(IPC.customBackgroundChooseFile),
   clearCustomBackground: (): Promise<CustomBackgroundResult> => ipcRenderer.invoke(IPC.customBackgroundClear),
-  scanWallpaperEngineProjects: (): Promise<WallpaperEngineScanResult> =>
-    ipcRenderer.invoke(IPC.customBackgroundScanWallpaperEngine),
-  importWallpaperEngineProject: (projectId: string): Promise<CustomBackgroundResult> =>
-    ipcRenderer.invoke(IPC.customBackgroundImportWallpaperEngine, { projectId }),
-  chooseWallpaperEngineProject: (): Promise<CustomBackgroundResult> =>
-    ipcRenderer.invoke(IPC.customBackgroundChooseWallpaperEngine),
   onCustomBackgroundChanged: (callback: (payload: CustomBackground | null) => void): (() => void) =>
     bind(IPC.customBackgroundChanged, callback),
+  listWallpaperEngineProjects: (
+    force = false,
+  ): Promise<WallpaperEngineLibrarySnapshot & { state: WallpaperEngineState }> =>
+    ipcRenderer.invoke(IPC.wallpaperEngineList, { force }),
+  chooseWallpaperEngineDirectory: (): Promise<WallpaperEngineCommandResult> =>
+    ipcRenderer.invoke(IPC.wallpaperEngineChooseDirectory),
+  chooseWallpaperEngineProjectFile: (): Promise<WallpaperEngineCommandResult> =>
+    ipcRenderer.invoke(IPC.wallpaperEngineChooseProjectFile),
+  removeWallpaperEngineDirectory: (id: string): Promise<WallpaperEngineCommandResult> =>
+    ipcRenderer.invoke(IPC.wallpaperEngineRemoveDirectory, { id }),
+  getWallpaperEngineProjectDetails: (id: string): Promise<WallpaperEngineProjectDetails> =>
+    ipcRenderer.invoke(IPC.wallpaperEngineProjectDetails, { id }),
+  getWallpaperEngineState: (): Promise<WallpaperEngineState> =>
+    ipcRenderer.invoke(IPC.wallpaperEngineGetState),
+  setWallpaperEngineState: (payload: WallpaperEngineStateCommand): Promise<WallpaperEngineState> =>
+    ipcRenderer.invoke(IPC.wallpaperEngineSetState, payload),
+  getWallpaperEngineRuntimeStatus: (): Promise<WallpaperEngineRuntimeStatus> =>
+    ipcRenderer.invoke(IPC.wallpaperEngineRuntimeStatus),
+  prepareWallpaperEngineGlassSampler: (sessionId: string): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.wallpaperEngineGlassSamplerPrepare, { sessionId }),
+  onWallpaperEngineStateChanged: (callback: (payload: WallpaperEngineState) => void): (() => void) =>
+    bind(IPC.wallpaperEngineStateChanged, callback),
+  onWallpaperEngineRuntimeChanged: (
+    callback: (payload: WallpaperEngineRuntimeStatus) => void,
+  ): (() => void) => bind(IPC.wallpaperEngineRuntimeChanged, callback),
 }
 
 export type FluxDesktopApi = typeof api

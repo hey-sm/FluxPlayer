@@ -1,6 +1,7 @@
 export const APP_SCHEME = 'flux'
 export const MEDIA_SCHEME = 'flux-media'
 export const FONT_SCHEME = 'flux-font'
+export const WALLPAPER_ENGINE_SCHEME = 'flux-wallpaper'
 export const APP_ORIGIN = `${APP_SCHEME}://app`
 export const APP_ENTRY_URL = `${APP_ORIGIN}/index.html`
 
@@ -14,8 +15,8 @@ export const PRODUCTION_CSP = [
   "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
-  "img-src 'self' data: blob: flux-media: flux-background:",
-  "media-src 'self' blob: flux-media: flux-background:",
+  "img-src 'self' data: blob: flux-media: flux-background: flux-wallpaper:",
+  "media-src 'self' blob: flux-media: flux-background: flux-wallpaper:",
   "connect-src 'self' flux: flux-font:",
   "worker-src 'self' blob:",
 ].join('; ')

@@ -77,6 +77,7 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
   await window.evaluate((browserWindow) => browserWindow.setSize(1440, 900))
 
   await page.getByRole('button', { name: '设置' }).click()
+  await page.getByRole('tab', { name: '歌词', exact: true }).click()
   const lyricsAnimation = page.getByRole('combobox', { name: '歌词动画' })
   await expect(lyricsAnimation).toContainText('紧凑滚动')
   await lyricsAnimation.click()
@@ -105,7 +106,7 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
   await page.getByRole('button', { name: '关闭', exact: true }).click()
 
   const searchInput = page.getByPlaceholder(/搜索歌曲/)
-  await page.locator('[data-search-sensor]').dispatchEvent('pointerenter')
+  await page.locator('[data-search-sensor]').hover()
   await expect(searchInput).toBeVisible()
   await searchInput.fill('LYRICS VISUAL')
   await page.getByText(TRACK.name, { exact: true }).click()

@@ -7,6 +7,12 @@
       "skillPath": "cli-tool/components/skills/web-development/electron-development/SKILL.md",
       "computedHash": "b47faf3ba9d7993e8e46bfc8612e4f0a15961e3356f882b20b9a03d81c652311"
     },
+    "gsap-core": {
+      "source": "nexu-io/open-design",
+      "sourceType": "github",
+      "skillPath": "skills/gsap-core/SKILL.md",
+      "computedHash": "75b6cb04645746dc3201a8e256ae35068b326295f7e760066f26177b0f373b7e"
+    },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",

@@ -22,15 +22,39 @@ interface FluxDesktopApi {
   getCustomBackground(): Promise<import('@shared/custom-background-contract').CustomBackground | null>
   chooseCustomBackgroundFile(): Promise<import('@shared/custom-background-contract').CustomBackgroundResult>
   clearCustomBackground(): Promise<import('@shared/custom-background-contract').CustomBackgroundResult>
-  scanWallpaperEngineProjects(): Promise<
-    import('@shared/custom-background-contract').WallpaperEngineScanResult
-  >
-  importWallpaperEngineProject(
-    projectId: string,
-  ): Promise<import('@shared/custom-background-contract').CustomBackgroundResult>
-  chooseWallpaperEngineProject(): Promise<import('@shared/custom-background-contract').CustomBackgroundResult>
   onCustomBackgroundChanged(
     callback: (payload: import('@shared/custom-background-contract').CustomBackground | null) => void,
+  ): () => void
+  listWallpaperEngineProjects(force?: boolean): Promise<
+    import('@shared/wallpaper-engine-contract').WallpaperEngineLibrarySnapshot & {
+      state: import('@shared/wallpaper-engine-contract').WallpaperEngineState
+    }
+  >
+  chooseWallpaperEngineDirectory(): Promise<
+    import('@shared/wallpaper-engine-contract').WallpaperEngineCommandResult
+  >
+  chooseWallpaperEngineProjectFile(): Promise<
+    import('@shared/wallpaper-engine-contract').WallpaperEngineCommandResult
+  >
+  removeWallpaperEngineDirectory(
+    id: string,
+  ): Promise<import('@shared/wallpaper-engine-contract').WallpaperEngineCommandResult>
+  getWallpaperEngineProjectDetails(
+    id: string,
+  ): Promise<import('@shared/wallpaper-engine-contract').WallpaperEngineProjectDetails>
+  getWallpaperEngineState(): Promise<import('@shared/wallpaper-engine-contract').WallpaperEngineState>
+  setWallpaperEngineState(
+    payload: import('@shared/wallpaper-engine-contract').WallpaperEngineStateCommand,
+  ): Promise<import('@shared/wallpaper-engine-contract').WallpaperEngineState>
+  getWallpaperEngineRuntimeStatus(): Promise<
+    import('@shared/wallpaper-engine-contract').WallpaperEngineRuntimeStatus
+  >
+  prepareWallpaperEngineGlassSampler(sessionId: string): Promise<boolean>
+  onWallpaperEngineStateChanged(
+    callback: (payload: import('@shared/wallpaper-engine-contract').WallpaperEngineState) => void,
+  ): () => void
+  onWallpaperEngineRuntimeChanged(
+    callback: (payload: import('@shared/wallpaper-engine-contract').WallpaperEngineRuntimeStatus) => void,
   ): () => void
 }
 

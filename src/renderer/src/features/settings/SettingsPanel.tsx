@@ -1,19 +1,37 @@
 import { lazy, Suspense, useState } from 'react'
 import { cva } from 'class-variance-authority'
-import { RotateCcw } from 'lucide-react'
-import type { CustomBackground, WallpaperEngineProject } from '@shared/custom-background-contract'
+import {
+  Captions,
+  FolderOpen,
+  Image as ImageIcon,
+  Palette,
+  RotateCcw,
+  Settings2,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+  Undo2,
+} from 'lucide-react'
+import type { CustomBackground } from '@shared/custom-background-contract'
+import type {
+  WallpaperEngineLibrarySnapshot,
+  WallpaperEngineSelection,
+  WallpaperEngineState,
+} from '@shared/wallpaper-engine-contract'
 import { cn } from '@/lib/utils'
+import { GlassSurface } from '../../components/glass'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Button } from '../../components/ui/button'
-import { Card } from '../../components/ui/card'
 import { ColorPicker } from '../../components/ui/color-picker'
 import { GlassSelect } from '../../components/ui/glass-select'
-import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { SettingsDialog } from '../../components/shell/SettingsDialog'
 import { useThemeStore } from '../../theme'
 import { DYNAMIC_BACKGROUND_OPTIONS, type DynamicBackgroundEffect } from '../../visual/backgrounds'
 import type { BackgroundMode } from '../../visual/background-mode'
 import { LYRICS_ANIMATION_OPTIONS, type LyricsAnimationMode } from '../../visual/lyrics3d-mesh/animation'
+import { WallpaperEngineLibraryDialog } from './WallpaperEngineLibraryDialog'
+import { GlassSettingsTab } from './GlassSettingsTab'
 
 const SystemMaintenancePanel = lazy(() =>
   import('../system/SystemMaintenancePanel').then((module) => ({
@@ -30,6 +48,31 @@ const lyricsAnimationSelectOptions = LYRICS_ANIMATION_OPTIONS.map((option) => ({
   value: option.value,
   label: option.label,
 }))
+
+type SettingsTab = 'theme' | 'glass' | 'background' | 'lyrics' | 'system'
+
+const settingsTabs = [
+  { value: 'theme', label: '主题', icon: Palette },
+  { value: 'glass', label: '玻璃', icon: SlidersHorizontal },
+  { value: 'background', label: '背景', icon: ImageIcon },
+  { value: 'lyrics', label: '歌词', icon: Captions },
+  { value: 'system', label: '系统', icon: Settings2 },
+] as const
+
+const settingsContentClass = [
+  'h-full min-h-0 overflow-y-auto px-6 py-5 outline-none',
+  '[scrollbar-color:color-mix(in_srgb,var(--flux-accent)_38%,transparent)_transparent]',
+  '[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5',
+  '[&::-webkit-scrollbar-thumb]:rounded-full',
+  '[&::-webkit-scrollbar-thumb]:bg-[color-mix(in_srgb,var(--flux-accent)_38%,transparent)]',
+].join(' ')
+
+const settingsSectionClass = [
+  'grid gap-4 border-b border-[color-mix(in_srgb,var(--flux-panel-border)_7%,transparent)] pb-5',
+  'last:border-b-0 last:pb-0',
+].join(' ')
+
+const settingsRowClass = 'flex min-h-11 items-center gap-3'
 
 const settingsSwitchVariants = cva(
   [
@@ -95,12 +138,12 @@ export interface SettingsPanelProps {
   customBackground: CustomBackground | null
   backgroundBusy: boolean
   backgroundError: string
-  wallpaperProjects: WallpaperEngineProject[]
   onChooseBackground(): void
   onClearBackground(): void
-  onScanWallpaperEngine(): void
-  onChooseWallpaperEngine(): void
-  onImportWallpaperEngine(projectId: string): void
+  wallpaperEngineSelection: WallpaperEngineSelection
+  onWallpaperEngineStateChange(state: WallpaperEngineState): void
+  onWallpaperEngineSnapshotChange(snapshot: WallpaperEngineLibrarySnapshot): void
+  onWallpaperEngineDeactivate(): void
   lyricsDragEnabled: boolean
   lyricsAnimationMode: LyricsAnimationMode
   onLyricsAnimationModeChange(mode: LyricsAnimationMode): void
@@ -120,12 +163,12 @@ export default function SettingsPanel({
   customBackground,
   backgroundBusy,
   backgroundError,
-  wallpaperProjects,
   onChooseBackground,
   onClearBackground,
-  onScanWallpaperEngine,
-  onChooseWallpaperEngine,
-  onImportWallpaperEngine,
+  wallpaperEngineSelection,
+  onWallpaperEngineStateChange,
+  onWallpaperEngineSnapshotChange,
+  onWallpaperEngineDeactivate,
   lyricsDragEnabled,
   lyricsAnimationMode,
   onLyricsAnimationModeChange,
@@ -134,7 +177,7 @@ export default function SettingsPanel({
   onLyricsDragEnabledChange,
   onResetLyricsPosition,
 }: SettingsPanelProps): React.JSX.Element | null {
-  const [activeTab, setActiveTab] = useState<'appearance' | 'system'>('appearance')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('theme')
   const accent = useThemeStore((state) => state.visualParams.accent)
   const lyricsColor = useThemeStore((state) => state.lyricsColor)
   const lyricsColorLinked = useThemeStore((state) => state.lyricsColorLinked)
@@ -150,282 +193,335 @@ export default function SettingsPanel({
   return (
     <SettingsDialog
       open={open}
-      wide={activeTab === 'system'}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) onClose()
       }}
     >
-      <Card
-        className="max-h-[calc(100vh-72px)] w-full overflow-y-auto border-0 bg-transparent p-[18px] text-[var(--flux-text)] shadow-none"
+      <GlassSurface
+        elevation="raised"
+        className="relative size-full min-h-0"
+        contentClassName="flex size-full min-h-0 flex-col"
         data-settings-panel=""
       >
-        <header className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <strong className="text-[15px] tracking-[0.04em]">主题设置</strong>
-            <p className="mt-1 text-[11px] leading-[1.45] text-[var(--flux-text-muted)]">
-              主题变量会实时应用并自动保存。
-            </p>
+        <header className="flex h-[68px] shrink-0 items-center border-b border-[color-mix(in_srgb,var(--flux-panel-border)_7%,transparent)] px-6 pr-20">
+          <div className="grid gap-0.5">
+            <strong className="text-base font-semibold text-[var(--flux-text)]">设置</strong>
+            <span className="text-[10px] text-[var(--flux-text-muted)]">FLUXPLAYER</span>
           </div>
         </header>
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)}>
-          <TabsList
-            className="mb-4 -mt-1.5 flex h-auto gap-1 rounded-[10px] border-[color-mix(in_srgb,var(--flux-panel-border)_8%,transparent)] bg-[color-mix(in_srgb,var(--flux-panel-border)_3%,transparent)] p-[3px]"
-            aria-label="设置分类"
-            data-settings-tabs=""
-          >
-            <TabsTrigger
-              value="appearance"
-              className="min-h-[30px] rounded-[7px] text-[11px] data-[state=active]:bg-[color-mix(in_srgb,var(--flux-accent)_13%,var(--flux-panel-surface))] data-[state=active]:text-[var(--flux-text)]"
+
+        <Tabs
+          value={activeTab}
+          className="min-h-0 flex-1 gap-0"
+          onValueChange={(value) => setActiveTab(value as SettingsTab)}
+        >
+          <div className="shrink-0 px-5 py-3">
+            <div
+              className="w-full rounded-[var(--flux-radius-control)] border border-[var(--flux-glass-border)] bg-[var(--flux-glass-background)] p-1"
+              data-settings-tabs-rail=""
             >
-              外观
-            </TabsTrigger>
-            <TabsTrigger
-              value="system"
-              className="min-h-[30px] rounded-[7px] text-[11px] data-[state=active]:bg-[color-mix(in_srgb,var(--flux-accent)_13%,var(--flux-panel-surface))] data-[state=active]:text-[var(--flux-text)]"
-            >
-              系统
-            </TabsTrigger>
-          </TabsList>
-
-          {activeTab === 'appearance' ? (
-            <div data-settings-appearance="">
-              <section
-                className="mb-4 grid gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--flux-panel-border)_8%,transparent)] bg-[color-mix(in_srgb,var(--flux-panel-border)_3%,transparent)] p-[13px]"
-                aria-label="主题颜色"
+              <TabsList
+                className="grid h-auto grid-cols-5 gap-1 border-0 bg-transparent p-0"
+                aria-label="设置分类"
+                data-settings-tabs=""
               >
-                <ColorPicker
-                  value={accent}
-                  label="主题与灯光色"
-                  description="用于界面强调、播放进度和动态背景灯光；本地壁纸保持原色。"
-                  onChange={setAccent}
-                />
-                <div className="flex min-h-[30px] items-center gap-2">
-                  <span className="grid flex-1 gap-0.5 text-[11px] text-[var(--flux-text)]">
-                    <strong>歌词高亮色</strong>
-                    <small className="text-[10px] leading-[1.45] font-normal text-[var(--flux-text-muted)]">
-                      默认跟随主题；分开后可针对背景提升可读性。
-                    </small>
-                  </span>
-                  <SettingsSwitch
-                    checked={lyricsColorLinked}
-                    label="歌词高亮色跟随主题"
-                    onCheckedChange={setLyricsColorLinked}
-                  />
-                  <em className="w-7 text-[10px] not-italic text-[var(--flux-text-muted)]">
-                    {lyricsColorLinked ? '跟随' : '独立'}
-                  </em>
-                </div>
-                {!lyricsColorLinked ? (
-                  <ColorPicker
-                    className="pt-0.5"
-                    value={lyricsColor}
-                    label="歌词颜色"
-                    swatches={[]}
-                    onChange={setLyricsColor}
-                  />
-                ) : null}
-              </section>
-
-              <div className="mb-[13px] grid gap-[7px] text-[11px] text-[var(--flux-text-muted)]">
-                <span>动态背景（选择后替换自定义背景）</span>
-                <GlassSelect
-                  value={dynamicBackground}
-                  ariaLabel="动态背景"
-                  contentClassName="w-[var(--radix-select-trigger-width)]"
-                  options={dynamicBackgroundSelectOptions}
-                  onValueChange={(value) => onDynamicBackgroundChange(value as DynamicBackgroundEffect)}
-                />
-                <small className="text-[10px] leading-[1.45] text-[var(--flux-text-muted)]">
-                  {activeDynamicBackground?.description}
-                </small>
-              </div>
-
-              <div className="mb-[13px] grid gap-[7px] text-[11px] text-[var(--flux-text-muted)]">
-                <span>歌词动画</span>
-                <GlassSelect
-                  value={lyricsAnimationMode}
-                  ariaLabel="歌词动画"
-                  contentClassName="w-[var(--radix-select-trigger-width)]"
-                  options={lyricsAnimationSelectOptions}
-                  onValueChange={(value) => onLyricsAnimationModeChange(value as LyricsAnimationMode)}
-                />
-                <small className="text-[10px] leading-[1.45] text-[var(--flux-text-muted)]">
-                  {activeLyricsAnimation?.description}
-                </small>
-                <div className="flex min-h-[30px] items-center gap-2">
-                  <SettingsSwitch
-                    checked={lyricsFocusOnly}
-                    label="只显示当前歌词"
-                    onCheckedChange={onLyricsFocusOnlyChange}
-                  />
-                  <span className="text-[10px] text-[var(--flux-text-muted)]">
-                    {lyricsFocusOnly ? '隐藏上下文' : '显示前后各两句'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mb-[13px] grid gap-[7px] text-[11px] text-[var(--flux-text-muted)]">
-                <span>歌词位置</span>
-                <div className="flex min-h-[30px] items-center gap-2">
-                  <SettingsSwitch
-                    checked={lyricsDragEnabled}
-                    label="允许拖拽歌词"
-                    onCheckedChange={onLyricsDragEnabledChange}
-                  />
-                  <span className="mr-auto text-[10px] text-[var(--flux-text-muted)]">
-                    {lyricsDragEnabled ? '移动位置' : '3D 旋转'}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-[30px] cursor-pointer rounded-lg border border-[var(--flux-glass-border)] bg-transparent text-[var(--flux-text-muted)] transition-[color,background-color] duration-[var(--motion-duration-fast)] hover:bg-[color-mix(in_srgb,var(--flux-accent)_10%,transparent)] hover:text-[var(--flux-text)] focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color-mix(in_srgb,var(--flux-accent)_58%,transparent)] motion-reduce:transition-none"
-                    aria-label="重置歌词位置"
-                    title="重置歌词位置"
-                    onClick={onResetLyricsPosition}
-                  >
-                    <RotateCcw size={14} strokeWidth={1.8} />
-                  </Button>
-                </div>
-              </div>
-
-              <section
-                className="my-3 grid gap-[9px] rounded-[var(--flux-radius-panel)] border border-[var(--flux-panel-border)] bg-[color-mix(in_srgb,var(--flux-panel-border)_5%,transparent)] p-3"
-                aria-label="自定义背景"
-              >
-                <div className="flex items-start justify-between gap-2.5">
-                  <span className="block">
-                    <strong className="block">自定义背景</strong>
-                    <small className="mt-[3px] block text-[10px] text-[var(--flux-text-muted)]">
-                      图片或静音循环视频；启用后替换动态背景并保留 3D 歌词
-                    </small>
-                  </span>
-                  {customBackground ? (
-                    <em className="whitespace-nowrap text-[10px] not-italic text-[var(--flux-accent)]">
-                      {backgroundMode === 'wallpaper'
-                        ? '使用中'
-                        : customBackground.source === 'wallpaper-engine'
-                          ? '已保存 · Wallpaper Engine'
-                          : '已保存 · 本地文件'}
-                    </em>
-                  ) : null}
-                </div>
-                <div className="overflow-hidden text-[11px] text-ellipsis whitespace-nowrap text-[var(--flux-text-muted)]">
-                  {backgroundMode === 'wallpaper' && customBackground
-                    ? `当前使用：${customBackground.name}`
-                    : customBackground
-                      ? `当前使用动态背景；已保存：${customBackground.name}`
-                      : '当前使用动态背景'}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {customBackground ? (
-                    <Button
-                      type="button"
-                      variant="glassRaised"
-                      size="compact"
-                      disabled={backgroundBusy}
-                      onClick={() =>
-                        onBackgroundModeChange(backgroundMode === 'wallpaper' ? 'dynamic' : 'wallpaper')
-                      }
+                {settingsTabs.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <TabsTrigger
+                      key={item.value}
+                      value={item.value}
+                      className="h-11 min-w-0 cursor-pointer gap-2 rounded-[10px] px-3 text-[11px] font-medium text-[var(--flux-text-muted)] transition-[color,background-color,box-shadow] duration-[var(--motion-duration-fast)] hover:bg-[color-mix(in_srgb,var(--flux-panel-border)_5%,transparent)] hover:text-[var(--flux-text)] focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[color-mix(in_srgb,var(--flux-accent)_66%,white_8%)] data-[state=active]:bg-[color-mix(in_srgb,var(--flux-accent)_16%,var(--flux-panel-surface))] data-[state=active]:text-[var(--flux-text)] data-[state=active]:shadow-[inset_0_1px_0_color-mix(in_srgb,var(--flux-panel-border)_10%,transparent),0_8px_20px_color-mix(in_srgb,var(--flux-accent)_10%,transparent)] motion-reduce:transition-none"
                     >
-                      {backgroundMode === 'wallpaper' ? '切换到动态背景' : '启用自定义背景'}
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="glassSoft"
-                    size="compact"
-                    disabled={backgroundBusy}
-                    onClick={onChooseBackground}
-                  >
-                    选择图片 / 视频
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="glassSoft"
-                    size="compact"
-                    disabled={backgroundBusy}
-                    onClick={onScanWallpaperEngine}
-                  >
-                    扫描 Wallpaper Engine
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="glassSoft"
-                    size="compact"
-                    disabled={backgroundBusy}
-                    onClick={onChooseWallpaperEngine}
-                  >
-                    手选 WE 项目
-                  </Button>
-                  {customBackground ? (
+                      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{item.label}</span>
+                    </TabsTrigger>
+                  )
+                })}
+              </TabsList>
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 border-t border-[color-mix(in_srgb,var(--flux-panel-border)_7%,transparent)]">
+            <TabsContent value="theme" className={settingsContentClass} data-settings-theme="">
+              <section className={settingsSectionClass} aria-labelledby="settings-theme-heading">
+                <header>
+                  <h2 id="settings-theme-heading" className="text-sm font-semibold text-[var(--flux-text)]">
+                    主题颜色
+                  </h2>
+                </header>
+                <ColorPicker value={accent} label="主题与灯光色" onChange={setAccent} />
+              </section>
+            </TabsContent>
+
+            <TabsContent value="glass" className={settingsContentClass} data-settings-glass="">
+              <GlassSettingsTab />
+            </TabsContent>
+
+            <TabsContent value="background" className={settingsContentClass} data-settings-background="">
+              <div className="grid gap-5">
+                <section className={settingsSectionClass} aria-labelledby="settings-dynamic-heading">
+                  <header>
+                    <h2
+                      id="settings-dynamic-heading"
+                      className="text-sm font-semibold text-[var(--flux-text)]"
+                    >
+                      动态背景
+                    </h2>
+                  </header>
+                  <GlassSelect
+                    value={dynamicBackground}
+                    ariaLabel="动态背景"
+                    contentClassName="w-[var(--radix-select-trigger-width)]"
+                    options={dynamicBackgroundSelectOptions}
+                    onValueChange={(value) => onDynamicBackgroundChange(value as DynamicBackgroundEffect)}
+                  />
+                  <span className="text-[10px] leading-[1.5] text-[var(--flux-text-muted)]">
+                    {activeDynamicBackground?.description}
+                  </span>
+                </section>
+
+                <section className={settingsSectionClass} aria-labelledby="settings-custom-heading">
+                  <header className="flex items-center justify-between gap-3">
+                    <h2
+                      id="settings-custom-heading"
+                      className="text-sm font-semibold text-[var(--flux-text)]"
+                    >
+                      本地背景
+                    </h2>
+                    <span className="shrink-0 text-[10px] text-[var(--flux-accent-strong)]">
+                      {backgroundMode === 'wallpaper' ? '使用中' : customBackground ? '已保存' : '未设置'}
+                    </span>
+                  </header>
+                  <p className="overflow-hidden text-[11px] text-ellipsis whitespace-nowrap text-[var(--flux-text-muted)]">
+                    {customBackground?.name ?? '图片或静音循环视频'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {customBackground ? (
+                      <Button
+                        type="button"
+                        variant="glassRaised"
+                        size="compact"
+                        disabled={backgroundBusy}
+                        onClick={() =>
+                          onBackgroundModeChange(backgroundMode === 'wallpaper' ? 'dynamic' : 'wallpaper')
+                        }
+                      >
+                        {backgroundMode === 'wallpaper' ? (
+                          <Sparkles className="size-3.5" aria-hidden="true" />
+                        ) : (
+                          <ImageIcon className="size-3.5" aria-hidden="true" />
+                        )}
+                        {backgroundMode === 'wallpaper' ? '切换到动态背景' : '启用本地背景'}
+                      </Button>
+                    ) : null}
                     <Button
                       type="button"
                       variant="glassSoft"
                       size="compact"
                       disabled={backgroundBusy}
-                      onClick={onClearBackground}
+                      onClick={onChooseBackground}
                     >
-                      清除
+                      <FolderOpen className="size-3.5" aria-hidden="true" />
+                      选择文件
                     </Button>
-                  ) : null}
-                </div>
-                {wallpaperProjects.length ? (
-                  <div
-                    className="grid max-h-[260px] grid-cols-2 gap-2 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                    data-scroll-region
-                    data-wallpaper-projects=""
-                  >
-                    {wallpaperProjects.map((project) => (
+                    {customBackground ? (
                       <Button
                         type="button"
-                        key={project.id}
                         variant="glassSoft"
-                        size="preview"
+                        size="compact"
                         disabled={backgroundBusy}
-                        onClick={() => onImportWallpaperEngine(project.id)}
+                        onClick={onClearBackground}
                       >
-                        <span className="block aspect-video w-full overflow-hidden bg-[color-mix(in_srgb,var(--flux-panel-border)_8%,transparent)]">
-                          {project.previewUrl ? (
-                            <img
-                              className="block size-full object-cover"
-                              src={project.previewUrl}
-                              alt=""
-                              loading="lazy"
-                            />
-                          ) : null}
-                        </span>
-                        <span className="flex min-w-0 items-center justify-between gap-1.5 px-2 py-[7px]">
-                          <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                            {project.title}
-                          </span>
-                          <small className="shrink-0 whitespace-nowrap text-[var(--flux-text-muted)]">
-                            视频
-                          </small>
-                        </span>
+                        <Trash2 className="size-3.5" aria-hidden="true" />
+                        清除
                       </Button>
-                    ))}
+                    ) : null}
                   </div>
-                ) : null}
-                {backgroundError ? (
-                  <Alert
-                    variant="destructive"
-                    className="m-0 text-[10px] leading-[1.45] text-[var(--flux-danger)]"
-                  >
-                    <AlertDescription>{backgroundError}</AlertDescription>
-                  </Alert>
-                ) : null}
-              </section>
-            </div>
-          ) : (
-            <Suspense
-              fallback={<div className="text-[11px] text-[var(--flux-text-muted)]">正在加载维护工具…</div>}
-            >
-              <SystemMaintenancePanel />
-            </Suspense>
-          )}
+                  {backgroundError ? (
+                    <Alert
+                      variant="destructive"
+                      className="m-0 text-[10px] leading-[1.45] text-[var(--flux-danger)]"
+                    >
+                      <AlertDescription>{backgroundError}</AlertDescription>
+                    </Alert>
+                  ) : null}
+                </section>
+
+                <section className={settingsSectionClass} aria-labelledby="settings-wallpaper-heading">
+                  <header className="flex items-center justify-between gap-3">
+                    <h2
+                      id="settings-wallpaper-heading"
+                      className="text-sm font-semibold text-[var(--flux-text)]"
+                    >
+                      Wallpaper Engine
+                    </h2>
+                    <span className="shrink-0 text-[10px] text-[var(--flux-accent-strong)]">
+                      {wallpaperEngineSelection.active ? '使用中' : '原背景保留'}
+                    </span>
+                  </header>
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <span className="min-w-0 overflow-hidden text-[11px] text-ellipsis whitespace-nowrap text-[var(--flux-text-muted)]">
+                      {wallpaperEngineSelection.active
+                        ? wallpaperEngineSelection.title || 'Wallpaper Engine 项目'
+                        : '未启用'}
+                    </span>
+                    {wallpaperEngineSelection.active ? (
+                      <Button
+                        type="button"
+                        variant="glassSoft"
+                        size="compact"
+                        className="shrink-0"
+                        onClick={onWallpaperEngineDeactivate}
+                      >
+                        <Undo2 className="size-3.5" aria-hidden="true" />
+                        恢复原背景
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <WallpaperEngineLibraryDialog
+                      selection={wallpaperEngineSelection}
+                      onSelectionChange={onWallpaperEngineStateChange}
+                      onSnapshotChange={onWallpaperEngineSnapshotChange}
+                    />
+                  </div>
+                  {wallpaperEngineSelection.runtimeError ? (
+                    <Alert
+                      variant="destructive"
+                      className="m-0 text-[10px] leading-[1.45] text-[var(--flux-danger)]"
+                    >
+                      <AlertDescription>
+                        {`Wallpaper Engine 项目不可用，已恢复原背景（${wallpaperEngineSelection.runtimeError}）`}
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+                </section>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="lyrics" className={settingsContentClass} data-settings-lyrics="">
+              <div className="grid gap-5">
+                <section className={settingsSectionClass} aria-labelledby="settings-lyrics-color-heading">
+                  <header>
+                    <h2
+                      id="settings-lyrics-color-heading"
+                      className="text-sm font-semibold text-[var(--flux-text)]"
+                    >
+                      高亮颜色
+                    </h2>
+                  </header>
+                  <div className={settingsRowClass}>
+                    <span className="min-w-0 flex-1 text-[11px] font-medium text-[var(--flux-text)]">
+                      跟随主题色
+                    </span>
+                    <span className="text-[10px] text-[var(--flux-text-muted)]">
+                      {lyricsColorLinked ? '已开启' : '已关闭'}
+                    </span>
+                    <SettingsSwitch
+                      checked={lyricsColorLinked}
+                      label="歌词高亮色跟随主题"
+                      onCheckedChange={setLyricsColorLinked}
+                    />
+                  </div>
+                  {!lyricsColorLinked ? (
+                    <ColorPicker
+                      value={lyricsColor}
+                      label="歌词颜色"
+                      swatches={[]}
+                      onChange={setLyricsColor}
+                    />
+                  ) : null}
+                </section>
+
+                <section className={settingsSectionClass} aria-labelledby="settings-lyrics-motion-heading">
+                  <header>
+                    <h2
+                      id="settings-lyrics-motion-heading"
+                      className="text-sm font-semibold text-[var(--flux-text)]"
+                    >
+                      显示与动效
+                    </h2>
+                  </header>
+                  <div className="grid gap-2">
+                    <span className="text-[11px] font-medium text-[var(--flux-text)]">歌词动画</span>
+                    <GlassSelect
+                      value={lyricsAnimationMode}
+                      ariaLabel="歌词动画"
+                      contentClassName="w-[var(--radix-select-trigger-width)]"
+                      options={lyricsAnimationSelectOptions}
+                      onValueChange={(value) => onLyricsAnimationModeChange(value as LyricsAnimationMode)}
+                    />
+                    <span className="text-[10px] leading-[1.5] text-[var(--flux-text-muted)]">
+                      {activeLyricsAnimation?.description}
+                    </span>
+                  </div>
+                  <div className={settingsRowClass}>
+                    <span className="min-w-0 flex-1 text-[11px] font-medium text-[var(--flux-text)]">
+                      只显示当前歌词
+                    </span>
+                    <span className="text-[10px] text-[var(--flux-text-muted)]">
+                      {lyricsFocusOnly ? '隐藏上下文' : '显示上下文'}
+                    </span>
+                    <SettingsSwitch
+                      checked={lyricsFocusOnly}
+                      label="只显示当前歌词"
+                      onCheckedChange={onLyricsFocusOnlyChange}
+                    />
+                  </div>
+                </section>
+
+                <section className={settingsSectionClass} aria-labelledby="settings-lyrics-position-heading">
+                  <header>
+                    <h2
+                      id="settings-lyrics-position-heading"
+                      className="text-sm font-semibold text-[var(--flux-text)]"
+                    >
+                      歌词交互
+                    </h2>
+                  </header>
+                  <div className={settingsRowClass}>
+                    <span className="min-w-0 flex-1 text-[11px] font-medium text-[var(--flux-text)]">
+                      拖拽歌词
+                    </span>
+                    <span className="text-[10px] text-[var(--flux-text-muted)]">
+                      {lyricsDragEnabled ? '移动位置' : '3D 旋转'}
+                    </span>
+                    <SettingsSwitch
+                      checked={lyricsDragEnabled}
+                      label="允许拖拽歌词"
+                      onCheckedChange={onLyricsDragEnabledChange}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-11 cursor-pointer rounded-[var(--flux-radius-control)] border border-[var(--flux-glass-border)] bg-transparent text-[var(--flux-text-muted)] transition-[color,background-color] duration-[var(--motion-duration-fast)] hover:bg-[color-mix(in_srgb,var(--flux-accent)_10%,transparent)] hover:text-[var(--flux-text)] focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color-mix(in_srgb,var(--flux-accent)_58%,transparent)] motion-reduce:transition-none"
+                      aria-label="重置歌词位置"
+                      title="重置歌词位置"
+                      onClick={onResetLyricsPosition}
+                    >
+                      <RotateCcw className="size-3.5" strokeWidth={1.8} aria-hidden="true" />
+                    </Button>
+                  </div>
+                </section>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="system" className={settingsContentClass} data-settings-system="">
+              <Suspense
+                fallback={
+                  <div className="grid h-full place-items-center text-[11px] text-[var(--flux-text-muted)]">
+                    正在加载维护工具…
+                  </div>
+                }
+              >
+                <SystemMaintenancePanel />
+              </Suspense>
+            </TabsContent>
+          </div>
         </Tabs>
-      </Card>
+      </GlassSurface>
     </SettingsDialog>
   )
 }

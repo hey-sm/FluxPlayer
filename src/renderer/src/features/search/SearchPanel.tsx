@@ -2,19 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import type { ProviderId } from '@shared/models'
 import { coverProxyUrl, musicErrorMessage } from '../../api'
-import { glassSurfaceVariants } from '../../components/glass'
-import { useClassicControlGlass } from '../../components/glass/classic-control'
-import { AnimatedContent } from '../../components/react-bits/AnimatedContent'
+import { GlassSurface } from '../../components/glass'
+import { SnapshotAnimatedContent } from '../../components/react-bits/SnapshotAnimatedContent'
 import { Input } from '../../components/ui/input'
 import { cn } from '../../lib/utils'
 import { Flip, gsap, motionDurations, motionEases, useGSAP, useReducedMotion } from '../../motion'
 import { usePlayer } from '../../stores/player'
-import {
-  CLASSIC_GLASS_FILTER_ID,
-  CLASSIC_GLASS_FILTER_SVG,
-  CLASSIC_GLASS_MAP_ID,
-  useThemeStore,
-} from '../../theme'
 import { createSearchDismissScheduler, isSearchDismissKey } from './interaction'
 import { createSearchQuery } from './queries'
 import { useDebounced } from './useDebounced'
@@ -43,7 +36,6 @@ interface SearchPanelProps {
 }
 
 export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): React.JSX.Element {
-  const classicTheme = useThemeStore((state) => state.selectedPresetId === 'classic-gold')
   const current = usePlayer((state) => state.current)
   const setQueue = usePlayer((state) => state.setQueue)
   const [keyword, setKeyword] = useState('')
@@ -55,19 +47,13 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
   const inputRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
   const sensorRef = useRef<HTMLDivElement>(null)
-  const popoverRef = useRef<HTMLElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
   const providerTabsRef = useRef<HTMLDivElement>(null)
   const providerFlipStateRef = useRef<ReturnType<typeof Flip.getState> | null>(null)
   const closeScheduler = useMemo(() => createSearchDismissScheduler(), [])
   const previousKeywordEmpty = useRef(true)
   const reducedMotion = useReducedMotion()
-  const searchGlassRef = useClassicControlGlass(
-    classicTheme,
-    'flux-classic-search-glass-filter',
-    'flux-classic-search-glass-map',
-    'classic-search-glass-svg-ok',
-  )
 
   const neteaseSearch = useInfiniteQuery({
     ...createSearchQuery('netease', debouncedKeyword, SEARCH_PAGE_SIZE),
@@ -164,16 +150,14 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
       if (!searchOpen || !popover) return
       gsap.killTweensOf(popover)
       if (reducedMotion) {
-        gsap.set(popover, { autoAlpha: 1, y: 0, scale: 1 })
+        gsap.set(popover, { autoAlpha: 1 })
         return
       }
       gsap.fromTo(
         popover,
-        { autoAlpha: 0, y: -8, scale: 0.985, transformOrigin: '50% 0%' },
+        { autoAlpha: 0 },
         {
           autoAlpha: 1,
-          y: 0,
-          scale: 1,
           duration: motionDurations.emphasized,
           ease: motionEases.enter,
           overwrite: 'auto',
@@ -277,8 +261,9 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
           if (!event.currentTarget.contains(event.relatedTarget)) scheduleSearchDismiss()
         }}
       >
-        <AnimatedContent
+        <SnapshotAnimatedContent
           visible={searchVisible}
+          transitionName="flux-search-shell-vt"
           direction="vertical"
           reverse
           distance={44}
@@ -289,34 +274,14 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
           data-search-motion=""
           className="relative w-full pt-2"
         >
-          <div
-            ref={searchGlassRef}
-            className={cn(
-              'searchbar relative flex items-center rounded-full',
-              classicTheme && 'classic-search-glass',
-            )}
-          >
-            {classicTheme ? (
-              <svg className="control-glass-filter-svg" aria-hidden="true" focusable="false">
-                <defs
-                  dangerouslySetInnerHTML={{
-                    __html: CLASSIC_GLASS_FILTER_SVG.replaceAll(
-                      CLASSIC_GLASS_FILTER_ID,
-                      'flux-classic-search-glass-filter',
-                    ).replaceAll(CLASSIC_GLASS_MAP_ID, 'flux-classic-search-glass-map'),
-                  }}
-                />
-              </svg>
-            ) : null}
+          <GlassSurface className="searchbar relative h-[52px] w-full" data-search-glass="">
             <Input
               ref={inputRef}
               value={keyword}
               className={cn(
-                'h-[52px] min-h-[52px] flex-1 rounded-full border-[var(--flux-glass-border)] bg-[color-mix(in_srgb,var(--flux-glass-background)_88%,transparent)] px-[18px] text-sm text-[var(--flux-text)]',
-                '[box-shadow:var(--flux-shadow-control)] backdrop-blur-[var(--flux-glass-blur)] backdrop-saturate-[var(--flux-glass-saturation)]',
-                'transition-[border-color,background-color,box-shadow] duration-[var(--motion-duration-base)] placeholder:text-[var(--flux-text-muted)]',
-                'focus-visible:border-[color-mix(in_srgb,var(--flux-accent)_52%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--flux-glass-background)_96%,transparent)] focus-visible:ring-0',
-                'focus-visible:[box-shadow:var(--flux-shadow-focus)] motion-reduce:transition-none',
+                'h-[52px] min-h-[52px] w-full rounded-[var(--flux-glass-radius)] border-0 bg-transparent px-[18px] text-sm text-[var(--flux-text)] shadow-none',
+                'transition-colors duration-[var(--motion-duration-base)] placeholder:text-[var(--flux-text-muted)]',
+                'focus-visible:bg-[color-mix(in_srgb,var(--flux-accent)_5%,transparent)] focus-visible:ring-0 motion-reduce:transition-none',
               )}
               placeholder="搜索歌曲 / 歌手"
               onFocus={revealSearch}
@@ -329,20 +294,15 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
               aria-expanded={searchOpen && Boolean(keyword.trim())}
               aria-controls="search-results-popover"
             />
-          </div>
+          </GlassSurface>
           {searchOpen && keyword.trim() ? (
-            <section
+            <GlassSurface
               ref={popoverRef}
               id="search-results-popover"
               data-search-popover=""
-              className={cn(
-                glassSurfaceVariants({
-                  treatment: classicTheme ? 'classicPanel' : 'theme',
-                  elevation: 'raised',
-                }),
-                'absolute top-[69px] left-0 z-[2] max-h-[min(570px,calc(100vh-210px))] w-full overflow-hidden rounded-[18px]',
-                '[box-shadow:var(--flux-shadow-panel)]',
-              )}
+              elevation="raised"
+              className="absolute top-[69px] left-0 z-[2] max-h-[min(570px,calc(100vh-210px))] w-full"
+              role="region"
               aria-label="搜索结果"
             >
               <div
@@ -467,9 +427,9 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
                   </>
                 )}
               </div>
-            </section>
+            </GlassSurface>
           ) : null}
-        </AnimatedContent>
+        </SnapshotAnimatedContent>
       </div>
     </>
   )

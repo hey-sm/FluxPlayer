@@ -1,7 +1,8 @@
 import { net, protocol } from 'electron'
 import type { CustomBackgroundService } from '../background/custom-background'
+import type { WallpaperEngineLibrary } from '../background/wallpaper-engine-library'
 import { CUSTOM_BACKGROUND_SCHEME } from '@shared/custom-background-contract'
-import { APP_SCHEME, FONT_SCHEME, MEDIA_SCHEME } from './constants'
+import { APP_SCHEME, FONT_SCHEME, MEDIA_SCHEME, WALLPAPER_ENGINE_SCHEME } from './constants'
 import { handleAppAssetRequest } from './static-assets'
 import { AudioHandleStore, handleMediaRequest } from './media'
 import { handleFontRequest } from './fonts'
@@ -30,6 +31,10 @@ export function registerPrivilegedSchemes(): void {
         stream: true,
       },
     },
+    {
+      scheme: WALLPAPER_ENGINE_SCHEME,
+      privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+    },
   ])
 }
 
@@ -37,6 +42,7 @@ export interface ProtocolRegistrationOptions {
   staticRoot: string
   audioHandles: AudioHandleStore
   customBackgroundService: CustomBackgroundService
+  wallpaperEngineLibrary: WallpaperEngineLibrary
 }
 
 export function registerProtocolHandlers(options: ProtocolRegistrationOptions): void {
@@ -48,6 +54,7 @@ export function registerProtocolHandlers(options: ProtocolRegistrationOptions): 
     const fileUrl = options.customBackgroundService.resolveRequestUrl(request.url)
     return fileUrl ? net.fetch(fileUrl) : new Response('Not found', { status: 404 })
   })
+  protocol.handle(WALLPAPER_ENGINE_SCHEME, (request) => options.wallpaperEngineLibrary.mediaResponse(request))
   protocol.handle(FONT_SCHEME, (request) => handleFontRequest(request))
 }
 

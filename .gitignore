@@ -1,6 +1,8 @@
 node_modules/
 out/
 dist/
+resources/native/win-x64/*.exe
+resources/native/win-x64/*.sha256
 *.local
 .eslintcache
 

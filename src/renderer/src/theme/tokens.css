@@ -10,19 +10,37 @@
   --flux-panel-surface: #14161e;
   --flux-panel-border: #ffffff;
 
-  --flux-glass-blur: 18px;
-  --flux-glass-saturation: 120%;
-  --flux-glass-bg-opacity: 0.72;
-  --flux-glass-border-opacity: 0.08;
-  --flux-glass-distortion: 0;
+  --flux-glass-blur: 10px;
+  --flux-glass-saturation: 100%;
+  --flux-glass-brightness: 100%;
+  --flux-glass-bg-opacity: 0;
+  --flux-glass-background-color: #000000ff;
+  --flux-glass-border-color: #ffffff;
+  --flux-glass-border-size: 1px;
+  --flux-glass-border-opacity: 0;
+  --flux-glass-distortion: 40;
   --flux-glass-chromatic-aberration: 0;
-  --flux-glass-radius: 14px;
+  --flux-glass-radius: 30px;
+  --flux-glass-color: #ffffff;
+  --flux-glass-inner-light-color: #ffffff;
+  --flux-glass-inner-light-spread: 1px;
+  --flux-glass-inner-light-blur: 10px;
+  --flux-glass-inner-light-opacity: 0;
+  --flux-glass-outer-light-color: #ffffff;
+  --flux-glass-outer-light-spread: 1px;
+  --flux-glass-outer-light-blur: 10px;
+  --flux-glass-outer-light-opacity: 0;
 
-  --flux-radius-control: 9px;
-  --flux-radius-panel: 14px;
-  --flux-radius-shell: 22px;
+  --flux-radius-control: clamp(4px, calc(var(--flux-glass-radius) * 0.33), 14px);
+  --flux-radius-panel: clamp(8px, calc(var(--flux-glass-radius) * 0.47), 22px);
+  --flux-radius-shell: var(--flux-glass-radius);
   --flux-edge-sheet-radius: 15px;
   --flux-topbar-height: 48px;
+
+  /* The player keeps the pre-global-glass appearance and never reads glass settings. */
+  --flux-player-radius: 22px;
+  --flux-player-border: color-mix(in srgb, var(--flux-panel-border) 8%, transparent);
+  --flux-player-background: color-mix(in srgb, var(--flux-panel-surface) 63%, transparent);
 
   --flux-shadow-control: 0 20px 64px rgba(0, 0, 0, 0.25);
   --flux-shadow-focus: 0 16px 46px rgba(0, 0, 0, 0.28), 0 0 0 3px var(--flux-accent-soft);
@@ -40,7 +58,9 @@
   --motion-duration-emphasized: 280ms;
   --motion-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  /* Compact SVG glass controls; never apply these displacement-era values to scrolling panels. */
+  --flux-search-glass-radius: var(--flux-radius-shell);
+
+  /* Legacy control-strip glass stays independent from the editable global glass. */
   --saved-panel-glass-bg: rgba(0, 0, 0, 0.1);
   --saved-panel-glass-filter: blur(12px) saturate(1.8) brightness(1.16);
   --saved-panel-glass-shadow:
@@ -49,20 +69,18 @@
     inset 0 4px 16px rgba(17, 17, 26, 0.05), inset 0 8px 24px rgba(17, 17, 26, 0.05),
     inset 0 16px 56px rgba(17, 17, 26, 0.05);
   --saved-panel-glass-radius: 50px;
-  --flux-search-glass-radius: var(--flux-radius-shell);
-  --flux-search-glass-border: rgba(255, 255, 255, 0.34);
 
   /* Derived values are shared by native glass surfaces and ordinary controls. */
   --flux-accent-soft: color-mix(in srgb, var(--flux-accent) 18%, transparent);
   --flux-accent-strong: color-mix(in srgb, var(--flux-accent) 84%, white 16%);
   --flux-glass-background: color-mix(
     in srgb,
-    var(--flux-panel-surface) calc(var(--flux-glass-bg-opacity) * 100%),
+    var(--flux-glass-background-color) calc(var(--flux-glass-bg-opacity) * 100%),
     transparent
   );
   --flux-glass-border: color-mix(
     in srgb,
-    var(--flux-panel-border) calc(var(--flux-glass-border-opacity) * 100%),
+    var(--flux-glass-border-color) calc(var(--flux-glass-border-opacity) * 100%),
     transparent
   );
 }

@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  react-glass-ui@1.2.2:
+    hash: b94c8a88ea31ee636ae5647788e44544d7e6f7ce4151047c386bd8bfd040b6ea
+    path: patches/react-glass-ui@1.2.2.patch
+
 importers:
 
   .:
@@ -101,7 +106,7 @@ importers:
         version: 19.2.7(react@19.2.7)
       react-glass-ui:
         specifier: 1.2.2
-        version: 1.2.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 1.2.2(patch_hash=b94c8a88ea31ee636ae5647788e44544d7e6f7ce4151047c386bd8bfd040b6ea)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       sharp:
         specifier: ^0.33.5
         version: 0.33.5
@@ -6330,7 +6335,7 @@ snapshots:
       react: 19.2.7
       scheduler: 0.27.0
 
-  react-glass-ui@1.2.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+  react-glass-ui@1.2.2(patch_hash=b94c8a88ea31ee636ae5647788e44544d7e6f7ce4151047c386bd8bfd040b6ea)(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)

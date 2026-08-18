@@ -1,8 +1,7 @@
 import { cva } from 'class-variance-authority'
-import { useEffect, useRef, type ReactNode } from 'react'
-import { glassSurfaceVariants } from '../glass/surface'
-import { AnimatedContent } from '../react-bits/AnimatedContent'
-import { cn } from '@/lib/utils'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { GlassSurface } from '../glass'
+import { gsap, motionDurations, motionEases, useReducedMotion } from '../../motion'
 
 export interface HoverEdgeSheetProps {
   side: 'left' | 'right'
@@ -15,7 +14,7 @@ export interface HoverEdgeSheetProps {
 const edgeSheetVariants = cva(
   [
     'fixed top-[var(--flux-topbar-height)] bottom-[104px] z-[78]',
-    'h-auto min-h-0 w-[min(340px,32vw)] overflow-hidden opacity-100',
+    'h-auto min-h-0 w-[min(340px,32vw)] opacity-100',
     'group-data-[focus-mode=true]/app:hidden',
     '[@media(max-height:560px)]:bottom-[88px]',
   ],
@@ -55,6 +54,8 @@ export function HoverEdgeSheet({
   children,
 }: HoverEdgeSheetProps): React.JSX.Element {
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const reducedMotion = useReducedMotion()
 
   const cancelClose = (): void => {
     if (closeTimer.current) clearTimeout(closeTimer.current)
@@ -73,6 +74,47 @@ export function HoverEdgeSheet({
     [],
   )
 
+  useLayoutEffect(() => {
+    const sheet = sheetRef.current
+    const content = sheet?.querySelector<HTMLElement>('.flux-glass-surface__content')
+    if (!sheet) return
+    const closedClip = side === 'left' ? 'inset(0 100% 0 0)' : 'inset(0 0 0 100%)'
+    const contentOffset = side === 'left' ? -18 : 18
+    if (reducedMotion) {
+      gsap.set(sheet, {
+        clipPath: open ? 'inset(0 0% 0 0)' : closedClip,
+        visibility: open ? 'visible' : 'hidden',
+      })
+      if (content) gsap.set(content, { x: 0 })
+      delete sheet.dataset.animationState
+      return
+    }
+
+    if (open) gsap.set(sheet, { visibility: 'visible' })
+    gsap.to(sheet, {
+      clipPath: open ? 'inset(0 0% 0 0)' : closedClip,
+      duration: open ? motionDurations.base : motionDurations.fast,
+      ease: open ? motionEases.enter : motionEases.exit,
+      overwrite: 'auto',
+      onComplete: () => {
+        if (!open) gsap.set(sheet, { visibility: 'hidden' })
+        delete sheet.dataset.animationState
+      },
+    })
+    if (content) {
+      gsap.to(content, {
+        x: open ? 0 : contentOffset,
+        duration: open ? motionDurations.base : motionDurations.fast,
+        ease: open ? motionEases.enter : motionEases.exit,
+        overwrite: 'auto',
+      })
+    }
+    return () => {
+      gsap.killTweensOf(sheet)
+      if (content) gsap.killTweensOf(content)
+    }
+  }, [open, reducedMotion, side])
+
   return (
     <>
       <div
@@ -85,25 +127,28 @@ export function HoverEdgeSheet({
           if (available) onOpenChange(true)
         }}
       />
-      <AnimatedContent
-        visible={open}
-        direction="horizontal"
-        reverse={side === 'left'}
-        className={cn(
-          edgeSheetVariants({ side }),
-          glassSurfaceVariants({ treatment: 'classicPanel', edge: side }),
-          // Only the bottom edge is stroked. The classic panel ships an all-around inset ring, so the
-          // stroke is expressed as a single inset shadow line instead of a border that ring would fight.
-          '[box-shadow:inset_0_-1px_0_0_var(--flux-glass-border),0_16px_48px_rgba(17,17,26,0.12)]',
-        )}
+      <div
+        ref={sheetRef}
+        className={edgeSheetVariants({ side })}
         data-edge-sheet=""
         data-side={side}
-        data-treatment="classicPanel"
+        data-animation-direction="horizontal"
+        data-animation-reverse={side === 'left'}
+        data-animation-effect="live-clip-reveal"
+        data-animation-state={open ? 'enter' : 'exit'}
+        aria-hidden={!open || undefined}
+        style={{
+          visibility: open ? 'visible' : 'hidden',
+          pointerEvents: open ? 'auto' : 'none',
+          clipPath: side === 'left' ? 'inset(0 100% 0 0)' : 'inset(0 0 0 100%)',
+        }}
         onPointerEnter={cancelClose}
         onPointerLeave={scheduleClose}
       >
-        <div className="flex h-full">{children}</div>
-      </AnimatedContent>
+        <GlassSurface edge={side} className="size-full" data-edge-sheet-glass="">
+          {children}
+        </GlassSurface>
+      </div>
     </>
   )
 }

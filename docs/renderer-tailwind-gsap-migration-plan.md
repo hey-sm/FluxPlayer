@@ -611,3 +611,15 @@ interface MotionPreferences {
 - 左右玻璃面板保持播放器一致的液态玻璃视觉和固定 15px 内侧圆角。
 - 开发使用 `pnpm dev`/`pnpm start` 可获得 renderer HMR；`pnpm preview` 的静态产物语义清晰。
 - 全量质量门禁和 Electron E2E 通过。
+
+## 十二、全局液态玻璃正式统一阶段
+
+> 状态：**已完成**（2026-08-17）。本阶段取代本文早期的 classic panel、播放器/搜索 SVG 例外、`effects.css` 和固定 15px 贴边圆角策略；冲突处以 [liquid-glass-system.md](liquid-glass-system.md) 为准。
+
+- `components/glass` 现由 `config.ts`、`persistence.ts`、`store.ts`、`surface.tsx`、`glass.css` 和 `index.ts` 组成，业务代码只能通过唯一 `GlassSurface` 使用 `react-glass-ui`。
+- 删除 Demo、LiquidGlassSurface、classic-control、旧 SVG 生成器和 `effects.css`。主题持久化升到 v3，旧 v2 只迁移颜色、字体和歌词状态。
+- SettingsPanel 新增固定尺寸的第五个“玻璃”Tab；预览按 rAF 合并，提交只写一次 `fluxplayer-glass-v1`。
+- 左右栏、PlayerBar、搜索、设置、Wallpaper Engine 对话框和 GlassSelect 浮层统一消费同一配置。轻量按钮只消费派生 CSS 变量，不创建嵌套 SVG 玻璃。
+- 第三方 patch 在静态配置下关闭 hover transform，并直接从 props 计算光照阴影，消除 effect 二次渲染。
+- View Transition 只移动左右栏和搜索壳的位图；Dialog、Sheet、Select、搜索结果只动画透明度。实时 GlassCard 和祖先禁止动态 transform。
+- Electron E2E 会把 blur 调到 40，并逐一检查已挂载真实表面的配置签名和计算后的 backdrop-filter，防止再次出现“只有 PlayerBar 生效”。

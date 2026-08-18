@@ -29,10 +29,18 @@ export const IPC = {
   customBackgroundGet: 'flux:background:get',
   customBackgroundChooseFile: 'flux:background:choose-file',
   customBackgroundClear: 'flux:background:clear',
-  customBackgroundScanWallpaperEngine: 'flux:background:scan-wallpaper-engine',
-  customBackgroundImportWallpaperEngine: 'flux:background:import-wallpaper-engine',
-  customBackgroundChooseWallpaperEngine: 'flux:background:choose-wallpaper-engine',
   customBackgroundChanged: 'flux:background:changed',
+  wallpaperEngineList: 'flux:wallpaper-engine:list',
+  wallpaperEngineChooseDirectory: 'flux:wallpaper-engine:choose-directory',
+  wallpaperEngineChooseProjectFile: 'flux:wallpaper-engine:choose-project-file',
+  wallpaperEngineRemoveDirectory: 'flux:wallpaper-engine:remove-directory',
+  wallpaperEngineProjectDetails: 'flux:wallpaper-engine:project-details',
+  wallpaperEngineGetState: 'flux:wallpaper-engine:get-state',
+  wallpaperEngineSetState: 'flux:wallpaper-engine:set-state',
+  wallpaperEngineRuntimeStatus: 'flux:wallpaper-engine:runtime-status',
+  wallpaperEngineGlassSamplerPrepare: 'flux:wallpaper-engine:glass-sampler-prepare',
+  wallpaperEngineStateChanged: 'flux:wallpaper-engine:state-changed',
+  wallpaperEngineRuntimeChanged: 'flux:wallpaper-engine:runtime-changed',
 } as const
 
 export interface DisplayState {

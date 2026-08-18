@@ -57,7 +57,33 @@ describe('classic-only theme', () => {
 
   it('rejects malformed JSON and unknown persistence versions', () => {
     expect(deserializePersistedTheme('{not-json')).toBeNull()
-    expect(deserializePersistedTheme(JSON.stringify({ version: 3 }))).toBeNull()
+    expect(deserializePersistedTheme(JSON.stringify({ version: 4 }))).toBeNull()
+  })
+
+  it('migrates V2 colors and typography while ignoring its glass values', () => {
+    const current = THEME_PRESETS['classic-gold'].visualParams
+    const migrated = deserializePersistedTheme(
+      JSON.stringify({
+        version: 2,
+        selectedPresetId: 'classic-gold',
+        visualParams: {
+          ...current,
+          accent: '#334455',
+          fontScale: 1.2,
+          blur: 39,
+          distortion: 99,
+        },
+        lyricsColor: '#778899',
+        lyricsColorLinked: false,
+      }),
+    )
+    expect(migrated).toMatchObject({
+      visualParams: { accent: '#334455', fontScale: 1.2 },
+      lyricsColor: '#778899',
+      lyricsColorLinked: false,
+    })
+    expect(migrated?.visualParams).not.toHaveProperty('blur')
+    expect(migrated?.visualParams).not.toHaveProperty('distortion')
   })
 
   it('applies classic variables and rewrites persisted state on startup', () => {
@@ -75,7 +101,7 @@ describe('classic-only theme', () => {
     expect(store.getState()).toMatchObject({ selectedPresetId: 'classic-gold', hydrated: true })
     expect(style.values.get('--flux-bg')).toBe(THEME_PRESETS['classic-gold'].visualParams.background)
     expect(JSON.parse(storage.getItem(THEME_PERSISTENCE_KEY)!)).toEqual({
-      version: 2,
+      version: 3,
       selectedPresetId: 'classic-gold',
       visualParams: THEME_PRESETS['classic-gold'].visualParams,
       lyricsColor: THEME_PRESETS['classic-gold'].visualParams.accent,

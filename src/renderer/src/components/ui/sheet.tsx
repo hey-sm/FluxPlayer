@@ -69,10 +69,7 @@ const SheetOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     data-sheet-motion-overlay=""
-    className={cn(
-      'fixed inset-x-0 bottom-0 top-[var(--flux-topbar-height)] z-[60] bg-black/25 backdrop-blur-[1px]',
-      className,
-    )}
+    className={cn('fixed inset-x-0 bottom-0 top-[var(--flux-topbar-height)] z-[60] bg-black/25', className)}
     {...props}
   />
 ))
@@ -96,7 +93,6 @@ const SheetContent = React.forwardRef<React.ComponentRef<typeof DialogPrimitive.
     const contentRef = React.useRef<React.ComponentRef<typeof DialogPrimitive.Content>>(null)
     const enteredRef = React.useRef(false)
     const reducedMotion = useReducedMotion()
-    const hiddenXPercent = side === 'left' ? -100 : 100
 
     const setContentRef = React.useCallback(
       (node: React.ComponentRef<typeof DialogPrimitive.Content> | null) => {
@@ -121,7 +117,6 @@ const SheetContent = React.forwardRef<React.ComponentRef<typeof DialogPrimitive.
             gsap.set(overlay, { autoAlpha: 0 })
             gsap.set(content, {
               autoAlpha: reducedMotion ? 1 : 0.96,
-              xPercent: reducedMotion ? 0 : hiddenXPercent,
             })
           }
           enteredRef.current = true
@@ -140,7 +135,6 @@ const SheetContent = React.forwardRef<React.ComponentRef<typeof DialogPrimitive.
               content,
               {
                 autoAlpha: 1,
-                xPercent: 0,
                 duration: reducedMotion ? 0 : motionDurations.emphasized,
                 ease: motionEases.enter,
                 overwrite: 'auto',
@@ -153,7 +147,6 @@ const SheetContent = React.forwardRef<React.ComponentRef<typeof DialogPrimitive.
               content,
               {
                 autoAlpha: reducedMotion ? 1 : 0.96,
-                xPercent: reducedMotion ? 0 : hiddenXPercent,
                 duration: reducedMotion ? 0 : motionDurations.base,
                 ease: motionEases.exit,
                 overwrite: 'auto',
@@ -183,7 +176,7 @@ const SheetContent = React.forwardRef<React.ComponentRef<typeof DialogPrimitive.
       },
       {
         scope: contentRef,
-        dependencies: [completeExit, hiddenXPercent, open, present, reducedMotion],
+        dependencies: [completeExit, open, present, reducedMotion],
       },
     )
 
@@ -198,10 +191,10 @@ const SheetContent = React.forwardRef<React.ComponentRef<typeof DialogPrimitive.
           data-side={side}
           data-sheet-motion-content=""
           className={cn(
-            'fixed bottom-0 top-[var(--flux-topbar-height)] z-[61] flex h-[calc(100dvh-var(--flux-topbar-height))] flex-col border-border bg-popover text-popover-foreground shadow-2xl backdrop-blur-2xl outline-none',
+            'fixed bottom-0 top-[var(--flux-topbar-height)] z-[61] flex h-[calc(100dvh-var(--flux-topbar-height))] flex-col border-0 bg-transparent text-popover-foreground shadow-none outline-none',
             side === 'left'
-              ? 'left-0 w-[min(360px,calc(100vw-24px))] border-r'
-              : 'right-0 w-[min(440px,calc(100vw-24px))] border-l',
+              ? 'left-0 w-[min(360px,calc(100vw-24px))]'
+              : 'right-0 w-[min(440px,calc(100vw-24px))]',
             className,
           )}
           {...props}

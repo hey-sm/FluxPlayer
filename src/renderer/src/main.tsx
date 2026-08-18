@@ -5,7 +5,6 @@ import App from './App'
 import './styles/shadcn.css'
 import './theme/tokens.css'
 import './styles/global.css'
-import './styles/effects.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

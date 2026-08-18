@@ -1,13 +1,6 @@
 import type { ThemeVisualParams, ThemeVisualPatch } from './types'
 
 const PARAM_LIMITS = Object.freeze({
-  blur: [0, 40],
-  saturation: [80, 180],
-  backgroundOpacity: [0, 1],
-  borderOpacity: [0, 1],
-  distortion: [0, 100],
-  chromaticAberration: [0, 20],
-  radius: [0, 50],
   fontScale: [0.8, 1.4],
 } as const)
 
@@ -22,16 +15,7 @@ const STRING_KEYS = Object.freeze([
   'fontFamily',
 ] as const)
 
-const NUMBER_KEYS = Object.freeze([
-  'blur',
-  'saturation',
-  'backgroundOpacity',
-  'borderOpacity',
-  'distortion',
-  'chromaticAberration',
-  'radius',
-  'fontScale',
-] as const)
+const NUMBER_KEYS = Object.freeze(['fontScale'] as const)
 
 type NumericThemeKey = (typeof NUMBER_KEYS)[number]
 type StringThemeKey = (typeof STRING_KEYS)[number]

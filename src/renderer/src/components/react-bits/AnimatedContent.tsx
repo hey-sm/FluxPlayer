@@ -23,6 +23,7 @@ export interface AnimatedContentMotionState {
   axis: 'x' | 'y'
   hidden: gsap.TweenVars
   shown: gsap.TweenVars
+  exit: gsap.TweenVars
 }
 
 export function resolveAnimatedContentMotionState(
@@ -47,6 +48,11 @@ export function resolveAnimatedContentMotionState(
       opacity: 1,
       visibility: 'visible',
       pointerEvents: 'auto',
+    },
+    exit: {
+      [axis]: offset,
+      opacity: animateOpacity ? 0 : 1,
+      pointerEvents: 'none',
     },
   }
 }
@@ -78,7 +84,7 @@ export function AnimatedContent({
       const element = elementRef.current
       if (!element) return
 
-      const { axis, hidden, shown } = resolveAnimatedContentMotionState(
+      const { hidden, shown, exit } = resolveAnimatedContentMotionState(
         direction,
         reverse,
         distance,
@@ -96,37 +102,50 @@ export function AnimatedContent({
 
       if (visible) {
         if (firstAnimationRef.current) {
-          gsap.set(element, { ...hidden, visibility: 'visible' })
+          gsap.set(element, hidden)
         }
-        gsap.to(element, {
+        gsap.set(element, {
+          visibility: 'visible',
+          pointerEvents: 'auto',
+          willChange: 'transform, opacity',
+        })
+        const tween = gsap.to(element, {
           ...shown,
           duration: enterDuration,
           ease: enterEase,
+          force3D: true,
           overwrite: 'auto',
-          onComplete: () => callbacksRef.current.onEnterComplete?.(),
+          onComplete: () => {
+            gsap.set(element, { clearProps: 'willChange' })
+            callbacksRef.current.onEnterComplete?.()
+          },
         })
+        firstAnimationRef.current = false
+        return () => tween.kill()
       } else {
         if (firstAnimationRef.current) {
           gsap.set(element, hidden)
           firstAnimationRef.current = false
           return
         }
-        gsap.to(element, {
-          [axis]: hidden[axis],
-          opacity: animateOpacity ? 0 : 1,
+        gsap.set(element, {
           pointerEvents: 'none',
+          willChange: 'transform, opacity',
+        })
+        const tween = gsap.to(element, {
+          ...exit,
           duration: exitDuration,
           ease: exitEase,
+          force3D: true,
           overwrite: 'auto',
           onComplete: () => {
-            gsap.set(element, { visibility: 'hidden' })
+            gsap.set(element, { visibility: 'hidden', clearProps: 'willChange' })
             callbacksRef.current.onExitComplete?.()
           },
         })
+        firstAnimationRef.current = false
+        return () => tween.kill()
       }
-      firstAnimationRef.current = false
-
-      return () => gsap.killTweensOf(element)
     },
     {
       scope: elementRef,
@@ -142,9 +161,8 @@ export function AnimatedContent({
         reverse,
         visible,
       ],
-      // Never revert on update: this animation tweens *from* the state the previous run left behind.
-      // Reverting would snap the panel to its resting position before the enter tween starts, so the
-      // slide-in would be dropped entirely.
+      // Never revert on update: each effect continues from the state left by its previous tween.
+      // Reverting would snap the panel to rest before its next entrance begins.
     },
   )
 
@@ -154,6 +172,7 @@ export function AnimatedContent({
       aria-hidden={!visible || undefined}
       data-animation-direction={direction}
       data-animation-reverse={reverse}
+      data-animation-effect="slide"
       style={style}
       {...props}
     >

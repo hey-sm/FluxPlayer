@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { cva } from 'class-variance-authority'
 import type { UpdaterState, UpdaterStatus } from '@shared/updater-contract'
 import { DEFAULT_UPDATER_STATE } from '@shared/updater-contract'
-import { GlassSurface } from '@/components/glass'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { gsap, motionDurations, motionEases, useGSAP, useReducedMotion } from '@/motion'
@@ -121,39 +120,32 @@ export function SystemMaintenancePanel({ className = '' }: { className?: string 
       aria-label="应用更新"
       data-system-maintenance=""
     >
-      <header className="mb-4 flex items-end justify-between gap-6 max-[560px]:block">
+      <header className="mb-4 flex items-center justify-between gap-5 max-[560px]:block">
         <div className="min-w-0">
-          <span className="mb-[0.32rem] block text-[0.64rem] font-bold tracking-[0.2em] text-[var(--flux-accent-strong)]">
-            FLUXPLAYER
-          </span>
-          <h2 className="text-[clamp(1.35rem,2vw,1.75rem)] leading-[1.2] font-[660] tracking-[-0.025em] text-[var(--flux-text)]">
-            应用更新
-          </h2>
+          <h2 className="text-sm leading-[1.3] font-semibold text-[var(--flux-text)]">应用更新</h2>
         </div>
-        <p className="mb-[0.08rem] max-w-[27rem] text-right text-[0.78rem] leading-[1.55] text-[var(--flux-text-muted)] max-[560px]:mt-[0.55rem] max-[560px]:text-left">
-          本应用使用独立的新数据目录，更新操作不会改动个人音乐数据。
+        <p className="max-w-[25rem] text-right text-[0.7rem] leading-[1.5] text-[var(--flux-text-muted)] max-[560px]:mt-2 max-[560px]:text-left">
+          更新不会改动个人音乐数据。
         </p>
       </header>
       <div className="grid grid-cols-1 gap-[0.9rem]">
-        <GlassSurface
-          className="flex min-h-[30rem] min-w-0 flex-col gap-[0.9rem] overflow-hidden p-[clamp(1rem,2vw,1.35rem)] max-[860px]:min-h-0"
+        <div
+          className="flex min-h-[16rem] min-w-0 flex-col gap-3.5 rounded-[var(--flux-glass-radius)] border border-[var(--flux-glass-border)] bg-[color-mix(in_srgb,var(--flux-glass-background)_55%,transparent)] p-4 max-[560px]:min-h-0"
           data-system-maintenance-card=""
         >
           <header className="flex items-center justify-between gap-4 max-[560px]:items-start">
             <div className="flex min-w-0 items-baseline gap-[0.62rem]">
-              <span className="text-[0.62rem] font-[750] tracking-[0.08em] text-[color-mix(in_srgb,var(--flux-accent)_75%,white_25%)] tabular-nums">
+              <span className="text-[0.62rem] font-[750] text-[color-mix(in_srgb,var(--flux-accent)_75%,white_25%)] tabular-nums">
                 01
               </span>
-              <h3 className="text-base leading-[1.2] font-[640] tracking-[-0.01em] text-[var(--flux-text)]">
-                版本与更新
-              </h3>
+              <h3 className="text-sm leading-[1.3] font-semibold text-[var(--flux-text)]">版本与更新</h3>
             </div>
             <span className={statusVariants({ tone: copy.tone })} data-tone={copy.tone}>
               <span className="size-[0.4rem] rounded-full bg-current shadow-[0_0_0.55rem_currentColor]" />
               {copy.label}
             </span>
           </header>
-          <p className="-mt-[0.22rem] min-h-[2.4rem] text-[0.76rem] leading-[1.6] text-[var(--flux-text-muted)]">
+          <p className="text-[0.72rem] leading-[1.55] text-[var(--flux-text-muted)]">
             {disabled ?? copy.detail}
           </p>
           <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-[0.55rem] max-[560px]:grid-cols-1">
@@ -232,7 +224,7 @@ export function SystemMaintenancePanel({ className = '' }: { className?: string 
               {command === 'install' ? '正在安装…' : '安装并重启'}
             </Button>
           </footer>
-        </GlassSurface>
+        </div>
       </div>
     </section>
   )

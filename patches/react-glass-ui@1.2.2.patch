@@ -1,0 +1,180 @@
+diff --git a/dist/index.js b/dist/index.js
+index a7e2f25cda5e7c1c0a195df0a8dfed608f082a07..9ab1b4f02e925bc4a1e3ac8506b82b31ec0dc1cf 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -318,6 +318,12 @@ var GlassCard = (props) => {
+   const glassCardContainerRef = (0, import_react.useRef)(null);
+   const glassCardContentRef = (0, import_react.useRef)(null);
+   const [isHovered, setIsHovered] = (0, import_react.useState)(false);
++  const hasHoverTransform = cardProps.flexibility > 0;
++  const staticStyle = {
++    transform: "none",
++    innerBoxShadow: `inset 0 0 ${cardProps.innerLightBlur}px ${cardProps.innerLightSpread}px ${cardProps.innerLightColor}`,
++    outerBoxShadow: `0 0 ${cardProps.outerLightBlur}px ${cardProps.outerLightSpread}px ${cardProps.outerLightColor}`
++  };
+   const [style, setStyle] = (0, import_react.useState)({
+     transform: "none",
+     innerBoxShadow: `inset 0 0 ${cardProps.innerLightBlur}px ${cardProps.innerLightSpread}px ${cardProps.innerLightColor}`,
+@@ -325,7 +331,7 @@ var GlassCard = (props) => {
+   });
+   (0, import_react.useEffect)(() => {
+     const card = glassCardContainerRef.current;
+-    if (!card) return;
++    if (!card || !hasHoverTransform) return;
+     const getTouchPoint = (e) => {
+       if ("touches" in e && e.touches.length > 0) {
+         return {
+@@ -366,13 +372,27 @@ var GlassCard = (props) => {
+       card.removeEventListener("touchend", reset);
+       card.removeEventListener("touchcancel", reset);
+     };
+-  }, [style]);
++  }, [
++    hasHoverTransform,
++    cardProps.flexibility,
++    cardProps.onHoverScale,
++    cardProps.innerLightBlur,
++    cardProps.innerLightSpread,
++    cardProps.innerLightColor,
++    cardProps.outerLightBlur,
++    cardProps.outerLightSpread,
++    cardProps.outerLightColor
++  ]);
+   (0, import_react.useEffect)(() => {
+-    setStyle((prev) => __spreadProps(__spreadValues({}, prev), {
+-      innerBoxShadow: `inset 0 0 ${cardProps.innerLightBlur}px ${cardProps.innerLightSpread}px ${cardProps.innerLightColor}`,
+-      outerBoxShadow: `0 0 ${cardProps.outerLightBlur}px ${cardProps.outerLightSpread}px ${cardProps.outerLightColor}`
++    if (!hasHoverTransform) return;
++    const innerBoxShadow = `inset 0 0 ${cardProps.innerLightBlur}px ${cardProps.innerLightSpread}px ${cardProps.innerLightColor}`;
++    const outerBoxShadow = `0 0 ${cardProps.outerLightBlur}px ${cardProps.outerLightSpread}px ${cardProps.outerLightColor}`;
++    setStyle((prev) => prev.innerBoxShadow === innerBoxShadow && prev.outerBoxShadow === outerBoxShadow ? prev : __spreadProps(__spreadValues({}, prev), {
++      innerBoxShadow,
++      outerBoxShadow
+     }));
+   }, [
++    hasHoverTransform,
+     cardProps.innerLightBlur,
+     cardProps.innerLightSpread,
+     cardProps.innerLightColor,
+@@ -392,17 +412,17 @@ var GlassCard = (props) => {
+       id: cardProps.id,
+       ref: glassCardContainerRef,
+       className: `glass-ui-container ${cardProps.className ? cardProps.className : ""}`,
+-      onMouseEnter: handleOnMouseEnter,
+-      onMouseLeave: handleOnMouseLeave,
++      onMouseEnter: hasHoverTransform ? handleOnMouseEnter : void 0,
++      onMouseLeave: hasHoverTransform ? handleOnMouseLeave : void 0,
+       onClick: cardProps.onClick,
+       style: {
+         color: cardProps.color,
+         width: (_b = cardProps.width) != null ? _b : "fit-content",
+         height: (_c = cardProps.height) != null ? _c : "fit-content",
+         borderRadius: cardProps.borderRadius,
+-        transform: style.transform,
+-        transition: isHovered ? "transform 80ms ease-out" : "transform 250ms cubic-bezier(0.3, 0.7, 0.4, 1.5)",
+-        willChange: "transform",
++        transform: hasHoverTransform ? style.transform : "none",
++        transition: hasHoverTransform ? isHovered ? "transform 80ms ease-out" : "transform 250ms cubic-bezier(0.3, 0.7, 0.4, 1.5)" : void 0,
++        willChange: hasHoverTransform ? "transform" : void 0,
+         zIndex: cardProps.zIndex
+       },
+       children: [
+@@ -415,7 +435,7 @@ var GlassCard = (props) => {
+           (_h = cardProps.distortion) != null ? _h : 50,
+           (_i = cardProps.backgroundColor) != null ? _i : "white",
+           (_j = cardProps.backgroundOpacity) != null ? _j : 0,
+-          style,
++          hasHoverTransform ? style : staticStyle,
+           (_k = cardProps.innerLightOpacity) != null ? _k : 0.2,
+           (_l = cardProps.outerLightOpacity) != null ? _l : 0.2,
+           (_n = (_m = cardProps.borderColor) != null ? _m : cardProps.innerLightColor) != null ? _n : "white",
+diff --git a/dist/index.mjs b/dist/index.mjs
+index ae46894137714b7aa2ee4193402b2a2568dfc312..84a9f9c7b0b32cf3b2b03aae7cd1c3a16138efc0 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -293,6 +293,12 @@ var GlassCard = (props) => {
+   const glassCardContainerRef = useRef(null);
+   const glassCardContentRef = useRef(null);
+   const [isHovered, setIsHovered] = useState(false);
++  const hasHoverTransform = cardProps.flexibility > 0;
++  const staticStyle = {
++    transform: "none",
++    innerBoxShadow: `inset 0 0 ${cardProps.innerLightBlur}px ${cardProps.innerLightSpread}px ${cardProps.innerLightColor}`,
++    outerBoxShadow: `0 0 ${cardProps.outerLightBlur}px ${cardProps.outerLightSpread}px ${cardProps.outerLightColor}`
++  };
+   const [style, setStyle] = useState({
+     transform: "none",
+     innerBoxShadow: `inset 0 0 ${cardProps.innerLightBlur}px ${cardProps.innerLightSpread}px ${cardProps.innerLightColor}`,
+@@ -300,7 +306,7 @@ var GlassCard = (props) => {
+   });
+   useEffect(() => {
+     const card = glassCardContainerRef.current;
+-    if (!card) return;
++    if (!card || !hasHoverTransform) return;
+     const getTouchPoint = (e) => {
+       if ("touches" in e && e.touches.length > 0) {
+         return {
+@@ -341,13 +347,27 @@ var GlassCard = (props) => {
+       card.removeEventListener("touchend", reset);
+       card.removeEventListener("touchcancel", reset);
+     };
+-  }, [style]);
++  }, [
++    hasHoverTransform,
++    cardProps.flexibility,
++    cardProps.onHoverScale,
++    cardProps.innerLightBlur,
++    cardProps.innerLightSpread,
++    cardProps.innerLightColor,
++    cardProps.outerLightBlur,
++    cardProps.outerLightSpread,
++    cardProps.outerLightColor
++  ]);
+   useEffect(() => {
+-    setStyle((prev) => __spreadProps(__spreadValues({}, prev), {
+-      innerBoxShadow: `inset 0 0 ${cardProps.innerLightBlur}px ${cardProps.innerLightSpread}px ${cardProps.innerLightColor}`,
+-      outerBoxShadow: `0 0 ${cardProps.outerLightBlur}px ${cardProps.outerLightSpread}px ${cardProps.outerLightColor}`
++    if (!hasHoverTransform) return;
++    const innerBoxShadow = `inset 0 0 ${cardProps.innerLightBlur}px ${cardProps.innerLightSpread}px ${cardProps.innerLightColor}`;
++    const outerBoxShadow = `0 0 ${cardProps.outerLightBlur}px ${cardProps.outerLightSpread}px ${cardProps.outerLightColor}`;
++    setStyle((prev) => prev.innerBoxShadow === innerBoxShadow && prev.outerBoxShadow === outerBoxShadow ? prev : __spreadProps(__spreadValues({}, prev), {
++      innerBoxShadow,
++      outerBoxShadow
+     }));
+   }, [
++    hasHoverTransform,
+     cardProps.innerLightBlur,
+     cardProps.innerLightSpread,
+     cardProps.innerLightColor,
+@@ -367,17 +387,17 @@ var GlassCard = (props) => {
+       id: cardProps.id,
+       ref: glassCardContainerRef,
+       className: `glass-ui-container ${cardProps.className ? cardProps.className : ""}`,
+-      onMouseEnter: handleOnMouseEnter,
+-      onMouseLeave: handleOnMouseLeave,
++      onMouseEnter: hasHoverTransform ? handleOnMouseEnter : void 0,
++      onMouseLeave: hasHoverTransform ? handleOnMouseLeave : void 0,
+       onClick: cardProps.onClick,
+       style: {
+         color: cardProps.color,
+         width: (_b = cardProps.width) != null ? _b : "fit-content",
+         height: (_c = cardProps.height) != null ? _c : "fit-content",
+         borderRadius: cardProps.borderRadius,
+-        transform: style.transform,
+-        transition: isHovered ? "transform 80ms ease-out" : "transform 250ms cubic-bezier(0.3, 0.7, 0.4, 1.5)",
+-        willChange: "transform",
++        transform: hasHoverTransform ? style.transform : "none",
++        transition: hasHoverTransform ? isHovered ? "transform 80ms ease-out" : "transform 250ms cubic-bezier(0.3, 0.7, 0.4, 1.5)" : void 0,
++        willChange: hasHoverTransform ? "transform" : void 0,
+         zIndex: cardProps.zIndex
+       },
+       children: [
+@@ -390,7 +410,7 @@ var GlassCard = (props) => {
+           (_h = cardProps.distortion) != null ? _h : 50,
+           (_i = cardProps.backgroundColor) != null ? _i : "white",
+           (_j = cardProps.backgroundOpacity) != null ? _j : 0,
+-          style,
++          hasHoverTransform ? style : staticStyle,
+           (_k = cardProps.innerLightOpacity) != null ? _k : 0.2,
+           (_l = cardProps.outerLightOpacity) != null ? _l : 0.2,
+           (_n = (_m = cardProps.borderColor) != null ? _m : cardProps.innerLightColor) != null ? _n : "white",
