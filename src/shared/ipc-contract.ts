@@ -19,8 +19,6 @@ export const IPC = {
   musicGetLikedTracks: 'flux:music:get-liked-tracks',
   musicGetDiscover: 'flux:music:get-discover',
   restartApp: 'flux:app:restart',
-  configureGlobalHotkeys: 'flux:hotkeys:configure-global',
-  globalHotkey: 'flux:hotkeys:triggered',
   updaterGetState: 'flux:updater:get-state',
   updaterCheck: 'flux:updater:check',
   updaterDownload: 'flux:updater:download',
@@ -62,21 +60,6 @@ export interface DesktopWindowState extends DisplayState {
   isMinimized: boolean
   isVisible: boolean
   isFocused: boolean
-}
-
-export interface HotkeyBinding {
-  action: string
-  accelerator: string
-}
-
-export interface HotkeyConfigureResult {
-  ok: boolean
-  results: Array<{
-    action: string
-    accelerator: string
-    ok: boolean
-    conflict?: { sourceName: string; sourceIcon: string; reason: string }
-  }>
 }
 
 export interface LoginWindowResult {

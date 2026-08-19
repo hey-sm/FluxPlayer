@@ -12,8 +12,6 @@ interface FluxDesktopApi {
   onWindowState(callback: (state: import('@shared/ipc-contract').DesktopWindowState) => void): () => void
   onPerfState(callback: (state: import('@shared/perf-state').PerfState) => void): () => void
   restartApp(): Promise<{ ok: boolean }>
-  configureGlobalHotkeys(bindings: unknown[]): Promise<unknown>
-  onGlobalHotkey(callback: (payload: { action: string }) => void): () => void
   getUpdaterState(): Promise<import('@shared/updater-contract').UpdaterState>
   checkForUpdates(): Promise<import('@shared/updater-contract').UpdaterCommandResult>
   downloadUpdate(): Promise<import('@shared/updater-contract').UpdaterCommandResult>

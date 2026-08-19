@@ -18,7 +18,7 @@ import { useAuth } from './stores/auth'
 import { showToast } from './stores/toast'
 import { gsap, motionDurations, motionEases, useGSAP, useReducedMotion } from './motion'
 import { usePlaybackProgress, usePlayer } from './stores/player'
-import { isDynamicBackgroundEffect, type DynamicBackgroundEffect } from './visual/backgrounds'
+import { isDynamicBackgroundEffect, type DynamicBackgroundEffect } from './visual/backgrounds/dynamic'
 import { parseBackgroundMode, type BackgroundMode } from './visual/background-mode'
 import type { LyricsOffset } from './visual/StageCanvas'
 import { isLyricsAnimationMode, type LyricsAnimationMode } from './visual/lyrics3d-mesh/animation'
@@ -108,44 +108,6 @@ function useAuthLifecycle(): void {
   }, [qqLoggedIn, startQQPolling])
 
   useEffect(() => () => useAuth.getState().stopQQPolling(), [])
-}
-
-function useGlobalHotkeys(): void {
-  useEffect(() => {
-    const desktop = window.fluxDesktop
-    if (!desktop) return
-    void desktop.configureGlobalHotkeys([
-      { action: 'togglePlay', accelerator: 'Ctrl+Alt+Space' },
-      { action: 'prevTrack', accelerator: 'Ctrl+Alt+Left' },
-      { action: 'nextTrack', accelerator: 'Ctrl+Alt+Right' },
-      { action: 'volumeUp', accelerator: 'Ctrl+Alt+Up' },
-      { action: 'volumeDown', accelerator: 'Ctrl+Alt+Down' },
-      { action: 'toggleFullscreen', accelerator: 'Ctrl+Alt+F' },
-    ])
-    return desktop.onGlobalHotkey(({ action }) => {
-      const player = usePlayer.getState()
-      switch (action) {
-        case 'togglePlay':
-          player.toggle()
-          break
-        case 'prevTrack':
-          void player.prev()
-          break
-        case 'nextTrack':
-          void player.next()
-          break
-        case 'volumeUp':
-          player.setVolume(player.volume + 0.05)
-          break
-        case 'volumeDown':
-          player.setVolume(player.volume - 0.05)
-          break
-        case 'toggleFullscreen':
-          void desktop.toggleFullscreen()
-          break
-      }
-    })
-  }, [])
 }
 
 function isPlaybackShortcutTarget(target: EventTarget | null): boolean {
@@ -239,8 +201,6 @@ export default function App(): React.JSX.Element {
   const reducedMotion = useReducedMotion()
 
   useAuthLifecycle()
-  useGlobalHotkeys()
-
   const exitFocusMode = useCallback(() => {
     setFocusMode(false)
     const desktop = window.fluxDesktop

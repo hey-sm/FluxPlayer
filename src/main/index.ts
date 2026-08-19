@@ -6,7 +6,7 @@ import { IPC } from '@shared/ipc-contract'
 import { DEFAULT_UPDATER_STATE, type UpdaterState } from '@shared/updater-contract'
 import { SafeCredentialStore } from './credentials'
 import { createElectronUpdaterAdapter, UpdaterController } from './updater'
-import { isWallpaperRuntimeSelectionActive, registerIpcHandlers, unregisterGlobalHotkeys } from './ipc'
+import { isWallpaperRuntimeSelectionActive, registerIpcHandlers } from './ipc'
 import { PerfGovernor } from './perf-governor'
 import { createMainWindow, didWindowLoad, focusMainWindow, getWindowState } from './windows/main-window'
 import { CustomBackgroundService } from './background/custom-background'
@@ -91,7 +91,6 @@ async function cleanupRuntime(disposeUpdater: boolean): Promise<void> {
   if (!runtimeCleaned) {
     perfGovernor.destroy()
     audioHandles.clear()
-    unregisterGlobalHotkeys()
     runtimeCleaned = true
   }
   if (disposeUpdater) {
@@ -182,26 +181,31 @@ async function createWindow(): Promise<void> {
   const devRendererUrl = process.env.ELECTRON_RENDERER_URL || undefined
   const iconPath = path.join(app.getAppPath(), 'resources', 'icon.png')
 
-  mainWindow = await createMainWindow({
-    preloadPath: preloadPath(),
-    iconPath: fs.existsSync(iconPath) ? iconPath : undefined,
-    devRendererUrl,
-    onStateChange: (window) => {
-      perfGovernor.evaluate()
-      const state = getWindowState(window)
-      if (state.isMinimized || !state.isVisible) void wallpaperEngineRuntime?.suspend()
-      else {
-        void wallpaperEngineRuntime?.resume()
-        void wallpaperEngineRuntime?.refreshBounds()
-      }
-    },
-    onRendererGone: () => {
-      void wallpaperEngineRuntime?.stop()
-    },
-    onCreated: (window) => {
-      mainWindow = window
-    },
-  })
+  try {
+    mainWindow = await createMainWindow({
+      preloadPath: preloadPath(),
+      iconPath: fs.existsSync(iconPath) ? iconPath : undefined,
+      devRendererUrl,
+      onStateChange: (window) => {
+        perfGovernor.evaluate()
+        const state = getWindowState(window)
+        if (state.isMinimized || !state.isVisible) void wallpaperEngineRuntime?.suspend()
+        else {
+          void wallpaperEngineRuntime?.resume()
+          void wallpaperEngineRuntime?.refreshBounds()
+        }
+      },
+      onRendererGone: () => {
+        void wallpaperEngineRuntime?.stop()
+      },
+      onCreated: (window) => {
+        mainWindow = window
+      },
+    })
+  } catch (error) {
+    if (mainWindow?.isDestroyed()) mainWindow = null
+    throw error
+  }
   perfGovernor.attach(mainWindow)
   mainWindow.on('close', (event) => {
     if (allowQuit) return
@@ -273,7 +277,10 @@ if (!gotSingleInstanceLock) {
       app
         .whenReady()
         .then(() => createWindow())
-        .catch((error) => console.error('Second instance window restore failed:', error))
+        .catch((error) => {
+          console.error('Second instance window restore failed:', error)
+          requestQuit()
+        })
     }
   })
 
@@ -402,8 +409,14 @@ if (!gotSingleInstanceLock) {
     })
 
   app.on('activate', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) void createWindow()
-    else focusMainWindow(mainWindow)
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      void createWindow().catch((error) => {
+        console.error('Application activation window restore failed:', error)
+        requestQuit()
+      })
+      return
+    }
+    focusMainWindow(mainWindow)
   })
 
   app.on('window-all-closed', () => {

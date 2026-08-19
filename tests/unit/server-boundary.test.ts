@@ -92,4 +92,19 @@ describe('Electron application boundary', () => {
     expect(ipcSource).toContain('musicSearchRequestSchema')
     expect(ipcSource).toContain('playbackResolveRequestSchema')
   })
+
+  it('does not expose or register unused global shortcuts', () => {
+    const sources = [
+      projectFile('src/shared/ipc-contract.ts'),
+      projectFile('src/main/ipc.ts'),
+      projectFile('src/main/index.ts'),
+      projectFile('src/preload/main.ts'),
+      projectFile('src/renderer/src/env.d.ts'),
+      projectFile('src/renderer/src/App.tsx'),
+    ].join('\n')
+
+    expect(sources).not.toMatch(
+      /globalShortcut|GlobalHotkey|globalHotkey|configureGlobalHotkeys|HotkeyBinding|flux:hotkeys:/,
+    )
+  })
 })

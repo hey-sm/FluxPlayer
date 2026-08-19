@@ -44,15 +44,14 @@ FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云�
 ## 核心特性
 
 - **双 provider 聚合**：网易云 / QQ 音乐统一搜索、歌单、我喜欢、逐字歌词。
-- **智能播放容错**：音质自动降级重试、跨 provider 同名同歌手自动换源、失败黑名单、试听片段截断。
 - **多档音质**：超清母带 / 高清臻音 / 无损 / 极高 / 标准，跨 provider 归一化。
+- **明确的失败反馈**：播放地址不可用时保留当前队列并展示原因，由用户手动重试或切歌；试听片段在 30 秒处截断。
 - **动态背景与 3D 歌词**：内置 Light Rays 光线、HTML Light 吊灯与 Galaxy 螺旋星系背景，歌词继续使用 Three.js 网格渲染并支持旋转、拖拽和缩放。
 - **全局液态玻璃**：左右栏、PlayerBar、搜索、设置与浮层统一使用可实时调节和持久化的 react-glass-ui 配置。
 - **自定义背景**：支持导入本地图片/视频，以及 Wallpaper Engine 视频项目。
-- **全局快捷键**：播放控制、切歌、音量、全屏。
 - **系统媒体集成**：Media Session（系统媒体控制中心 / 键盘媒体键）。
 - **自动更新**：基于 electron-updater，GitHub 发布通道。
-- **隐私优先**：凭据经 Windows DPAPI 加密落盘，上游地址永不出主进程。
+- **隐私优先**：凭据经系统 `safeStorage` 加密落盘，上游地址永不出主进程。
 
 ## 技术栈
 
@@ -66,7 +65,7 @@ FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云�
 | 校验       | Zod 4（IPC 入参 schema）                                                  |
 | 工具链     | oxlint · oxfmt（非 ESLint/Prettier）                                      |
 | 测试       | Vitest 3（单测）· Playwright（e2e，真实 Electron）                        |
-| 打包       | electron-builder（Windows NSIS）                                          |
+| 打包       | electron-builder（Windows NSIS · macOS DMG/ZIP · Linux AppImage/deb）     |
 | 包管理     | pnpm                                                                      |
 
 ## 快速开始
@@ -95,6 +94,8 @@ pnpm dev              # 启动开发（Electron + HMR）
 | `pnpm smoke`                        | 无头启动冒烟测试（验证窗口加载、无本地 TCP 监听）                  |
 | `pnpm record:fixtures`              | 重新录制 provider 测试夹具                                         |
 | `pnpm build:win`                    | 打 Windows NSIS 安装包到 `dist/`                                   |
+| `pnpm build:mac`                    | 在 macOS 打 x64/arm64 DMG 与 ZIP 到 `dist/`                        |
+| `pnpm build:linux`                  | 在 Linux 打 x64 AppImage 与 deb 到 `dist/`                         |
 
 > 开发界面时请使用 `pnpm dev` 或 `pnpm start`。`pnpm preview` 默认只在启动时构建一次，运行期间修改源码不会热更新；需要重启 `preview`，或先执行 `pnpm build` 再使用 `electron-vite preview --skipBuild` 查看新的静态产物。
 > | `pnpm build:win:dir` | 免安装目录版本 |
@@ -102,7 +103,7 @@ pnpm dev              # 启动开发（Electron + HMR）
 **跑单个测试：**
 
 ```bash
-pnpm vitest run tests/unit/playback-match.test.ts    # 指定文件
+pnpm vitest run tests/unit/player-failure.test.ts    # 指定文件
 pnpm vitest run -t "用例名片段"                          # 按名字过滤
 pnpm exec playwright test tests/e2e/player.spec.ts    # 单个 e2e（需先 pnpm build）
 ```
@@ -224,7 +225,7 @@ FluxPlayer 严格遵循 Electron 三进程模型，并额外抽出「共享契�
    → 透传 Range、重写响应头、限制 CORS 到 flux://app
 ```
 
-失败时（受限/需登录/无版权），引擎会依次尝试：音质降级重试 → 跨 provider 换源 → 失败黑名单跳过 → 报错。详见[播放引擎](#播放引擎)。
+失败时（受限/需登录/无版权），引擎保留当前队列和歌曲上下文，展示具体原因，并等待用户手动重试或切歌。
 
 ### 安全边界
 
@@ -234,7 +235,7 @@ FluxPlayer 严格遵循 Electron 三进程模型，并额外抽出「共享契�
 2. **每个 IPC handler 经 `secureHandle` 包裹**：先校验 sender 是主窗口的主 frame 且 origin 匹配（否则抛 `UNAUTHORIZED_RENDERER`），再用 Zod schema 解析入参（否则抛 `INVALID_REQUEST`）。新增 IPC 通道必须走这条路径，schema 定义在 [src/shared/music-schema.ts](src/shared/music-schema.ts)。
 3. **自定义协议 + 主机 allowlist。** `flux://app` 加载渲染层，`flux-media://` 代理音频/封面。封面主机走 `COVER_HOST_SUFFIXES` allowlist，响应头被过滤重写，`Access-Control-Allow-Origin` 固定为 `flux://app`。
 4. **网易云 SDK 走固定门面。** [src/server/providers/netease/sdk.ts](src/server/providers/netease/sdk.ts) 只 deep-import `NCM_ENDPOINT_ALLOWLIST` 里明确列出的模块，绝不 import 包根、不扫描模块目录——缩小 SDK 攻击面。新增端点需显式加进 loader map（有 `netease-sdk-allowlist.test.ts` 守护）。
-5. **凭据加密落盘。** `SafeCredentialStore` 用 Windows DPAPI（`safeStorage`）加密，带读回校验、replacement journal 崩溃恢复，只接受密文、不降级明文写入。
+5. **凭据加密落盘。** `SafeCredentialStore` 使用 Electron `safeStorage`（Windows DPAPI / macOS Keychain / Linux secret store）加密，带读回校验、replacement journal 崩溃恢复，只接受密文、不降级明文写入。
 6. **e2e 网络防护。** `FLUX_E2E=1` 时 [src/main/e2e-network-guard.ts](src/main/e2e-network-guard.ts) monkey-patch http/https/fetch，阻断一切非 loopback 请求；测试数据靠 fixture 注入。
 7. **禁用 webview**、单实例锁、`will-attach-webview` 拦截等在 [src/main/index.ts](src/main/index.ts) 中固定。
 
@@ -245,7 +246,7 @@ FluxPlayer 严格遵循 Electron 三进程模型，并额外抽出「共享契�
 - **Zustand 只是投影。** player store 通过 `connect(port)` 给引擎注入 state 读写口，store 本身不含播放逻辑——它只是引擎状态的可观察 UI 投影 + 用户动作门面。别把播放逻辑写进 store。
 - **进度隔离。** 高频进度更新走独立的 `usePlaybackProgress` store，避免每秒触发整棵组件树重渲染。
 - **竞态防护。** `loadGeneration` 计数器保证过期的异步解析结果不会覆盖新播放。
-- **容错链。** `tryQualityRetry`（音质逐档降级）→ `tryAlternateSource`（跨 provider 搜同名同歌手换源）→ `skipFailed`（失败黑名单 + 跳下一首）。
+- **单源失败语义。** 每次播放只解析当前歌曲所属 provider；失败后保持当前队列和索引，不自动换源或跳歌。
 - **播放模式。** sequence / repeat-one / shuffle，shuffle 用环形游标 + 洗牌轮次，支持双向。
 - **试听截断。** 试听资源在 30s 处强制暂停。
 - **系统集成。** 绑定 Media Session（系统媒体控制、键盘媒体键）。
@@ -289,16 +290,18 @@ Three.js 动态背景遵循「单一实例」原则，避免资源泄漏与多�
 - `server-boundary.test.ts` —— server 层不得泄漏上游细节到跨进程契约
 - `electron-ipc-security.test.ts` —— `secureHandle` / origin 校验
 - `netease-sdk-allowlist.test.ts` —— SDK 门面 allowlist 完整性
-- `player-*.test.ts` —— 播放降级 / 换源 / 模式 / 进度隔离
+- `player-*.test.ts` —— 播放失败反馈 / 音质 / 模式 / 进度隔离
 
 e2e 下 `FLUX_E2E=1` 触发网络防护（阻断非 loopback），Playwright 配置 `workers: 1` 非并行。
 
 ## 构建与发布
 
 - 产物结构：`out/main`（ESM）、`out/preload`（**CJS `.cjs`**，ESM preload 会导致页面加载静默悬死）、`out/renderer`（oxc 压缩）。
-- Windows 打包：`pnpm build:win` → electron-builder NSIS，输出 `dist/FluxPlayer-<version>-Setup.exe`。
-- 更新通道固定 GitHub `hey-sm/FluxPlayer`。当前**未做代码签名**——发布说明需标注 SmartScreen 风险提示。
-- 图标：源文件 `resources/icon.svg`，`scripts/gen-icons.mjs` 生成 `icon.png`（builder 自动转 ico）。
+- 本地打包：Windows 使用 `pnpm build:win`，macOS 使用 `pnpm build:mac`，Linux 使用 `pnpm build:linux`。
+- 推送 `main` 自动生成三平台 Actions Artifacts；推送与 `package.json` 版本一致的 `v*` 标签后自动创建 GitHub Release。
+- 标签发布强制校验 Windows Authenticode 签名和 macOS Developer ID 签名/公证；所需 Secrets 与发版步骤见 [docs/releasing.md](docs/releasing.md)。
+- 更新通道固定 GitHub `hey-sm/FluxPlayer`。Windows NSIS、macOS ZIP 和 Linux AppImage 会同时发布对应的更新元数据。
+- 图标：源文件 `resources/icon.svg`；Windows/Linux 使用 `icon.png`，macOS 构建时生成 `icon.icns`。
 
 ## 开发约定
 
@@ -311,4 +314,4 @@ e2e 下 `FLUX_E2E=1` 触发网络防护（阻断非 loopback），Playwright 配
 
 ## 许可证
 
-MIT
+FluxPlayer 原创代码采用 [MIT License](LICENSE) 开源。项目包含的第三方代码和依赖仍遵循各自的许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -16,7 +16,6 @@ vi.mock('electron', () => ({
     handle: (channel: string, handler: (...args: unknown[]) => unknown) =>
       electronMock.handlers.set(channel, handler),
   },
-  globalShortcut: { register: vi.fn(() => true), unregister: vi.fn() },
   dialog: { showOpenDialog: vi.fn() },
   screen: { getAllDisplays: vi.fn(), getPrimaryDisplay: vi.fn(), getDisplayMatching: vi.fn() },
   shell: { openExternal: vi.fn() },

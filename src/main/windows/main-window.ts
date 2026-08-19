@@ -236,6 +236,36 @@ export async function createMainWindow(options: MainWindowOptions): Promise<Brow
 }
 
 const loadedWindows = new WeakSet<BrowserWindow>()
+const MAIN_WINDOW_LOAD_TIMEOUT_MS = 15_000
+
+export interface MainWindowLoader {
+  loadURL(target: string): Promise<void>
+  isDestroyed(): boolean
+  destroy(): void
+}
+
+export async function loadMainWindowContent(
+  win: MainWindowLoader,
+  target: string,
+  timeoutMs = MAIN_WINDOW_LOAD_TIMEOUT_MS,
+): Promise<void> {
+  let timeout: NodeJS.Timeout | undefined
+  try {
+    await Promise.race([
+      win.loadURL(target),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('LOAD_TIMEOUT')), timeoutMs)
+        timeout.unref?.()
+      }),
+    ])
+  } catch (error) {
+    if (!win.isDestroyed()) win.destroy()
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(`MAIN_WINDOW_LOAD_FAILED: ${detail}`, { cause: error })
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
+}
 
 /** 首屏是否真实加载成功（烟雾测试用，防止服务通了但窗口没渲染的假成功） */
 export function didWindowLoad(win: BrowserWindow | null): boolean {
@@ -245,16 +275,9 @@ export function didWindowLoad(win: BrowserWindow | null): boolean {
 async function buildAndLoad(options: MainWindowOptions): Promise<BrowserWindow> {
   const win = buildWindow(options)
   const target = options.devRendererUrl || APP_ENTRY_URL
-  try {
-    // 某些环境下渲染进程崩溃会让 loadURL 永不 settle，必须加超时竞速
-    await Promise.race([
-      win.loadURL(target),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('LOAD_TIMEOUT')), 15000)),
-    ])
-    loadedWindows.add(win)
-  } catch (error: unknown) {
-    console.error('Main window load failed:', error instanceof Error ? error.message : String(error))
-  }
+  // 某些环境下渲染进程崩溃会让 loadURL 永不 settle，必须加超时竞速。
+  await loadMainWindowContent(win, target)
+  loadedWindows.add(win)
   return win
 }
 

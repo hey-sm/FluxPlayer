@@ -1,0 +1,240 @@
+name: Desktop builds
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --registry=https://registry.npmjs.org --prod --audit-level=high
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format
+      - run: pnpm test
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: node -e "const version=require('./package.json').version; if (process.env.GITHUB_REF_NAME !== 'v' + version) throw new Error('Tag must equal v' + version)"
+
+  package:
+    name: Package ${{ matrix.name }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            command: pnpm build:win --publish never
+            artifact: fluxplayer-windows-x64
+            paths: |
+              dist/*.exe
+              dist/*.blockmap
+              dist/latest.yml
+          - name: macOS x64 + arm64
+            os: macos-14
+            command: pnpm build:mac --publish never
+            artifact: fluxplayer-macos
+            paths: |
+              dist/*.dmg
+              dist/*.zip
+              dist/*.blockmap
+              dist/latest-mac.yml
+          - name: Linux x64
+            os: ubuntu-24.04
+            command: pnpm build:linux --publish never
+            artifact: fluxplayer-linux-x64
+            paths: |
+              dist/*.AppImage
+              dist/*.deb
+              dist/*.blockmap
+              dist/latest-linux.yml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Require Windows signing credentials for a tagged release
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64)) { $missing += 'WINDOWS_CERTIFICATE_BASE64' }
+          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_KEY_PASSWORD)) { $missing += 'WINDOWS_CERTIFICATE_PASSWORD' }
+          if ($missing.Count -gt 0) { throw "Missing release secrets: $($missing -join ', ')" }
+
+      - name: Prepare Windows signing certificate
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64)) {
+            if (-not [string]::IsNullOrWhiteSpace($env:WIN_CSC_KEY_PASSWORD)) { throw 'WINDOWS_CERTIFICATE_BASE64 is missing' }
+            exit 0
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_KEY_PASSWORD)) { throw 'WINDOWS_CERTIFICATE_PASSWORD is missing' }
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'windows-signing.pfx'
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          "WIN_CSC_LINK=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WIN_CSC_KEY_PASSWORD=$env:WIN_CSC_KEY_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Require macOS signing and notarization credentials for a tagged release
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          missing=()
+          for name in MACOS_CERTIFICATE_BASE64 CSC_KEY_PASSWORD APPLE_API_KEY_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            if [[ -z "${!name}" ]]; then missing+=("$name"); fi
+          done
+          if (( ${#missing[@]} )); then
+            printf 'Missing release secrets: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Prepare macOS signing certificate
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          if [[ -z "$MACOS_CERTIFICATE_BASE64" ]]; then
+            [[ -z "$CSC_KEY_PASSWORD" ]] || { echo 'MACOS_CERTIFICATE_BASE64 is missing' >&2; exit 1; }
+            exit 0
+          fi
+          [[ -n "$CSC_KEY_PASSWORD" ]] || { echo 'MACOS_CERTIFICATE_PASSWORD is missing' >&2; exit 1; }
+          certificate_path="$RUNNER_TEMP/macos-signing.p12"
+          CERTIFICATE_PATH="$certificate_path" node -e "require('node:fs').writeFileSync(process.env.CERTIFICATE_PATH, Buffer.from(process.env.MACOS_CERTIFICATE_BASE64, 'base64'))"
+          echo "CSC_LINK=$certificate_path" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Prepare Apple notarization key
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          if [[ -z "$APPLE_API_KEY_BASE64$APPLE_API_KEY_ID$APPLE_API_ISSUER" ]]; then exit 0; fi
+          for name in APPLE_API_KEY_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            [[ -n "${!name}" ]] || { echo "$name is missing" >&2; exit 1; }
+          done
+          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          API_KEY_PATH="$api_key_path" node -e "require('node:fs').writeFileSync(process.env.API_KEY_PATH, Buffer.from(process.env.APPLE_API_KEY_BASE64, 'base64'))"
+          echo "APPLE_API_KEY=$api_key_path" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID" >> "$GITHUB_ENV"
+          echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
+
+      - name: Build installers
+        run: ${{ matrix.command }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Verify Windows release signature
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem dist -Filter '*-Setup.exe' -File)
+          if ($installers.Count -ne 1) { throw "Expected exactly one Windows installer, found $($installers.Count)" }
+          $required = @(
+            $installers[0],
+            (Get-Item 'dist/win-unpacked/FluxPlayer.exe'),
+            (Get-Item 'dist/win-unpacked/resources/native/win-x64/FluxPlayer.WallpaperEngine.Helper.exe')
+          )
+          foreach ($file in $required) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
+            if ($signature.Status -ne 'Valid') { throw "$($file.Name) signature is $($signature.Status)" }
+          }
+
+      - name: Verify macOS release signature
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'macOS'
+        shell: bash
+        run: |
+          found=0
+          while IFS= read -r -d '' app; do
+            found=1
+            codesign --verify --deep --strict --verbose=2 "$app"
+            spctl --assess --type execute --verbose=2 "$app"
+          done < <(find dist -type d -name 'FluxPlayer.app' -print0)
+          [[ "$found" == 1 ]]
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.paths }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          cd release-assets
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f -print0)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            flags=(--verify-tag --generate-notes --title "FluxPlayer $GITHUB_REF_NAME")
+            if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease); fi
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" "${flags[@]}"
+          fi

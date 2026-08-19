@@ -1,6 +1,6 @@
-import { BrowserWindow, dialog, globalShortcut, ipcMain } from 'electron'
+import { BrowserWindow, dialog, ipcMain } from 'electron'
 import * as z from 'zod/mini'
-import { IPC, type HotkeyBinding, type HotkeyConfigureResult } from '@shared/ipc-contract'
+import { IPC } from '@shared/ipc-contract'
 import type {
   DiscoverRequest,
   FluxMusicApi,
@@ -45,14 +45,7 @@ import {
 } from './windows/login-windows'
 import type { UpdaterController } from './updater'
 
-const registeredGlobalHotkeys = new Map<string, string>()
 const noInputSchema = z.undefined()
-const hotkeyBindingsSchema = z.array(
-  z.object({
-    action: z.string().check(z.minLength(1), z.maxLength(100)),
-    accelerator: z.string().check(z.minLength(1), z.maxLength(100)),
-  }),
-)
 const wallpaperEngineListSchema = z.object({ force: z.optional(z.boolean()) })
 const wallpaperEngineIdSchema = z.object({ id: z.string().check(z.minLength(1), z.maxLength(64)) })
 const wallpaperEngineStateSchema = z.object({
@@ -152,60 +145,6 @@ function secureHandle<Input, Output>(
   })
 }
 
-function sendGlobalHotkeyAction(getMainWindow: () => BrowserWindow | null, action: string): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed() || !action) return
-  win.webContents.send(IPC.globalHotkey, { action })
-}
-
-export function unregisterGlobalHotkeys(): void {
-  for (const accelerator of registeredGlobalHotkeys.keys()) {
-    try {
-      globalShortcut.unregister(accelerator)
-    } catch {
-      // A shutdown race must not block application exit.
-    }
-  }
-  registeredGlobalHotkeys.clear()
-}
-
-function configureGlobalHotkeys(
-  getMainWindow: () => BrowserWindow | null,
-  bindings: HotkeyBinding[],
-): HotkeyConfigureResult {
-  unregisterGlobalHotkeys()
-  const results: HotkeyConfigureResult['results'] = []
-  const seen = new Set<string>()
-  for (const item of bindings) {
-    const action = item.action.trim()
-    const accelerator = item.accelerator.trim()
-    if (!action || !accelerator || seen.has(accelerator)) continue
-    seen.add(accelerator)
-    let registered = false
-    try {
-      registered = globalShortcut.register(accelerator, () => sendGlobalHotkeyAction(getMainWindow, action))
-    } catch {
-      registered = false
-    }
-    if (registered) {
-      registeredGlobalHotkeys.set(accelerator, action)
-      results.push({ action, accelerator, ok: true })
-    } else {
-      results.push({
-        action,
-        accelerator,
-        ok: false,
-        conflict: {
-          sourceName: '系统 / 其他软件',
-          sourceIcon: 'warning',
-          reason: '该组合键已被占用或被系统保留',
-        },
-      })
-    }
-  }
-  return { ok: true, results }
-}
-
 function unavailableUpdaterResult(deps: IpcDeps, code: string, message: string): UpdaterCommandResult {
   return { ok: false, state: deps.getUpdaterFallbackState(), error: { code, message } }
 }
@@ -239,10 +178,6 @@ export function registerIpcHandlers(deps: IpcDeps): void {
   )
   secureHandle(IPC.windowGetState, noInputSchema, deps, () => getWindowState(deps.getMainWindow()))
   secureHandle(IPC.windowClose, noInputSchema, deps, () => deps.requestQuit())
-
-  secureHandle(IPC.configureGlobalHotkeys, hotkeyBindingsSchema, deps, (bindings) =>
-    configureGlobalHotkeys(deps.getMainWindow, bindings),
-  )
 
   secureHandle(IPC.musicSearch, musicSearchRequestSchema, deps, (request) =>
     deps.getMusicService().search(request as MusicSearchRequest),

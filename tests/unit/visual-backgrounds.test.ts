@@ -11,6 +11,10 @@ import { GalaxyBackground } from '@renderer/visual/backgrounds/galaxy'
 import { HtmlLightBackground } from '@renderer/visual/backgrounds/html-light'
 import { LightRaysBackground } from '@renderer/visual/backgrounds/light-rays'
 import type { DynamicBackground, DynamicBackgroundDefinition } from '@renderer/visual/backgrounds/types'
+import { readFileSync } from 'node:fs'
+
+const projectFile = (relativePath: string): string =>
+  readFileSync(new URL(`../../${relativePath}`, import.meta.url), 'utf8')
 
 function fakeDefinition(effect: DynamicBackgroundEffect) {
   const background: DynamicBackground = {
@@ -29,6 +33,16 @@ function fakeDefinition(effect: DynamicBackgroundEffect) {
 }
 
 describe('dynamic background registry', () => {
+  it('keeps Three.js behind the StageCanvas lazy boundary without a second stage request', () => {
+    const appSource = projectFile('src/renderer/src/App.tsx')
+    const stageCanvasSource = projectFile('src/renderer/src/visual/StageCanvas.tsx')
+
+    expect(appSource).toContain("from './visual/backgrounds/dynamic'")
+    expect(appSource).not.toContain("from './visual/backgrounds'")
+    expect(stageCanvasSource).toContain("import { VisualStage } from './stage'")
+    expect(stageCanvasSource).not.toContain("import('./stage')")
+  })
+
   it('exposes Light Rays, HTML Light and Galaxy and rejects removed persisted values', () => {
     expect(DYNAMIC_BACKGROUND_DEFINITIONS.map(({ effect }) => effect)).toEqual([
       'light-rays',

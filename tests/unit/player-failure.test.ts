@@ -8,14 +8,12 @@ import { makeSong } from '../helpers/song'
 
 const mocks = vi.hoisted(() => ({
   resolvePlayback: vi.fn(),
-  search: vi.fn(),
   showToast: vi.fn(),
 }))
 
 vi.mock('@renderer/api', () => ({
   musicClient: {
     resolvePlayback: mocks.resolvePlayback,
-    search: mocks.search,
   },
   musicErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error && error.message ? error.message : fallback,
@@ -85,7 +83,7 @@ function unavailable(provider: ProviderId, message = '版权受限'): PlaybackRe
     restriction: {
       provider,
       category: 'copyright_unavailable',
-      action: 'switch_source',
+      action: 'none',
       message,
     },
   }
@@ -100,7 +98,6 @@ beforeEach(async () => {
   vi.stubGlobal('Audio', FakeAudio)
   FakeAudio.playScript = () => Promise.resolve()
   mocks.resolvePlayback.mockReset()
-  mocks.search.mockReset()
   mocks.showToast.mockReset()
   resolvePlayback = mocks.resolvePlayback
   ;({ usePlayer } = await import('@renderer/stores/player'))
@@ -115,7 +112,6 @@ describe('PlaybackEngine failure behavior', () => {
 
     expect(resolvePlayback).toHaveBeenCalledOnce()
     expect(resolvePlayback).toHaveBeenCalledWith({ song: current, quality: 'hires' })
-    expect(mocks.search).not.toHaveBeenCalled()
     expect(mocks.showToast).not.toHaveBeenCalled()
     expect(usePlayer.getState()).toMatchObject({
       current,
@@ -126,7 +122,7 @@ describe('PlaybackEngine failure behavior', () => {
 
   it('routes automatic quality downgrade feedback through the shared Toast', async () => {
     const current = song(1, 'netease')
-    resolvePlayback.mockResolvedValue(playable('netease', 'standard-fallback', 'standard'))
+    resolvePlayback.mockResolvedValue(playable('netease', 'standard-source', 'standard'))
 
     await usePlayer.getState().setQueue([current], 0)
 
@@ -137,7 +133,7 @@ describe('PlaybackEngine failure behavior', () => {
     })
   })
 
-  it('does not retry quality, search another provider, replace context, or skip after resolve failure', async () => {
+  it('keeps the queue context and reports a resolve failure', async () => {
     const current = song(1, 'qq')
     const nextSong = song(2, 'qq')
     const queue = [current, nextSong]
@@ -147,7 +143,6 @@ describe('PlaybackEngine failure behavior', () => {
 
     expect(resolvePlayback).toHaveBeenCalledOnce()
     expect(resolvePlayback).toHaveBeenCalledWith({ song: current, quality: 'hires' })
-    expect(mocks.search).not.toHaveBeenCalled()
     expect(usePlayer.getState().queue).toEqual(queue)
     expect(usePlayer.getState()).toMatchObject({
       index: 0,
@@ -163,7 +158,7 @@ describe('PlaybackEngine failure behavior', () => {
     })
   })
 
-  it('does not retry or advance after the media element rejects playback', async () => {
+  it('reports a media element rejection without advancing the queue', async () => {
     const current = song(1, 'qq')
     const nextSong = song(2, 'qq')
     resolvePlayback.mockResolvedValue(playable('qq', 'media-hires'))
@@ -172,7 +167,6 @@ describe('PlaybackEngine failure behavior', () => {
     await usePlayer.getState().setQueue([current, nextSong], 0)
 
     expect(resolvePlayback).toHaveBeenCalledOnce()
-    expect(mocks.search).not.toHaveBeenCalled()
     expect(usePlayer.getState()).toMatchObject({
       index: 0,
       current,

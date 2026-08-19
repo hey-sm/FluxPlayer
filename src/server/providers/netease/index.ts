@@ -43,7 +43,7 @@ const EMPTY_LOGIN: NeteaseLoginInfo = {
 function playbackRestriction(
   category: PlaybackRestriction['category'],
   message: string,
-  action: string,
+  action: PlaybackRestriction['action'],
   extra?: Record<string, unknown>,
 ): PlaybackRestriction {
   return { provider: 'netease', category, action, message, ...(extra ?? {}) }
@@ -84,7 +84,7 @@ export function classifyNeteasePlaybackRestriction(
     })
   }
   if (code === 404 || code === 403) {
-    return playbackRestriction('copyright_unavailable', '网易云版权暂不可播，请稍后重试', 'switch_source', {
+    return playbackRestriction('copyright_unavailable', '网易云版权暂不可播，请稍后重试', 'none', {
       code,
       fee,
     })
@@ -92,7 +92,7 @@ export function classifyNeteasePlaybackRestriction(
   return playbackRestriction(
     'url_unavailable',
     '网易云没有返回可播放地址，可能是版权、会员或地区限制',
-    loggedIn ? 'switch_source' : 'login',
+    loggedIn ? 'retry' : 'login',
     { code, fee },
   )
 }

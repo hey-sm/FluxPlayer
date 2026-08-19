@@ -73,7 +73,7 @@ interface FileCandidate {
 function playbackRestriction(
   category: PlaybackRestriction['category'],
   message: string,
-  action: string,
+  action: PlaybackRestriction['action'],
   extra?: Record<string, unknown>,
 ): PlaybackRestriction {
   return { provider: 'qq', category, action, message, ...(extra ?? {}) }
@@ -104,8 +104,8 @@ export function classifyQQPlaybackRestriction(
   if (code === 104003) {
     return playbackRestriction(
       'copyright_unavailable',
-      'QQ 音乐没有给当前版本返回播放地址，通常是版权、会员或官方版本限制，可以换一个搜索结果或切到网易云源',
-      'switch_source',
+      'QQ 音乐没有给当前版本返回播放地址，通常是版权、会员或官方版本限制',
+      'none',
       { code, rawMessage },
     )
   }
@@ -119,7 +119,7 @@ export function classifyQQPlaybackRestriction(
     return playbackRestriction(
       'copyright_unavailable',
       rawMessage || 'QQ 音乐版权暂不可播或仅官方客户端可播',
-      'switch_source',
+      'none',
       {
         code,
         rawMessage,
@@ -129,7 +129,7 @@ export function classifyQQPlaybackRestriction(
   return playbackRestriction(
     'url_unavailable',
     'QQ 音乐没有返回播放地址，可能受版权、会员或官方客户端限制',
-    'switch_source',
+    'retry',
     {
       code,
       rawMessage,

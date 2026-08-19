@@ -7,24 +7,29 @@ publish:
 directories:
   output: dist
   buildResources: resources
+compression: maximum
+electronLanguages: [zh-CN, zh-TW, en-US]
 files:
   - out/main/**/*
   - out/preload/**/*
   - out/renderer/**/*
   - package.json
+  - LICENSE
+  - THIRD_PARTY_NOTICES.md
   - resources/icon.png
   - '!node_modules/**/*'
-extraResources:
-  - from: resources/native/win-x64
-    to: native/win-x64
-    filter:
-      - FluxPlayer.WallpaperEngine.Helper.exe
-      - FluxPlayer.WallpaperEngine.Helper.exe.sha256
 asar: true
 win:
   executableName: FluxPlayer
   icon: resources/icon.png
-  signAndEditExecutable: false
+  signtoolOptions:
+    signingHashAlgorithms: [sha256]
+  extraResources:
+    - from: resources/native/win-x64
+      to: native/win-x64
+      filter:
+        - FluxPlayer.WallpaperEngine.Helper.exe
+        - FluxPlayer.WallpaperEngine.Helper.exe.sha256
   target:
     - target: nsis
       arch: [x64]
@@ -37,5 +42,32 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: FluxPlayer
   artifactName: FluxPlayer-${version}-Setup.${ext}
+mac:
+  category: public.app-category.music
+  icon: resources/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  notarize: true
+  artifactName: FluxPlayer-${version}-mac-${arch}.${ext}
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+linux:
+  executableName: FluxPlayer
+  icon: resources/icon.png
+  category: AudioVideo
+  maintainer: FluxPlayer maintainers <hey-sm@users.noreply.github.com>
+  synopsis: Immersive desktop music player
+  syncDesktopName: true
+  artifactName: FluxPlayer-${version}-linux-${arch}.${ext}
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
 # 图标：resources/icon.svg 为源，scripts/gen-icons.mjs 生成 icon.png（builder 自动转 ico）
-# 更新 provider 固定为 hey-sm/FluxPlayer；未签名发布须在 release 文档标明 SmartScreen 风险。
+# 更新 provider 固定为 hey-sm/FluxPlayer；签名、公证与发布凭据只从 CI secrets 注入。

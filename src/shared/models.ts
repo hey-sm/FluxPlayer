@@ -52,10 +52,12 @@ export type RestrictionCategory =
   | 'copyright_unavailable'
   | 'url_unavailable'
 
+export type PlaybackRestrictionAction = 'login' | 'upgrade' | 'purchase' | 'retry' | 'none'
+
 export interface PlaybackRestriction {
   provider: ProviderId
   category: RestrictionCategory
-  action: string
+  action: PlaybackRestrictionAction
   message: string
   [key: string]: unknown
 }

@@ -1,10 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import {
-  IPC,
-  type DesktopWindowState,
-  type HotkeyBinding,
-  type HotkeyConfigureResult,
-} from '@shared/ipc-contract'
+import { IPC, type DesktopWindowState } from '@shared/ipc-contract'
 import type { FluxMusicApi } from '@shared/music-contract'
 import type { PerfState } from '@shared/perf-state'
 import type { CustomBackground, CustomBackgroundResult } from '@shared/custom-background-contract'
@@ -51,10 +46,6 @@ const api = {
     bind(IPC.windowStateChanged, callback),
   onPerfState: (callback: (state: PerfState) => void): (() => void) => bind(IPC.perfStateChanged, callback),
   restartApp: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(IPC.restartApp),
-  configureGlobalHotkeys: (bindings: HotkeyBinding[]): Promise<HotkeyConfigureResult> =>
-    ipcRenderer.invoke(IPC.configureGlobalHotkeys, bindings),
-  onGlobalHotkey: (callback: (payload: { action: string }) => void): (() => void) =>
-    bind(IPC.globalHotkey, callback),
   getUpdaterState: (): Promise<UpdaterState> => ipcRenderer.invoke(IPC.updaterGetState),
   checkForUpdates: (): Promise<UpdaterCommandResult> => ipcRenderer.invoke(IPC.updaterCheck),
   downloadUpdate: (): Promise<UpdaterCommandResult> => ipcRenderer.invoke(IPC.updaterDownload),

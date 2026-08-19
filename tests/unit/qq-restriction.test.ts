@@ -14,10 +14,10 @@ describe('classifyQQPlaybackRestriction', () => {
     expect(r.missingPlaybackKey).toBe(true)
   })
 
-  it('有播放票据 + 104003 → copyright_unavailable / switch_source', () => {
+  it('有播放票据 + 104003 → copyright_unavailable / none', () => {
     const r = classifyQQPlaybackRestriction({ code: 104003 }, { hasSession: true, hasPlaybackKey: true })
     expect(r.category).toBe('copyright_unavailable')
-    expect(r.action).toBe('switch_source')
+    expect(r.action).toBe('none')
   })
 
   it('消息命中 vip/付费词 → paid_required', () => {
@@ -41,6 +41,6 @@ describe('classifyQQPlaybackRestriction', () => {
   it('零 code 无消息 → url_unavailable 兜底', () => {
     const r = classifyQQPlaybackRestriction({}, { hasSession: true, hasPlaybackKey: true })
     expect(r.category).toBe('url_unavailable')
-    expect(r.action).toBe('switch_source')
+    expect(r.action).toBe('retry')
   })
 })

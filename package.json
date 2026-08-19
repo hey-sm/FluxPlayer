@@ -4,8 +4,18 @@
   "version": "2.0.0-alpha.1",
   "description": "FluxPlayer — 沉浸式桌面音乐播放器",
   "author": "FluxPlayer",
-  "license": "GPL-3.0",
+  "license": "MIT",
   "private": true,
+  "homepage": "https://github.com/hey-sm/FluxPlayer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hey-sm/FluxPlayer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hey-sm/FluxPlayer/issues"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "desktopName": "FluxPlayer.desktop",
   "main": "out/main/index.mjs",
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -14,6 +24,9 @@
       "electron-winstaller",
       "sharp"
     ],
+    "overrides": {
+      "js-yaml": "4.3.1"
+    },
     "patchedDependencies": {
       "react-glass-ui@1.2.2": "patches/react-glass-ui@1.2.2.patch"
     }
@@ -34,8 +47,11 @@
     "test:e2e": "pnpm build && playwright test",
     "smoke": "node scripts/smoke.mjs",
     "record:fixtures": "node scripts/record-fixtures.mjs",
-    "build:win": "pnpm native:wallpaper && electron-vite build && electron-builder --win nsis",
-    "build:win:dir": "pnpm native:wallpaper && electron-vite build && electron-builder --win dir"
+    "icons:mac": "node scripts/gen-mac-icon.mjs",
+    "build:win": "pnpm build && electron-builder --win",
+    "build:win:dir": "pnpm build && electron-builder --win dir",
+    "build:mac": "pnpm icons:mac && pnpm build && electron-builder --mac",
+    "build:linux": "pnpm build && electron-builder --linux"
   },
   "dependencies": {
     "@gsap/react": "2.1.2",

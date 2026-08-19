@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useThemeStore } from '../theme'
-import type { DynamicBackgroundEffect } from './backgrounds'
+import type { DynamicBackgroundEffect } from './backgrounds/dynamic'
 import type { LyricsAnimationMode } from './lyrics3d-mesh/animation'
-import type { VisualStage } from './stage'
+import { VisualStage } from './stage'
 
 export interface LyricsOffset {
   x: number
@@ -54,12 +54,7 @@ export function StageCanvas({
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
-    let disposed = false
-    let cleanup: (() => void) | undefined
-
-    void import('./stage').then(({ VisualStage: Stage }) => {
-      if (disposed) return
-      const stage = new Stage()
+      const stage = new VisualStage()
       stageRef.current = stage
       stage.setAccentColor(accentColorRef.current)
       stage.mount(container)
@@ -207,7 +202,7 @@ export function StageCanvas({
       }
       window.addEventListener('blur', onBlur)
 
-      cleanup = () => {
+      return () => {
         window.removeEventListener('pointerdown', onPointerDown, true)
         window.removeEventListener('pointermove', onPointerMove, true)
         window.removeEventListener('pointerup', onPointerUp, true)
@@ -219,13 +214,6 @@ export function StageCanvas({
         stage.dispose()
         if (stageRef.current === stage) stageRef.current = null
       }
-      if (disposed) cleanup()
-    })
-
-    return () => {
-      disposed = true
-      cleanup?.()
-    }
   }, [])
 
   useEffect(() => {
