@@ -24,6 +24,7 @@ vi.mock('electron', () => ({
 }))
 
 import {
+  isWallpaperRuntimeSelectionActive,
   normalizeRendererOrigin,
   registerIpcHandlers,
   type IpcDeps,
@@ -73,6 +74,21 @@ beforeEach(() => {
 })
 
 describe('secure Electron IPC', () => {
+  it('keeps a selected Scene active while its verified DWM surface is priming', () => {
+    expect(
+      isWallpaperRuntimeSelectionActive({
+        ok: true,
+        active: false,
+        mode: 'dwm',
+        phase: 'starting',
+        sessionId: 'session',
+        projectId: 'project',
+        glassSamplerAvailable: true,
+        error: '',
+      }),
+    ).toBe(true)
+  })
+
   it('accepts only the primary main frame and parses music input', async () => {
     const state = fixture()
     const handler = electronMock.handlers.get(IPC.musicSearch)

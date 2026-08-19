@@ -87,6 +87,8 @@ const api = {
     ipcRenderer.invoke(IPC.wallpaperEngineRuntimeStatus),
   prepareWallpaperEngineGlassSampler: (sessionId: string): Promise<boolean> =>
     ipcRenderer.invoke(IPC.wallpaperEngineGlassSamplerPrepare, { sessionId }),
+  activateWallpaperEngineDwmSurface: (sessionId: string): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.wallpaperEngineDwmActivate, { sessionId }),
   onWallpaperEngineStateChanged: (callback: (payload: WallpaperEngineState) => void): (() => void) =>
     bind(IPC.wallpaperEngineStateChanged, callback),
   onWallpaperEngineRuntimeChanged: (

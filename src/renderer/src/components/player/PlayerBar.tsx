@@ -129,7 +129,6 @@ export function PlayerBar(): React.JSX.Element | null {
   const syncProgress = usePlayer((state) => state.syncProgress)
   const mode = usePlayer((state) => state.mode)
   const setMode = usePlayer((state) => state.setMode)
-  const retryWithAlternateSource = usePlayer((state) => state.retryWithAlternateSource)
   const qualityPreference = usePlayer((state) => state.qualityPreference)
   const resolvedQuality = usePlayer((state) => state.resolvedQuality)
   const setQualityPreference = usePlayer((state) => state.setQualityPreference)
@@ -259,28 +258,10 @@ export function PlayerBar(): React.JSX.Element | null {
             )}
           >
             <span className="truncate">{playerMessage || '播放失败'}</span>
-            {status === 'error' ? (
-              <button
-                type="button"
-                className="shrink-0 cursor-pointer rounded-full border border-[color-mix(in_srgb,var(--flux-danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--flux-danger)_9%,transparent)] px-[7px] py-px text-[10px] text-[var(--flux-danger)]"
-                onClick={() => void retryWithAlternateSource()}
-              >
-                换源重试
-              </button>
-            ) : null}
           </div>
         ) : null}
       </div>
       <PlayerProgress />
     </div>
   )
-}
-
-export function FallbackNotice(): React.JSX.Element | null {
-  const notice = usePlayer((state) => state.notice)
-  return notice ? (
-    <div className="pointer-events-none fixed right-[18px] bottom-[86px] z-30 max-w-[340px] rounded-[10px] border border-[color-mix(in_srgb,var(--flux-panel-border)_10%,transparent)] bg-[rgba(20,22,34,0.88)] px-3.5 py-2 text-xs leading-normal text-[var(--flux-text-muted)]">
-      {notice}
-    </div>
-  ) : null
 }

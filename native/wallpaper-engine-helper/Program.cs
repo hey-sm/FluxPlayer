@@ -12,6 +12,7 @@ namespace FluxPlayer.WallpaperEngine
 {
     internal static class NativeMethods
     {
+        internal const uint WM_CLOSE = 0x0010;
         internal const uint WM_MOUSEMOVE = 0x0200;
         internal const uint DWM_TNP_RECTDESTINATION = 0x00000001;
         internal const uint DWM_TNP_VISIBLE = 0x00000008;
@@ -207,8 +208,8 @@ namespace FluxPlayer.WallpaperEngine
             options = session;
             Text = "FluxPlayer WE DWM Surface " + options.SessionId;
             FormBorderStyle = FormBorderStyle.None;
-            // WGC only exposes normal top-level windows consistently. DeleteTab
-            // removes the surface before it can become user-facing.
+            // Keep a normal top-level window until Chromium has opened its WGC
+            // stream. Removing the taskbar tab before then can make capture fail.
             ShowInTaskbar = true;
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.Black;
@@ -240,16 +241,9 @@ namespace FluxPlayer.WallpaperEngine
             base.WndProc(ref message);
         }
 
-        protected override void OnHandleCreated(EventArgs eventArgs)
-        {
-            base.OnHandleCreated(eventArgs);
-            HideTaskbar();
-        }
-
         protected override void OnShown(EventArgs eventArgs)
         {
             base.OnShown(eventArgs);
-            HideTaskbar();
             HideTaskbar(options.SourceWindow);
             options.SourceProcessId = ReadProcessId(options.SourceWindow);
             options.SourceWindowClass = ReadWindowClass(options.SourceWindow);
@@ -266,9 +260,6 @@ namespace FluxPlayer.WallpaperEngine
                 null,
                 (uint)options.ParentProcessId,
                 options.HostWindowClass);
-            int result = NativeMethods.DwmRegisterThumbnail(Handle, options.SourceWindow, out thumbnail);
-            if (result != 0 || thumbnail == IntPtr.Zero)
-                throw new InvalidOperationException("WALLPAPER_ENGINE_DWM_REGISTER_FAILED");
             FollowHost(true);
             timer.Start();
             StartCommandReader();
@@ -279,6 +270,19 @@ namespace FluxPlayer.WallpaperEngine
         private void HideTaskbar()
         {
             HideTaskbar(Handle);
+        }
+
+        private void ActivateThumbnail()
+        {
+            if (thumbnail == IntPtr.Zero)
+            {
+                int result = NativeMethods.DwmRegisterThumbnail(Handle, options.SourceWindow, out thumbnail);
+                if (result != 0 || thumbnail == IntPtr.Zero)
+                    throw new InvalidOperationException("WALLPAPER_ENGINE_DWM_REGISTER_FAILED");
+            }
+            FollowHost(true);
+            // WGC is live now, so the helper no longer needs a taskbar entry.
+            HideTaskbar();
         }
 
         private static void HideTaskbar(IntPtr window)
@@ -301,7 +305,31 @@ namespace FluxPlayer.WallpaperEngine
                 NativeMethods.DwmUnregisterThumbnail(thumbnail);
                 thumbnail = IntPtr.Zero;
             }
+            CloseVerifiedSourceWindow();
             base.OnFormClosed(eventArgs);
+        }
+
+        private void CloseVerifiedSourceWindow()
+        {
+            if (options.SourceProcessId == 0 || string.IsNullOrEmpty(options.SourceWindowClass)) return;
+            try
+            {
+                ValidateIdentity(
+                    options.SourceWindow,
+                    options.SourceExecutable,
+                    options.SourceTitle,
+                    options.SourceProcessId,
+                    options.SourceWindowClass);
+                NativeMethods.PostMessageW(
+                    options.SourceWindow,
+                    NativeMethods.WM_CLOSE,
+                    IntPtr.Zero,
+                    IntPtr.Zero);
+            }
+            catch
+            {
+                // Never close a window after its verified identity has changed.
+            }
         }
 
         private void TickSession()
@@ -332,7 +360,11 @@ namespace FluxPlayer.WallpaperEngine
                 consecutiveFailures += 1;
                 if (consecutiveFailures >= 8)
                 {
-                    WriteJson("{\"ok\":false,\"error\":\"" + EscapeJson(error.Message) + "\"}");
+                    try
+                    {
+                        WriteJson("{\"ok\":false,\"error\":\"" + EscapeJson(error.Message) + "\"}");
+                    }
+                    catch { }
                     Close();
                 }
             }
@@ -358,24 +390,48 @@ namespace FluxPlayer.WallpaperEngine
             int height = Math.Max(1, client.Bottom - client.Top);
 
             NativeMethods.ShowWindow(options.SourceWindow, NativeMethods.SW_SHOWNOACTIVATE);
-            NativeMethods.SetWindowPos(
-                options.SourceWindow,
-                Handle,
-                origin.X,
-                origin.Y,
-                width,
-                height,
-                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
-            NativeMethods.SetWindowPos(
-                Handle,
-                options.HostWindow,
-                origin.X,
-                origin.Y,
-                width,
-                height,
-                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+            if (thumbnail != IntPtr.Zero)
+            {
+                NativeMethods.SetWindowPos(
+                    Handle,
+                    options.HostWindow,
+                    origin.X,
+                    origin.Y,
+                    width,
+                    height,
+                    NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+                NativeMethods.SetWindowPos(
+                    options.SourceWindow,
+                    Handle,
+                    origin.X,
+                    origin.Y,
+                    width,
+                    height,
+                    NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+            }
+            else
+            {
+                // Before WGC priming, keep the real Scene above the empty helper
+                // so the user never sees the helper's black client area.
+                NativeMethods.SetWindowPos(
+                    options.SourceWindow,
+                    options.HostWindow,
+                    origin.X,
+                    origin.Y,
+                    width,
+                    height,
+                    NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+                NativeMethods.SetWindowPos(
+                    Handle,
+                    options.SourceWindow,
+                    origin.X,
+                    origin.Y,
+                    width,
+                    height,
+                    NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+            }
 
-            if (force || width != lastWidth || height != lastHeight)
+            if (thumbnail != IntPtr.Zero && (force || width != lastWidth || height != lastHeight))
             {
                 NativeMethods.ThumbnailProperties properties = new NativeMethods.ThumbnailProperties();
                 properties.Flags = NativeMethods.DWM_TNP_RECTDESTINATION |
@@ -448,6 +504,27 @@ namespace FluxPlayer.WallpaperEngine
                         if (command == "Q") break;
                         if (command == "S") suspended = true;
                         if (command == "R") suspended = false;
+                        if (command == "D")
+                        {
+                            try
+                            {
+                                BeginInvoke(new Action(delegate
+                                {
+                                    try
+                                    {
+                                        ActivateThumbnail();
+                                        WriteJson("{\"ok\":true,\"active\":true,\"surfaceWindowHandle\":" +
+                                            Handle.ToInt64() + "}");
+                                    }
+                                    catch (Exception error)
+                                    {
+                                        WriteJson("{\"ok\":false,\"error\":\"" +
+                                            EscapeJson(error.Message) + "\"}");
+                                    }
+                                }));
+                            }
+                            catch { }
+                        }
                     }
                 }
                 catch { }

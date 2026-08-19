@@ -29,6 +29,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog'
 import { cn } from '../../lib/utils'
+import { showToast } from '../../stores/toast'
 
 interface WallpaperPreviewProps {
   project: WallpaperEngineProject
@@ -88,6 +89,14 @@ function projectLabel(project: WallpaperEngineProject, nativeRuntimeAvailable: b
   return '项目 · 不支持播放'
 }
 
+function reportWallpaperError(reason: unknown, fallback: string): void {
+  showToast(reason instanceof Error ? reason.message : fallback, {
+    title: 'Wallpaper Engine 操作失败',
+    tone: 'error',
+    duration: 8000,
+  })
+}
+
 export function WallpaperEngineLibraryDialog({
   selection,
   onSelectionChange,
@@ -102,7 +111,6 @@ export function WallpaperEngineLibraryDialog({
   const [state, setState] = useState<WallpaperEngineState | null>(null)
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const [renderLimit, setRenderLimit] = useState(240)
   const [pendingSelectionId, setPendingSelectionId] = useState('')
   const [filter, setFilter] = useState<'all' | 'dynamic' | 'favorites'>('all')
@@ -160,7 +168,7 @@ export function WallpaperEngineLibraryDialog({
     let cancelled = false
     const desktop = window.fluxDesktop
     if (!desktop) {
-      setError('当前环境不支持 Wallpaper Engine 本地识别')
+      reportWallpaperError(null, '当前环境不支持 Wallpaper Engine 本地识别')
       return
     }
     if (snapshot) return
@@ -171,10 +179,9 @@ export function WallpaperEngineLibraryDialog({
         if (cancelled) return
         commitSnapshot(result)
         setState(result.state)
-        setError('')
       })
       .catch((reason: unknown) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : '扫描失败')
+        if (!cancelled) reportWallpaperError(reason, '扫描失败')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -199,13 +206,12 @@ export function WallpaperEngineLibraryDialog({
     const desktop = window.fluxDesktop
     if (!desktop) return
     setLoading(true)
-    setError('')
     try {
       const nextState = await desktop.setWallpaperEngineState(next)
       setState(nextState)
       onSelectionChange(nextState)
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : '状态更新失败')
+      reportWallpaperError(reason, '状态更新失败')
     } finally {
       setLoading(false)
     }
@@ -236,7 +242,6 @@ export function WallpaperEngineLibraryDialog({
     }
 
     setPendingSelectionId(project.id)
-    setError('')
     setState(optimisticState)
     onSelectionChange(optimisticState)
     try {
@@ -248,7 +253,7 @@ export function WallpaperEngineLibraryDialog({
       if (selectionRequestRef.current !== requestId) return
       setState(previousState)
       onSelectionChange(previousState)
-      setError(reason instanceof Error ? reason.message : '背景应用失败')
+      reportWallpaperError(reason, '背景应用失败')
     } finally {
       if (selectionRequestRef.current === requestId) setPendingSelectionId('')
     }
@@ -258,7 +263,6 @@ export function WallpaperEngineLibraryDialog({
     const desktop = window.fluxDesktop
     if (!desktop) return
     setLoading(true)
-    setError('')
     try {
       const result = await desktop.listWallpaperEngineProjects(true)
       commitSnapshot(result)
@@ -266,7 +270,7 @@ export function WallpaperEngineLibraryDialog({
       onSelectionChange(result.state)
       setRenderLimit(240)
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : '扫描失败')
+      reportWallpaperError(reason, '扫描失败')
     } finally {
       setLoading(false)
     }
@@ -276,7 +280,6 @@ export function WallpaperEngineLibraryDialog({
     const desktop = window.fluxDesktop
     if (!desktop) return
     setLoading(true)
-    setError('')
     try {
       const result = await desktop.chooseWallpaperEngineDirectory()
       if (result.canceled) return
@@ -285,7 +288,7 @@ export function WallpaperEngineLibraryDialog({
       if (result.state) setState(result.state)
       setRenderLimit(240)
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : '目录导入失败')
+      reportWallpaperError(reason, '目录导入失败')
     } finally {
       setLoading(false)
     }
@@ -295,7 +298,6 @@ export function WallpaperEngineLibraryDialog({
     const desktop = window.fluxDesktop
     if (!desktop) return
     setLoading(true)
-    setError('')
     try {
       const result = await desktop.chooseWallpaperEngineProjectFile()
       if (result.canceled) return
@@ -304,7 +306,7 @@ export function WallpaperEngineLibraryDialog({
       if (result.state) setState(result.state)
       setRenderLimit(240)
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : '项目导入失败')
+      reportWallpaperError(reason, '项目导入失败')
     } finally {
       setLoading(false)
     }
@@ -314,7 +316,6 @@ export function WallpaperEngineLibraryDialog({
     const desktop = window.fluxDesktop
     if (!desktop) return
     setLoading(true)
-    setError('')
     try {
       const result = await desktop.removeWallpaperEngineDirectory(id)
       if (!result.ok || !result.snapshot) throw new Error(result.error || '移除目录失败')
@@ -324,7 +325,7 @@ export function WallpaperEngineLibraryDialog({
         onSelectionChange(result.state)
       }
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : '移除目录失败')
+      reportWallpaperError(reason, '移除目录失败')
     } finally {
       setLoading(false)
     }
@@ -524,11 +525,6 @@ export function WallpaperEngineLibraryDialog({
                       </button>
                     </span>
                   ))}
-                </div>
-              ) : null}
-              {error ? (
-                <div className="rounded-lg border border-[color-mix(in_srgb,var(--flux-danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--flux-danger)_8%,transparent)] px-3 py-2 text-[11px] text-[var(--flux-danger)]">
-                  {error}
                 </div>
               ) : null}
               <div

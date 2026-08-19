@@ -3,6 +3,7 @@ import type { MusicAuthResult } from '@shared/music-contract'
 import { musicClient } from '@renderer/api'
 import { createQQPollingController, QQ_AUTH_POLL_INTERVAL_MS } from '@renderer/auth/qq-polling'
 import { useAuth } from '@renderer/stores/auth'
+import { useToast } from '@renderer/stores/toast'
 
 const musicClientMock = vi.hoisted(() => ({
   getAuthStatus: vi.fn(),
@@ -27,11 +28,11 @@ beforeEach(() => {
   musicClientMock.getAuthStatus.mockReset()
   musicClientMock.login.mockReset()
   musicClientMock.logout.mockReset().mockResolvedValue(undefined)
+  useToast.getState().clear()
   useAuth.getState().stopQQPolling()
   useAuth.setState({
     qq: null,
     qqBusy: false,
-    message: '',
   })
 })
 
@@ -72,6 +73,24 @@ describe('QQ auth polling through the typed music client', () => {
     await vi.advanceTimersByTimeAsync(QQ_AUTH_POLL_INTERVAL_MS)
     expect(musicClient.getAuthStatus).toHaveBeenCalledOnce()
     expect(musicClient.getAuthStatus).toHaveBeenCalledWith('qq')
+  })
+
+  it('routes incomplete QQ authorization through the shared Toast', async () => {
+    musicClientMock.login.mockResolvedValue({
+      ...qqStatus(true),
+      partial: true,
+      playbackKeyReady: false,
+    })
+
+    await useAuth.getState().loginQQ()
+
+    expect(useToast.getState().items).toEqual([
+      expect.objectContaining({
+        title: 'QQ 音乐授权提示',
+        message: '播放授权不完整，部分歌曲可能无法播放',
+        tone: 'warning',
+      }),
+    ])
   })
 
   it('does not start while QQ is logged out', async () => {

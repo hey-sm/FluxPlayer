@@ -6,7 +6,7 @@ import { IPC } from '@shared/ipc-contract'
 import { DEFAULT_UPDATER_STATE, type UpdaterState } from '@shared/updater-contract'
 import { SafeCredentialStore } from './credentials'
 import { createElectronUpdaterAdapter, UpdaterController } from './updater'
-import { registerIpcHandlers, unregisterGlobalHotkeys } from './ipc'
+import { isWallpaperRuntimeSelectionActive, registerIpcHandlers, unregisterGlobalHotkeys } from './ipc'
 import { PerfGovernor } from './perf-governor'
 import { createMainWindow, didWindowLoad, focusMainWindow, getWindowState } from './windows/main-window'
 import { CustomBackgroundService } from './background/custom-background'
@@ -250,7 +250,7 @@ async function resumeWallpaperEngineSelection(): Promise<void> {
     ) {
       return
     }
-    const next = status.active
+    const next = isWallpaperRuntimeSelectionActive(status)
       ? store.setSelection({ ...selection, active: true, runtimeError: '' })
       : store.deactivateSelection(selection.id, status.error || 'WALLPAPER_ENGINE_RUNTIME_UNAVAILABLE')
     mainWindow?.webContents.send(IPC.wallpaperEngineStateChanged, next)

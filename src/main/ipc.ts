@@ -30,6 +30,7 @@ import {
 } from '@shared/music-schema'
 import type { ProviderId } from '@shared/models'
 import type { UpdaterCommandResult, UpdaterState } from '@shared/updater-contract'
+import type { WallpaperEngineRuntimeStatus } from '@shared/wallpaper-engine-contract'
 import type { WallpaperEngineLibrary } from './background/wallpaper-engine-library'
 import type { WallpaperEngineStore } from './background/wallpaper-engine-store'
 import type { WallpaperEngineRuntime } from './background/wallpaper-engine-runtime'
@@ -63,6 +64,10 @@ const wallpaperEngineStateSchema = z.object({
 const wallpaperEngineGlassSamplerSchema = z.object({
   sessionId: z.string().check(z.minLength(1), z.maxLength(96)),
 })
+
+export function isWallpaperRuntimeSelectionActive(status: WallpaperEngineRuntimeStatus): boolean {
+  return status.active || (status.ok && status.mode === 'dwm' && status.phase === 'starting')
+}
 
 export interface MainPlaybackResolution extends Omit<PlaybackResolveResult, 'url'> {
   /** Upstream URL. It exists only in main and is exchanged for an opaque flux-media handle. */
@@ -400,10 +405,11 @@ export function registerIpcHandlers(deps: IpcDeps): void {
       const selection = await deps.getWallpaperEngineLibrary().resolveSelection(id)
       const project = await deps.getWallpaperEngineLibrary().getProject(id)
       const runtime = await deps.getWallpaperEngineRuntime().activate(project, selection)
+      const selectionActive = isWallpaperRuntimeSelectionActive(runtime)
       state =
         runtime.projectId !== project.id
           ? store.get()
-          : store.setSelection({ ...selection, active: runtime.active, runtimeError: runtime.error })
+          : store.setSelection({ ...selection, active: selectionActive, runtimeError: runtime.error })
     } else if (request.action === 'clear') {
       await deps.getWallpaperEngineRuntime().stop()
       state = store.clearSelection()
@@ -426,6 +432,9 @@ export function registerIpcHandlers(deps: IpcDeps): void {
     wallpaperEngineGlassSamplerSchema,
     deps,
     ({ sessionId }) => deps.getWallpaperEngineRuntime().prepareGlassSampler(sessionId),
+  )
+  secureHandle(IPC.wallpaperEngineDwmActivate, wallpaperEngineGlassSamplerSchema, deps, ({ sessionId }) =>
+    deps.getWallpaperEngineRuntime().activateDwmSurface(sessionId),
   )
 }
 

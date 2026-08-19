@@ -24,7 +24,5 @@ export function restrictionMessage(song: UnifiedSong, data: PlaybackFailure | nu
     else message = data?.error || `${provider}没有返回可播放地址`
   }
   if (category === 'login_required') return `${message} · 请在右上角完成登录`
-  if (category === 'copyright_unavailable' || category === 'url_unavailable')
-    return `${message} · 可以试试另一个平台版本`
   return message
 }

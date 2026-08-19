@@ -50,6 +50,7 @@ export interface WallpaperEngineRuntimeAdapter {
   resume?(): Promise<void>
   refreshBounds?(): Promise<void>
   takeGlassSamplerSource?(sessionId: string): Promise<WallpaperEngineCaptureSource | null>
+  activateSurface?(sessionId: string): Promise<void>
 }
 
 export interface WallpaperEngineRuntimeOptions {
@@ -299,6 +300,9 @@ interface DwmSession {
   source: WallpaperEngineCaptureSource
   helper: ChildProcessWithoutNullStreams
   surfaceTitle: string
+  surfaceWindowHandle: string
+  surfaceActive: boolean
+  activationPromise: Promise<void> | null
   samplerConsumed: boolean
   muteTimers: NodeJS.Timeout[]
 }
@@ -354,6 +358,7 @@ export class DwmRuntimeAdapter implements WallpaperEngineRuntimeAdapter {
       options.helperSpawn ??
       ((executable) =>
         spawn(executable, [], {
+          detached: true,
           windowsHide: true,
           stdio: ['pipe', 'pipe', 'pipe'],
         }) as ChildProcessWithoutNullStreams)
@@ -460,6 +465,9 @@ export class DwmRuntimeAdapter implements WallpaperEngineRuntimeAdapter {
         source,
         helper,
         surfaceTitle: ready.surfaceTitle,
+        surfaceWindowHandle: ready.surfaceWindowHandle,
+        surfaceActive: false,
+        activationPromise: null,
         samplerConsumed: false,
         muteTimers: [],
       }
@@ -488,7 +496,7 @@ export class DwmRuntimeAdapter implements WallpaperEngineRuntimeAdapter {
       sourceExecutable: string
       host: WallpaperEngineHostDescriptor
     },
-  ): Promise<{ surfaceTitle: string }> {
+  ): Promise<{ surfaceTitle: string; surfaceWindowHandle: string }> {
     const command = [
       'START',
       encodeField(input.sessionId),
@@ -503,7 +511,7 @@ export class DwmRuntimeAdapter implements WallpaperEngineRuntimeAdapter {
       let stdout = ''
       let stderr = ''
       let settled = false
-      const finish = (error?: Error, value?: { surfaceTitle: string }) => {
+      const finish = (error?: Error, value?: { surfaceTitle: string; surfaceWindowHandle: string }) => {
         if (settled) return
         settled = true
         clearTimeout(timeout)
@@ -512,16 +520,21 @@ export class DwmRuntimeAdapter implements WallpaperEngineRuntimeAdapter {
         helper.removeListener('error', onError)
         helper.removeListener('exit', onExit)
         if (error) reject(error)
-        else resolve(value ?? { surfaceTitle: '' })
+        else resolve(value ?? { surfaceTitle: '', surfaceWindowHandle: '' })
       }
       const onStdout = (chunk: Buffer | string) => {
         stdout = `${stdout}${String(chunk)}`.slice(-16_384)
         for (const line of stdout.split(/\r?\n/)) {
           if (!line.trim().startsWith('{')) continue
           try {
-            const result = JSON.parse(line) as { ready?: boolean; surfaceTitle?: string }
-            if (result.ready && result.surfaceTitle) {
-              finish(undefined, { surfaceTitle: result.surfaceTitle })
+            const result = JSON.parse(line) as {
+              ready?: boolean
+              surfaceTitle?: string
+              surfaceWindowHandle?: number | string
+            }
+            const surfaceWindowHandle = String(result.surfaceWindowHandle ?? '')
+            if (result.ready && result.surfaceTitle && /^\d+$/.test(surfaceWindowHandle)) {
+              finish(undefined, { surfaceTitle: result.surfaceTitle, surfaceWindowHandle })
               return
             }
           } catch {
@@ -542,6 +555,78 @@ export class DwmRuntimeAdapter implements WallpaperEngineRuntimeAdapter {
       helper.once('exit', onExit)
       helper.stdin.write(`${command}\n`)
     })
+  }
+
+  async activateSurface(sessionId: string): Promise<void> {
+    const session = this.active
+    if (!session || session.sessionId !== sessionId) {
+      throw runtimeError('WALLPAPER_ENGINE_SESSION_MISMATCH')
+    }
+    if (session.surfaceActive) return
+    if (session.activationPromise) return session.activationPromise
+    const operation = new Promise<void>((resolve, reject) => {
+      const helper = session.helper
+      let stdout = ''
+      let settled = false
+      const finish = (error?: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        helper.stdout.removeListener('data', onStdout)
+        helper.removeListener('error', onError)
+        helper.removeListener('exit', onExit)
+        if (error) reject(error)
+        else resolve()
+      }
+      const onStdout = (chunk: Buffer | string) => {
+        stdout = `${stdout}${String(chunk)}`.slice(-8192)
+        const lines = stdout.split(/\r?\n/)
+        stdout = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.trim().startsWith('{')) continue
+          try {
+            const result = JSON.parse(line) as {
+              ok?: boolean
+              active?: boolean
+              surfaceWindowHandle?: number | string
+              error?: string
+            }
+            if (result.ok === false) {
+              finish(runtimeError(safeRuntimeError(result.error, 'WALLPAPER_ENGINE_DWM_ACTIVATE_FAILED')))
+              return
+            }
+            if (
+              result.ok === true &&
+              result.active === true &&
+              String(result.surfaceWindowHandle ?? '') === session.surfaceWindowHandle
+            ) {
+              session.surfaceActive = true
+              finish()
+              return
+            }
+          } catch {
+            // Wait for the next complete helper response.
+          }
+        }
+      }
+      const onError = () => finish(runtimeError('WALLPAPER_ENGINE_DWM_HELPER_START_FAILED'))
+      const onExit = () => finish(runtimeError('WALLPAPER_ENGINE_DWM_HELPER_EXITED'))
+      const timeout = setTimeout(() => finish(runtimeError('WALLPAPER_ENGINE_DWM_ACTIVATE_TIMEOUT')), 2500)
+      helper.stdout.on('data', onStdout)
+      helper.once('error', onError)
+      helper.once('exit', onExit)
+      if (!helper.stdin.writable) {
+        finish(runtimeError('WALLPAPER_ENGINE_DWM_HELPER_EXITED'))
+        return
+      }
+      helper.stdin.write('D\n')
+    })
+    session.activationPromise = operation
+    try {
+      await operation
+    } finally {
+      if (session.activationPromise === operation) session.activationPromise = null
+    }
   }
 
   private async applyProperties(
@@ -713,19 +798,23 @@ export class WallpaperEngineRuntime {
           return this.getStatus()
         }
         this.activeAdapter = adapter
+        const awaitingDwmActivation = adapter.mode === 'dwm' && Boolean(adapter.activateSurface)
         this.setStatus({
           ok: true,
-          active: true,
+          active: !awaitingDwmActivation,
           mode: adapter.mode,
-          phase: 'active',
+          phase: awaitingDwmActivation ? 'starting' : 'active',
           sessionId,
           projectId: project.id,
-          glassSamplerAvailable: adapter.mode === 'dwm',
+          glassSamplerAvailable: awaitingDwmActivation,
           error: '',
         })
         return this.getStatus()
       } catch (error) {
         lastError = safeRuntimeError(error)
+        if (lastError === 'WALLPAPER_ENGINE_RUNTIME_UNAVAILABLE') {
+          console.error(`[Wallpaper Engine] ${adapter.mode} activation failed`, error)
+        }
       }
     }
     this.setStatus({
@@ -779,11 +868,33 @@ export class WallpaperEngineRuntime {
     if (
       !this.activeAdapter ||
       this.status.mode !== 'dwm' ||
-      this.status.phase !== 'active' ||
+      (this.status.phase !== 'starting' && this.status.phase !== 'active') ||
       this.status.sessionId !== sessionId
     )
       return null
     return this.activeAdapter.takeGlassSamplerSource?.(sessionId) ?? null
+  }
+
+  async activateDwmSurface(sessionId: string): Promise<boolean> {
+    const adapter = this.activeAdapter
+    if (!adapter || this.status.mode !== 'dwm' || this.status.sessionId !== sessionId) return false
+    if (this.status.active && this.status.phase === 'active') return true
+    const activateSurface = adapter.activateSurface
+    if (this.status.phase !== 'starting' || !activateSurface) return false
+    try {
+      await activateSurface.call(adapter, sessionId)
+      if (
+        this.activeAdapter !== adapter ||
+        this.status.sessionId !== sessionId ||
+        this.status.phase !== 'starting'
+      )
+        return false
+      this.setStatus({ ...this.status, active: true, phase: 'active' })
+      return true
+    } catch (error) {
+      await this.failSession(sessionId, safeRuntimeError(error, 'WALLPAPER_ENGINE_DWM_ACTIVATE_FAILED'))
+      return false
+    }
   }
 
   async prepareGlassSampler(sessionId: string): Promise<boolean> {

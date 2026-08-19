@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_GLASS_CONFIG,
   glassConfigToCssVariables,
+  glassConfigToSurfaceCssVariables,
   normalizeGlassColor,
   normalizeGlassConfig,
   patchGlassConfig,
+  resolveGlassSurfaceConfig,
 } from '@renderer/components/glass/config'
 import {
   GLASS_PERSISTENCE_KEY,
@@ -37,21 +39,21 @@ describe('global liquid glass config', () => {
   it('locks the complete approved default and interaction values', () => {
     expect(DEFAULT_GLASS_CONFIG).toEqual({
       blur: 10,
-      distortion: 40,
+      distortion: 50,
       flexibility: 0,
       borderColor: '#ffffff',
       borderSize: 1,
-      borderRadius: 30,
+      borderRadius: 20,
       borderOpacity: 0,
       backgroundColor: '#000000ff',
       backgroundOpacity: 0,
       innerLightColor: '#ffffff',
-      innerLightSpread: 1,
-      innerLightBlur: 10,
-      innerLightOpacity: 0,
+      innerLightSpread: 0,
+      innerLightBlur: 8,
+      innerLightOpacity: 0.3,
       outerLightColor: '#ffffff',
-      outerLightSpread: 1,
-      outerLightBlur: 10,
+      outerLightSpread: 0,
+      outerLightBlur: 0,
       outerLightOpacity: 0,
       color: '#ffffff',
       chromaticAberration: 0,
@@ -89,16 +91,38 @@ describe('global liquid glass config', () => {
 
   it('uses a versioned envelope and survives partial persisted damage', () => {
     expect(deserializeGlassConfig('{bad-json')).toBeNull()
-    expect(deserializeGlassConfig(JSON.stringify({ version: 3, config: {} }))).toBeNull()
+    expect(deserializeGlassConfig(JSON.stringify({ version: 4, config: {} }))).toBeNull()
     const restored = deserializeGlassConfig(
-      JSON.stringify({ version: 2, config: { blur: 19, borderOpacity: -2, color: '#11223344' } }),
+      JSON.stringify({ version: 3, config: { blur: 19, borderOpacity: -2, color: '#11223344' } }),
     )
     expect(restored).toMatchObject({
       blur: 19,
       borderOpacity: DEFAULT_GLASS_CONFIG.borderOpacity,
       color: '#11223344',
     })
-    expect(JSON.parse(serializeGlassConfig(restored!))).toMatchObject({ version: 2, config: restored })
+    expect(JSON.parse(serializeGlassConfig(restored!))).toMatchObject({ version: 3, config: restored })
+  })
+
+  it('migrates the untouched V2 defaults while preserving customized V2 values', () => {
+    const previousDefaults = {
+      ...DEFAULT_GLASS_CONFIG,
+      distortion: 40,
+      borderRadius: 30,
+      innerLightSpread: 1,
+      innerLightBlur: 10,
+      innerLightOpacity: 0,
+      outerLightSpread: 1,
+      outerLightBlur: 10,
+    }
+
+    expect(deserializeGlassConfig(JSON.stringify({ version: 2, config: previousDefaults }))).toEqual(
+      DEFAULT_GLASS_CONFIG,
+    )
+    expect(
+      deserializeGlassConfig(
+        JSON.stringify({ version: 2, config: { ...previousDefaults, brightness: 124 } }),
+      ),
+    ).toMatchObject({ brightness: 124, distortion: 40, borderRadius: 30 })
   })
 
   it('migrates legacy defaults to the new global blur and border opacity', () => {
@@ -120,13 +144,30 @@ describe('global liquid glass config', () => {
   it('exports every lightweight CSS variable from the same config', () => {
     expect(glassConfigToCssVariables(DEFAULT_GLASS_CONFIG)).toMatchObject({
       '--flux-glass-blur': '10px',
-      '--flux-glass-distortion': '40',
+      '--flux-glass-distortion': '50',
       '--flux-glass-background-color': '#000000ff',
-      '--flux-glass-radius': '30px',
+      '--flux-glass-radius': '20px',
       '--flux-glass-saturation': '100%',
       '--flux-glass-brightness': '100%',
       '--flux-glass-border-opacity': '0',
     })
+  })
+
+  it('keeps local Surface overrides scoped and derives their aliases locally', () => {
+    const local = resolveGlassSurfaceConfig(DEFAULT_GLASS_CONFIG, { borderRadius: 999, blur: 24 })
+    const variables = glassConfigToSurfaceCssVariables(local)
+
+    expect(local).toMatchObject({ borderRadius: 999, blur: 24 })
+    expect(DEFAULT_GLASS_CONFIG).toMatchObject({ borderRadius: 20, blur: 10 })
+    expect(variables).toMatchObject({
+      '--flux-glass-radius': '999px',
+      '--flux-glass-blur': '24px',
+      '--flux-glass-background': expect.stringContaining('#000000ff'),
+      '--flux-glass-border': expect.stringContaining('#ffffff'),
+      '--flux-radius-shell': '999px',
+      '--flux-text': '#ffffff',
+    })
+    expect(glassConfigToCssVariables(DEFAULT_GLASS_CONFIG)).not.toHaveProperty('--flux-glass-background')
   })
 })
 
@@ -158,7 +199,7 @@ describe('global liquid glass store', () => {
     store.getState().commitConfig({ brightness: 120 })
     expect(storage.writes).toBe(1)
     expect(JSON.parse(storage.values.get(GLASS_PERSISTENCE_KEY)!)).toMatchObject({
-      version: 2,
+      version: 3,
       config: { blur: 11, distortion: 70, brightness: 120 },
     })
   })
@@ -200,7 +241,7 @@ describe('global liquid glass store', () => {
 
     expect(store.getState().config).toMatchObject({ blur: 10, borderOpacity: 0, distortion: 64 })
     expect(JSON.parse(storage.values.get(GLASS_PERSISTENCE_KEY)!)).toMatchObject({
-      version: 2,
+      version: 3,
       config: { blur: 10, borderOpacity: 0, distortion: 64 },
     })
   })

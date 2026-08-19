@@ -84,15 +84,10 @@ export function classifyNeteasePlaybackRestriction(
     })
   }
   if (code === 404 || code === 403) {
-    return playbackRestriction(
-      'copyright_unavailable',
-      '网易云版权暂不可播，换源或稍后重试会更稳',
-      'switch_source',
-      {
-        code,
-        fee,
-      },
-    )
+    return playbackRestriction('copyright_unavailable', '网易云版权暂不可播，请稍后重试', 'switch_source', {
+      code,
+      fee,
+    })
   }
   return playbackRestriction(
     'url_unavailable',
@@ -255,6 +250,7 @@ function toAuthResult(info: NeteaseLoginInfo): MusicAuthResult {
   return {
     provider: 'netease',
     loggedIn: info.loggedIn,
+    credentialInvalidated: info.credentialInvalidated,
     userId: info.userId,
     nickname: info.nickname,
     avatar: info.avatar,
@@ -304,6 +300,10 @@ export class NeteaseProvider {
       const data = asRecord(body.data ?? body)
       const info = normalizeLoginInfo(data.profile ?? body.profile, data.account ?? body.account, data)
       if (info.loggedIn) return info
+      if (isAuthInvalidPayload(status)) {
+        this.saveCookie('')
+        return { ...EMPTY_LOGIN, hasCookie: false, credentialInvalidated: true }
+      }
     } catch (error) {
       console.warn('[NeteaseAuth] login_status failed:', errorMessage(error))
     }
@@ -313,7 +313,10 @@ export class NeteaseProvider {
       const body = asRecord(account.body)
       const info = normalizeLoginInfo(body.profile, body.account, body)
       if (info.loggedIn) return info
-      if (isAuthInvalidPayload(account)) this.saveCookie('')
+      if (isAuthInvalidPayload(account)) {
+        this.saveCookie('')
+        return { ...EMPTY_LOGIN, hasCookie: false, credentialInvalidated: true }
+      }
       return { ...EMPTY_LOGIN, hasCookie: Boolean(this.cookie) }
     } catch (error) {
       console.warn('[NeteaseAuth] user_account failed:', errorMessage(error))

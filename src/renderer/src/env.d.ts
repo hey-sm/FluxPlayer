@@ -50,6 +50,7 @@ interface FluxDesktopApi {
     import('@shared/wallpaper-engine-contract').WallpaperEngineRuntimeStatus
   >
   prepareWallpaperEngineGlassSampler(sessionId: string): Promise<boolean>
+  activateWallpaperEngineDwmSurface(sessionId: string): Promise<boolean>
   onWallpaperEngineStateChanged(
     callback: (payload: import('@shared/wallpaper-engine-contract').WallpaperEngineState) => void,
   ): () => void

@@ -78,6 +78,8 @@ export type LyricDocument = LyricDoc
 export interface MusicAuthResult {
   provider: ProviderId
   loggedIn: boolean
+  /** The provider explicitly rejected a credential that existed before this check. */
+  credentialInvalidated?: boolean
   preview?: boolean
   userId?: number | string
   nickname?: string

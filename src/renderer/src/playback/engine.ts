@@ -7,18 +7,10 @@ import {
   updatePlaybackState,
   updatePositionState,
 } from '../media/mediasession'
-import { PLAYBACK_FAIL_BLOCK_MS, markPlaybackFailed, nextPlayableIndex, songFailKey } from './blacklist'
-import { alternateProvider, alternateSearchRequest, pickAlternateSong } from './match'
 import { musicClient, musicErrorMessage } from '../api'
-import {
-  DEFAULT_QUALITY,
-  applyQQQualityCeiling,
-  isQualityDowngrade,
-  nextQQRetryQuality,
-  qqCeilingFromResolved,
-  qualityLabel,
-} from './quality'
-import { providerLabel, restrictionCategory, restrictionMessage } from './restriction'
+import { showToast } from '../stores/toast'
+import { DEFAULT_QUALITY, isQualityDowngrade, qualityLabel } from './quality'
+import { restrictionMessage } from './restriction'
 
 export type PlayStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error'
 export type PlaybackMode = 'sequence' | 'repeat-one' | 'shuffle'
@@ -30,7 +22,6 @@ export interface PlaybackViewState {
   current: UnifiedSong | null
   status: PlayStatus
   message: string
-  notice: string
   duration: number
   position: number
   volume: number
@@ -52,11 +43,7 @@ interface StatePort {
 }
 
 interface LoadOptions {
-  manual?: boolean
   qualityOverride?: QualityLevel
-  qualityTried?: QualityLevel[]
-  fallbackDepth?: number
-  disableAlternateRetry?: boolean
 }
 
 const DEFAULT_VOLUME = 0.8
@@ -64,7 +51,6 @@ const VOLUME_STORAGE_KEY = 'fluxplayer-volume-v1'
 const QUALITY_STORAGE_KEY = 'fluxplayer-quality-v1'
 const TRIAL_LIMIT_SECONDS = 30
 const MEDIA_LOAD_TIMEOUT_MS = 20_000
-const NETEASE_QUALITY_ORDER: readonly QualityLevel[] = ['jymaster', 'hires', 'lossless', 'exhigh', 'standard']
 
 function browserStorage(): Storage | null {
   if (typeof window === 'undefined') return null
@@ -110,21 +96,6 @@ function isOpaqueAudioUrl(url: string | null): url is string {
   return typeof url === 'string' && url.startsWith('flux-media://audio/')
 }
 
-function nextNeteaseQuality(
-  requested: QualityLevel,
-  resolvedLevel: unknown,
-  tried: ReadonlySet<QualityLevel>,
-): QualityLevel | null {
-  const resolved = String(resolvedLevel || '').toLowerCase() as QualityLevel
-  const anchor = NETEASE_QUALITY_ORDER.includes(resolved) ? resolved : requested
-  const start = Math.max(0, NETEASE_QUALITY_ORDER.indexOf(anchor))
-  for (let index = start + 1; index < NETEASE_QUALITY_ORDER.length; index += 1) {
-    const candidate = NETEASE_QUALITY_ORDER[index]
-    if (!tried.has(candidate)) return candidate
-  }
-  return null
-}
-
 /**
  * Owns the single HTMLAudio element and every asynchronous playback transition.
  * Zustand is connected only as an observable UI projection and user-action facade.
@@ -136,9 +107,6 @@ export class PlaybackEngine {
 
   private port: StatePort | null = null
   private loadGeneration = 0
-  private qqQualityCeiling: QualityLevel | null = null
-  private readonly failBlacklist = new Map<string, number>()
-  private noticeTimer: ReturnType<typeof setTimeout> | null = null
   private lastPositionSecondPushed = -1
   private lastDurationPushed = -1
   private lastUiProgressSecond = -1
@@ -194,7 +162,6 @@ export class PlaybackEngine {
         current: null,
         status: 'idle',
         message: '',
-        notice: '',
         duration: 0,
         position: 0,
         resolvedQuality: null,
@@ -207,9 +174,9 @@ export class PlaybackEngine {
 
     const requestedIndex = Number.isFinite(startIndex) ? Math.trunc(startIndex) : 0
     const index = Math.max(0, Math.min(requestedIndex, queue.length - 1))
-    this.patch({ queue, notice: '' })
+    this.patch({ queue })
     this.resetShuffle(queue.length, index)
-    await this.loadIndex(index, { manual: true })
+    await this.loadIndex(index)
   }
 
   setMode(mode: PlaybackMode): void {
@@ -227,59 +194,12 @@ export class PlaybackEngine {
     if (!state.current || state.index < 0) return
     const resumeAt = this.progress().position
     const remainPaused = state.status === 'paused'
-    await this.loadIndex(state.index, { manual: true, qualityOverride: qualityPreference })
+    await this.loadIndex(state.index, { qualityOverride: qualityPreference })
     if (this.state().current?.id !== state.current.id || !this.audio.src) return
     if (resumeAt > 0 && Number.isFinite(this.audio.duration)) {
       this.audio.currentTime = Math.min(resumeAt, this.audio.duration)
     }
     if (remainPaused) this.audio.pause()
-  }
-
-  async retryWithAlternateSource(): Promise<void> {
-    const state = this.state()
-    const song = state.current
-    const index = state.index
-    const previousReason = state.message.trim()
-    const fail = (reason: string): void => {
-      this.patch({ status: 'error', message: previousReason ? `${previousReason}；${reason}` : reason })
-      updatePlaybackState('none')
-    }
-    if (!song || index < 0 || !state.queue[index]) {
-      fail('当前没有可重试的歌曲')
-      return
-    }
-    if (song.type === 'local' || song.type === 'podcast') {
-      fail('当前歌曲不支持备用音源重试')
-      return
-    }
-    const request = alternateSearchRequest(song)
-    if (!request) {
-      fail('当前歌曲缺少可用于匹配备用音源的信息')
-      return
-    }
-
-    const generation = ++this.loadGeneration
-    this.cancelPendingAudioLoad()
-    this.audio.pause()
-    this.patch({ status: 'loading' })
-    const targetLabel = providerLabel(request.provider)
-    this.setNotice(`正在查找${targetLabel}的同名同歌手版本…`)
-    try {
-      const data = await musicClient.search(request)
-      if (this.stale(generation)) return
-      const alternate = pickAlternateSong(song, data.songs)
-      if (!alternate) {
-        fail(`未找到同名同歌手的${targetLabel}版本`)
-        return
-      }
-      const queue = [...this.state().queue]
-      queue[index] = alternate
-      this.patch({ queue })
-      this.setNotice(`已切换备用音源：${song.name || '当前歌曲'} → ${targetLabel}`)
-      await this.loadIndex(index, { manual: true, fallbackDepth: 1, disableAlternateRetry: true })
-    } catch (error) {
-      if (!this.stale(generation)) fail(`备用音源搜索失败：${errorMessage(error, '备用音源搜索失败')}`)
-    }
   }
 
   async next(): Promise<void> {
@@ -288,7 +208,6 @@ export class PlaybackEngine {
     const currentIndex = index >= 0 && index < queue.length ? index : -1
     const nextIndex = mode === 'shuffle' ? this.nextShuffleIndex() : (currentIndex + 1) % queue.length
     if (nextIndex < 0) return
-    this.patch({ notice: '' })
     await this.loadIndex(nextIndex)
   }
 
@@ -299,7 +218,6 @@ export class PlaybackEngine {
     const previousIndex =
       mode === 'shuffle' ? this.previousShuffleIndex() : (currentIndex - 1 + queue.length) % queue.length
     if (previousIndex < 0) return
-    this.patch({ notice: '' })
     await this.loadIndex(previousIndex)
   }
 
@@ -307,7 +225,7 @@ export class PlaybackEngine {
     const { status, index } = this.state()
     if (status === 'playing') this.audio.pause()
     else if (status === 'paused') this.resumePlayback()
-    else if (status === 'error' && index >= 0) void this.loadIndex(index, { manual: true })
+    else if (status === 'error' && index >= 0) void this.loadIndex(index)
   }
 
   setVolume(value: number): void {
@@ -379,115 +297,13 @@ export class PlaybackEngine {
     return generation !== this.loadGeneration
   }
 
-  private setNotice(text: string): void {
-    this.patch({ notice: text })
-    if (this.noticeTimer) clearTimeout(this.noticeTimer)
-    this.noticeTimer = setTimeout(() => {
-      this.noticeTimer = null
-      this.patch({ notice: '' })
-    }, 5000)
-  }
-
-  private async tryQualityRetry(
-    index: number,
-    generation: number,
-    options: LoadOptions,
-    info: PlaybackResolveResult | null | undefined,
-    requested: QualityLevel,
-  ): Promise<boolean> {
-    const tried = new Set<QualityLevel>(options.qualityTried || [])
-    tried.add(normalizeQualityPreference(requested))
-    if (info?.level) tried.add(normalizeQualityPreference(info.level))
-
-    const next =
-      this.state().queue[index]?.provider === 'qq'
-        ? nextQQRetryQuality(requested, String(info?.level || ''), tried)
-        : nextNeteaseQuality(requested, info?.level, tried)
-    if (!next || this.stale(generation)) return false
-
-    if (this.state().queue[index]?.provider === 'qq') {
-      const ceiling = qqCeilingFromResolved(info?.level, next)
-      if (ceiling) this.qqQualityCeiling = ceiling
-      this.setNotice(`QQ 音质自动兼容：正在切到${qualityLabel(next)}`)
-    } else {
-      this.setNotice(`网易云音质自动兼容：正在切到${qualityLabel(next)}`)
-    }
-    await this.loadIndex(index, { ...options, qualityOverride: next, qualityTried: [...tried] })
-    return true
-  }
-
-  private async tryAlternateSource(
-    song: UnifiedSong,
-    info: PlaybackResolveResult | null | undefined,
-    index: number,
-    generation: number,
-    options: LoadOptions,
-  ): Promise<boolean> {
-    if ((options.fallbackDepth || 0) > 0) {
-      this.skipFailed(
-        index,
-        generation,
-        '换源后的版本仍不可播，正在播放下一首',
-        restrictionMessage(song, info),
-      )
-      return true
-    }
-    if (song.type === 'local' || song.type === 'podcast') return false
-    const category = restrictionCategory(info)
-    const request = alternateSearchRequest(song)
-    if (!request) return false
-    const targetLabel = providerLabel(alternateProvider(song.provider))
-    this.setNotice(`${providerLabel(song.provider)}当前不可播，正在查找${targetLabel}的同名同歌手版本…`)
-    try {
-      const data = await musicClient.search(request)
-      if (this.stale(generation)) return true
-      const alternate = pickAlternateSong(song, data.songs)
-      if (!alternate) {
-        if (category === 'login_required') return false
-        this.skipFailed(
-          index,
-          generation,
-          `没有找到同名同歌手的${targetLabel}版本，正在播放下一首`,
-          restrictionMessage(song, info),
-        )
-        return true
-      }
-      const queue = [...this.state().queue]
-      queue[index] = alternate
-      this.patch({ queue })
-      this.setNotice(`已自动换源：${song.name || '当前歌曲'} 已切到${targetLabel}`)
-      await this.loadIndex(index, { fallbackDepth: 1 })
-      return true
-    } catch {
-      if (!this.stale(generation)) {
-        this.skipFailed(index, generation, '自动换源搜索失败，正在播放下一首', '备用音源搜索失败')
-      }
-      return true
-    }
-  }
-
-  private skipFailed(index: number, generation: number, notice: string, reason = ''): void {
-    if (this.stale(generation)) return
-    const { queue, mode } = this.state()
-    markPlaybackFailed(this.failBlacklist, queue[index])
-    if (queue.length <= 1) {
-      const suffix = '当前歌曲不可播放，队列里没有其他歌曲'
-      this.patch({ status: 'error', message: reason ? `${reason}；${suffix}` : suffix })
-      updatePlaybackState('none')
-      return
-    }
-    const nextIndex =
-      mode === 'shuffle'
-        ? this.nextPlayableShuffleIndex()
-        : nextPlayableIndex(this.failBlacklist, queue, index)
-    if (nextIndex < 0) {
-      const suffix = '已尝试绕开受限歌曲，队列暂时没有可播项'
-      this.patch({ status: 'error', message: reason ? `${reason}；${suffix}` : suffix })
-      updatePlaybackState('none')
-      return
-    }
-    this.setNotice(notice)
-    void this.loadIndex(nextIndex)
+  private failPlayback(reason: string): void {
+    if (this.state().status === 'error') return
+    const message = reason.trim() || '播放失败'
+    this.audio.pause()
+    this.patch({ status: 'error', message })
+    updatePlaybackState('none')
+    showToast(message, { title: '播放失败', tone: 'error', duration: 8000 })
   }
 
   private async loadIndex(index: number, options: LoadOptions = {}): Promise<void> {
@@ -511,29 +327,13 @@ export class PlaybackEngine {
     updateMediaMetadata(song)
     updatePlaybackState('paused')
 
-    let requested = normalizeQualityPreference(options.qualityOverride || this.state().qualityPreference)
-    if (song.provider === 'qq') requested = applyQQQualityCeiling(requested, this.qqQualityCeiling)
+    const requested = normalizeQualityPreference(options.qualityOverride || this.state().qualityPreference)
 
-    let info: PlaybackResolveResult | null = null
     try {
-      info = await musicClient.resolvePlayback({ song, quality: requested })
+      const info: PlaybackResolveResult = await musicClient.resolvePlayback({ song, quality: requested })
       if (this.stale(generation)) return
       if (!isOpaqueAudioUrl(info.url)) {
-        const category = restrictionCategory(info)
-        if (
-          category !== 'login_required' &&
-          (await this.tryQualityRetry(index, generation, options, info, requested))
-        )
-          return
-        if (this.stale(generation)) return
-        if (
-          !options.disableAlternateRetry &&
-          (await this.tryAlternateSource(song, info, index, generation, options))
-        )
-          return
-        if (this.stale(generation)) return
-        this.patch({ status: 'error', message: restrictionMessage(song, info) })
-        updatePlaybackState('none')
+        this.failPlayback(restrictionMessage(song, info))
         return
       }
 
@@ -542,14 +342,14 @@ export class PlaybackEngine {
         await this.playAudioSource(info.url)
       } catch (playError) {
         if (this.stale(generation)) return
-        if (await this.tryQualityRetry(index, generation, options, info, requested)) return
         throw playError
       }
       if (this.stale(generation)) return
       if (song.provider === 'netease' && info.level && isQualityDowngrade(requested, info.level)) {
-        this.setNotice(
-          `网易云音质自动降级：请求${qualityLabel(requested)}，实际播放${qualityLabel(info.level)}`,
-        )
+        showToast(`网易云音质自动降级：请求${qualityLabel(requested)}，实际播放${qualityLabel(info.level)}`, {
+          title: '音质已自动调整',
+          tone: 'warning',
+        })
       }
       this.patch({
         status: 'playing',
@@ -563,20 +363,7 @@ export class PlaybackEngine {
         updatePlaybackState('paused')
         return
       }
-      if (!info && (await this.tryQualityRetry(index, generation, options, undefined, requested))) return
-      if (this.stale(generation)) return
-      if (
-        !options.disableAlternateRetry &&
-        (await this.tryAlternateSource(song, info, index, generation, options))
-      )
-        return
-      if (this.stale(generation)) return
-      if (!options.manual && this.state().queue.length > 1) {
-        this.skipFailed(index, generation, '当前歌曲加载失败，正在尝试下一首')
-        return
-      }
-      this.patch({ status: 'error', message: errorMessage(error) })
-      updatePlaybackState('none')
+      this.failPlayback(errorMessage(error))
     }
   }
 
@@ -642,7 +429,7 @@ export class PlaybackEngine {
     }
     this.audio.play().catch((error: unknown) => {
       if (this.state().status === 'loading') return
-      if (this.state().current) this.patch({ status: 'error', message: errorMessage(error) })
+      if (this.state().current) this.failPlayback(errorMessage(error))
     })
   }
 
@@ -696,8 +483,7 @@ export class PlaybackEngine {
     this.audio.addEventListener('error', () => {
       if (this.state().status === 'loading') return
       if (this.state().current) {
-        this.patch({ status: 'error', message: '音频加载失败' })
-        updatePlaybackState('none')
+        this.failPlayback('音频加载失败')
       }
     })
   }
@@ -761,17 +547,6 @@ export class PlaybackEngine {
     }
     this.shuffleCursor -= 1
     return this.shuffleOrder[this.shuffleCursor] ?? -1
-  }
-
-  private nextPlayableShuffleIndex(): number {
-    const queue = this.state().queue
-    for (let checked = 0; checked < queue.length; checked += 1) {
-      const index = this.nextShuffleIndex()
-      const song = queue[index]
-      const failedAt = song ? this.failBlacklist.get(songFailKey(song)) || 0 : Date.now()
-      if (song && (!failedAt || Date.now() - failedAt > PLAYBACK_FAIL_BLOCK_MS)) return index
-    }
-    return -1
   }
 }
 

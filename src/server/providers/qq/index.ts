@@ -141,6 +141,7 @@ function toAuthResult(info: QQLoginInfo): MusicAuthResult {
   return {
     provider: 'qq',
     loggedIn: info.loggedIn,
+    credentialInvalidated: info.credentialInvalidated,
     preview: info.preview,
     userId: info.userId,
     nickname: info.nickname,
@@ -259,7 +260,9 @@ export class QQProvider {
   private async fetchLoginInfo(): Promise<QQLoginInfo> {
     const session = this.session
     if (!session.uin || !session.musicKey) {
-      return { provider: 'qq', loggedIn: false, hasCookie: Boolean(this.cookie) }
+      const credentialInvalidated = Boolean(this.cookie)
+      if (credentialInvalidated) this.saveCookie('')
+      return { provider: 'qq', loggedIn: false, hasCookie: false, credentialInvalidated }
     }
     const fallback = this.profileFromBody(null, session)
     try {

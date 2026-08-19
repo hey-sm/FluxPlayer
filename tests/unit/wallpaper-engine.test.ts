@@ -28,11 +28,31 @@ import {
 
 const temporaryDirectories: string[] = []
 
+const nativeHelperSource = fs.readFileSync(path.resolve('native/wallpaper-engine-helper/Program.cs'), 'utf8')
+
 function temporaryDirectory(): string {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'flux-wallpaper-engine-'))
   temporaryDirectories.push(directory)
   return directory
 }
+
+describe('Wallpaper Engine native helper lifecycle', () => {
+  it('closes only the verified Scene source when the helper exits', () => {
+    expect(nativeHelperSource).toContain('CloseVerifiedSourceWindow();')
+    expect(nativeHelperSource).toMatch(
+      /ValidateIdentity\([\s\S]*?options\.SourceWindow[\s\S]*?NativeMethods\.PostMessageW\([\s\S]*?NativeMethods\.WM_CLOSE/,
+    )
+    expect(nativeHelperSource).toMatch(/catch \{ \}\s*Close\(\);/)
+  })
+
+  it('runs the helper outside the main process job so parent-loss cleanup can run', () => {
+    const runtimeSource = fs.readFileSync(
+      path.resolve('src/main/background/wallpaper-engine-runtime.ts'),
+      'utf8',
+    )
+    expect(runtimeSource).toMatch(/spawn\(executable, \[\], \{[\s\S]*detached: true/)
+  })
+})
 
 function writeFile(filePath: string, content: string | Uint8Array): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
@@ -287,6 +307,48 @@ describe('WallpaperEngineStore migration and runtime', () => {
     await runtime.dispose()
   })
 
+  it('keeps a DWM session in starting until the helper activation is acknowledged', async () => {
+    let releaseActivation: () => void = () => undefined
+    let activationSessionId = ''
+    const activationBarrier = new Promise<void>((resolve) => {
+      releaseActivation = resolve
+    })
+    const adapter: WallpaperEngineRuntimeAdapter = {
+      mode: 'dwm',
+      canHandle: async () => true,
+      start: async () => undefined,
+      activateSurface: async (sessionId) => {
+        activationSessionId = sessionId
+        await activationBarrier
+      },
+      stop: async () => undefined,
+    }
+    const runtime = new WallpaperEngineRuntime({
+      userDataPath: temporaryDirectory(),
+      adapters: [adapter],
+    })
+
+    const starting = await runtime.activate(MEDIA_PROJECT, {
+      ...MEDIA_SELECTION,
+      kind: 'engine',
+      projectType: 'scene',
+    })
+    expect(starting).toMatchObject({
+      active: false,
+      mode: 'dwm',
+      phase: 'starting',
+      glassSamplerAvailable: true,
+    })
+    await expect(runtime.activateDwmSurface('stale-session')).resolves.toBe(false)
+    const activation = runtime.activateDwmSurface(starting.sessionId)
+    expect(activationSessionId).toBe(starting.sessionId)
+    expect(runtime.getStatus().phase).toBe('starting')
+    releaseActivation()
+    await expect(activation).resolves.toBe(true)
+    expect(runtime.getStatus()).toMatchObject({ active: true, mode: 'dwm', phase: 'active' })
+    await runtime.dispose()
+  })
+
   it('starts a verified Scene in a unique window with location-scoped mute and cleanup', async () => {
     const root = temporaryDirectory()
     const libraryRoot = path.join(root, 'steam')
@@ -353,12 +415,16 @@ describe('WallpaperEngineStore migration and runtime', () => {
       helper.emit('exit', 0)
       return true
     }
+    const helperCommands: string[] = []
     helper.stdin.on('data', (chunk) => {
       const command = String(chunk)
+      helperCommands.push(command.trim())
       if (command.startsWith('START\t')) {
         helper.stdout.write(
           '{"ok":true,"ready":true,"surfaceWindowHandle":5252,"surfaceTitle":"FluxPlayer WE DWM Surface session"}\n',
         )
+      } else if (command.trim() === 'D') {
+        helper.stdout.write('{"ok":true,"active":true,"surfaceWindowHandle":5252}\n')
       } else if (command.trim() === 'Q') helper.kill()
     })
     const adapter = new DwmRuntimeAdapter({
@@ -410,10 +476,13 @@ describe('WallpaperEngineStore migration and runtime', () => {
     expect(commands[1]).toContain('applyProperties')
     const properties = commands[1][commands[1].indexOf('-properties') + 1]
     expect(properties).toBe('RAW~({"rain":true,"volume":0})~END')
+    expect(helperCommands).not.toContain('D')
     await expect(adapter.takeGlassSamplerSource('session')).resolves.toEqual({
       id: 'window:5252:0',
       name: 'FluxPlayer WE DWM Surface session',
     })
+    await expect(adapter.activateSurface('session')).resolves.toBeUndefined()
+    expect(helperCommands).toContain('D')
     await expect(adapter.takeGlassSamplerSource('session')).resolves.toBeNull()
     await adapter.stop()
     expect(commands.at(-1)).toEqual(['-control', 'closeWallpaper', '-location', location])

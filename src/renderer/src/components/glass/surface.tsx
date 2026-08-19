@@ -1,6 +1,11 @@
 import { GlassCard } from 'react-glass-ui'
 import { forwardRef, type CSSProperties, type HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
+import {
+  glassConfigToSurfaceCssVariables,
+  resolveGlassSurfaceConfig,
+  type GlassSurfaceConfig,
+} from './config'
 import { useGlassStore } from './store'
 
 export type GlassEdge = 'none' | 'left' | 'right'
@@ -9,15 +14,17 @@ export interface GlassSurfaceProps extends HTMLAttributes<HTMLDivElement> {
   edge?: GlassEdge
   contentClassName?: string
   elevation?: 'flat' | 'raised'
+  glassConfig?: GlassSurfaceConfig
 }
 
 /** The only project adapter allowed to render react-glass-ui's GlassCard. */
 export const GlassSurface = forwardRef<HTMLDivElement, GlassSurfaceProps>(function GlassSurface(
-  { children, className, contentClassName, edge = 'none', elevation = 'flat', style, ...props },
+  { children, className, contentClassName, edge = 'none', elevation = 'flat', glassConfig, style, ...props },
   ref,
 ) {
-  const config = useGlassStore((state) => state.config)
-  const localStyle = { ...style, '--flux-text': config.color } as CSSProperties
+  const globalConfig = useGlassStore((state) => state.config)
+  const config = resolveGlassSurfaceConfig(globalConfig, glassConfig)
+  const localStyle = { ...style, ...glassConfigToSurfaceCssVariables(config) } as CSSProperties
 
   return (
     <div
@@ -26,7 +33,7 @@ export const GlassSurface = forwardRef<HTMLDivElement, GlassSurfaceProps>(functi
       className={cn('flux-glass-surface', className)}
       style={localStyle}
       data-flux-glass-surface=""
-      data-glass-scope="global"
+      data-glass-scope={glassConfig ? 'local' : 'global'}
       data-glass-config={JSON.stringify(config)}
       data-elevation={elevation}
       data-edge={edge}

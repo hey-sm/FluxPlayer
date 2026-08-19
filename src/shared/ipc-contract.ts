@@ -39,6 +39,7 @@ export const IPC = {
   wallpaperEngineSetState: 'flux:wallpaper-engine:set-state',
   wallpaperEngineRuntimeStatus: 'flux:wallpaper-engine:runtime-status',
   wallpaperEngineGlassSamplerPrepare: 'flux:wallpaper-engine:glass-sampler-prepare',
+  wallpaperEngineDwmActivate: 'flux:wallpaper-engine:dwm-activate',
   wallpaperEngineStateChanged: 'flux:wallpaper-engine:state-changed',
   wallpaperEngineRuntimeChanged: 'flux:wallpaper-engine:runtime-changed',
 } as const

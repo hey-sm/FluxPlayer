@@ -1,8 +1,20 @@
-import { DEFAULT_GLASS_CONFIG, normalizeGlassConfig, type GlassConfig } from './config'
+import { DEFAULT_GLASS_CONFIG, equalGlassConfig, normalizeGlassConfig, type GlassConfig } from './config'
 
 export const GLASS_PERSISTENCE_KEY = 'fluxplayer-glass-v1'
-export const GLASS_PERSISTENCE_VERSION = 2 as const
+export const GLASS_PERSISTENCE_VERSION = 3 as const
+const PREVIOUS_GLASS_PERSISTENCE_VERSION = 2 as const
 const LEGACY_GLASS_PERSISTENCE_VERSION = 1 as const
+
+const PREVIOUS_DEFAULT_GLASS_CONFIG = Object.freeze({
+  ...DEFAULT_GLASS_CONFIG,
+  distortion: 40,
+  borderRadius: 30,
+  innerLightSpread: 1,
+  innerLightBlur: 10,
+  innerLightOpacity: 0,
+  outerLightSpread: 1,
+  outerLightBlur: 10,
+} satisfies GlassConfig)
 
 export interface GlassStorage {
   getItem(key: string): string | null
@@ -35,6 +47,10 @@ export function deserializeGlassConfig(raw: string | null | undefined): GlassCon
     if (!envelope) return null
     if (envelope.version === GLASS_PERSISTENCE_VERSION) {
       return normalizeGlassConfig(envelope.config, DEFAULT_GLASS_CONFIG)
+    }
+    if (envelope.version === PREVIOUS_GLASS_PERSISTENCE_VERSION) {
+      const config = normalizeGlassConfig(envelope.config, DEFAULT_GLASS_CONFIG)
+      return equalGlassConfig(config, PREVIOUS_DEFAULT_GLASS_CONFIG) ? { ...DEFAULT_GLASS_CONFIG } : config
     }
     if (envelope.version === LEGACY_GLASS_PERSISTENCE_VERSION) {
       return {

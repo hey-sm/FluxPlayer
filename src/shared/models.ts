@@ -108,6 +108,7 @@ export interface LyricDoc {
 
 export interface NeteaseLoginInfo {
   loggedIn: boolean
+  credentialInvalidated?: boolean
   userId?: number | string
   nickname?: string
   avatar?: string
@@ -124,6 +125,7 @@ export interface NeteaseLoginInfo {
 export interface QQLoginInfo {
   provider: 'qq'
   loggedIn: boolean
+  credentialInvalidated?: boolean
   preview?: boolean
   userId?: string
   nickname?: string

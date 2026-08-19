@@ -25,23 +25,34 @@ export interface GlassConfig {
 
 export type GlassEditablePatch = Partial<Omit<GlassConfig, 'flexibility' | 'onHoverScale'>>
 
+/** Component-scoped overrides. These never enter the persisted global store. */
+export type GlassSurfaceConfig = Partial<GlassConfig>
+
+/** Resolves one Surface without mutating either the global config or the override. */
+export function resolveGlassSurfaceConfig(
+  globalConfig: Readonly<GlassConfig>,
+  localConfig?: GlassSurfaceConfig,
+): GlassConfig {
+  return { ...globalConfig, ...localConfig }
+}
+
 export const DEFAULT_GLASS_CONFIG = Object.freeze({
   blur: 10,
-  distortion: 40,
+  distortion: 50,
   flexibility: 0,
   borderColor: '#ffffff',
   borderSize: 1,
-  borderRadius: 30,
+  borderRadius: 20,
   borderOpacity: 0,
   backgroundColor: '#000000ff',
   backgroundOpacity: 0,
   innerLightColor: '#ffffff',
-  innerLightSpread: 1,
-  innerLightBlur: 10,
-  innerLightOpacity: 0,
+  innerLightSpread: 0,
+  innerLightBlur: 8,
+  innerLightOpacity: 0.3,
   outerLightColor: '#ffffff',
-  outerLightSpread: 1,
-  outerLightBlur: 10,
+  outerLightSpread: 0,
+  outerLightBlur: 0,
   outerLightOpacity: 0,
   color: '#ffffff',
   chromaticAberration: 0,
@@ -171,6 +182,16 @@ export type GlassCssVariables = Readonly<
   Record<(typeof GLASS_CSS_VARIABLE_NAMES)[keyof typeof GLASS_CSS_VARIABLE_NAMES], string>
 >
 
+export type GlassSurfaceCssVariables = GlassCssVariables &
+  Readonly<{
+    '--flux-glass-background': string
+    '--flux-glass-border': string
+    '--flux-radius-control': string
+    '--flux-radius-panel': string
+    '--flux-radius-shell': string
+    '--flux-text': string
+  }>
+
 export function glassConfigToCssVariables(config: Readonly<GlassConfig>): GlassCssVariables {
   return {
     '--flux-glass-blur': `${config.blur}px`,
@@ -193,5 +214,22 @@ export function glassConfigToCssVariables(config: Readonly<GlassConfig>): GlassC
     '--flux-glass-chromatic-aberration': String(config.chromaticAberration),
     '--flux-glass-saturation': `${config.saturation}%`,
     '--flux-glass-brightness': `${config.brightness}%`,
+  }
+}
+
+/**
+ * Builds variables for one Surface subtree. The derived aliases are intentionally
+ * kept out of the document root so local styling cannot change other glass nodes.
+ */
+export function glassConfigToSurfaceCssVariables(config: Readonly<GlassConfig>): GlassSurfaceCssVariables {
+  const radius = `${config.borderRadius}px`
+  return {
+    ...glassConfigToCssVariables(config),
+    '--flux-glass-background': `color-mix(in srgb, ${config.backgroundColor} calc(${config.backgroundOpacity} * 100%), transparent)`,
+    '--flux-glass-border': `color-mix(in srgb, ${config.borderColor} calc(${config.borderOpacity} * 100%), transparent)`,
+    '--flux-radius-control': `clamp(4px, calc(${radius} * 0.33), 14px)`,
+    '--flux-radius-panel': `clamp(8px, calc(${radius} * 0.47), 22px)`,
+    '--flux-radius-shell': radius,
+    '--flux-text': config.color,
   }
 }

@@ -20,7 +20,6 @@ import type {
 } from '@shared/wallpaper-engine-contract'
 import { cn } from '@/lib/utils'
 import { GlassSurface } from '../../components/glass'
-import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Button } from '../../components/ui/button'
 import { ColorPicker } from '../../components/ui/color-picker'
 import { GlassSelect } from '../../components/ui/glass-select'
@@ -137,7 +136,6 @@ export interface SettingsPanelProps {
   onBackgroundModeChange(mode: BackgroundMode): void
   customBackground: CustomBackground | null
   backgroundBusy: boolean
-  backgroundError: string
   onChooseBackground(): void
   onClearBackground(): void
   wallpaperEngineSelection: WallpaperEngineSelection
@@ -162,7 +160,6 @@ export default function SettingsPanel({
   onBackgroundModeChange,
   customBackground,
   backgroundBusy,
-  backgroundError,
   onChooseBackground,
   onClearBackground,
   wallpaperEngineSelection,
@@ -338,14 +335,6 @@ export default function SettingsPanel({
                       </Button>
                     ) : null}
                   </div>
-                  {backgroundError ? (
-                    <Alert
-                      variant="destructive"
-                      className="m-0 text-[10px] leading-[1.45] text-[var(--flux-danger)]"
-                    >
-                      <AlertDescription>{backgroundError}</AlertDescription>
-                    </Alert>
-                  ) : null}
                 </section>
 
                 <section className={settingsSectionClass} aria-labelledby="settings-wallpaper-heading">
@@ -386,16 +375,6 @@ export default function SettingsPanel({
                       onSnapshotChange={onWallpaperEngineSnapshotChange}
                     />
                   </div>
-                  {wallpaperEngineSelection.runtimeError ? (
-                    <Alert
-                      variant="destructive"
-                      className="m-0 text-[10px] leading-[1.45] text-[var(--flux-danger)]"
-                    >
-                      <AlertDescription>
-                        {`Wallpaper Engine 项目不可用，已恢复原背景（${wallpaperEngineSelection.runtimeError}）`}
-                      </AlertDescription>
-                    </Alert>
-                  ) : null}
                 </section>
               </div>
             </TabsContent>

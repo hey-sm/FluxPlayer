@@ -9,11 +9,13 @@ import {
   type WallpaperEngineState,
 } from '@shared/wallpaper-engine-contract'
 import { AppTopBar, FocusModeExitControls } from './components/shell/AppTopBar'
-import { FallbackNotice, PlayerBar } from './components/player/PlayerBar'
+import { PlayerBar } from './components/player/PlayerBar'
+import { ToastViewport } from './components/ui/toast-viewport'
 import { LibraryWorkspace } from './features/library'
 import { StageLyricsSynchronizer } from './features/lyrics'
 import { SearchPanel } from './features/search'
 import { useAuth } from './stores/auth'
+import { showToast } from './stores/toast'
 import { gsap, motionDurations, motionEases, useGSAP, useReducedMotion } from './motion'
 import { usePlaybackProgress, usePlayer } from './stores/player'
 import { isDynamicBackgroundEffect, type DynamicBackgroundEffect } from './visual/backgrounds'
@@ -92,13 +94,13 @@ function initialBackgroundMode(): BackgroundMode | null {
 }
 
 function useAuthLifecycle(): void {
-  const refreshAll = useAuth((state) => state.refreshAll)
+  const validateOnStartup = useAuth((state) => state.validateOnStartup)
   const qqLoggedIn = useAuth((state) => state.qq?.loggedIn === true)
   const startQQPolling = useAuth((state) => state.startQQPolling)
 
   useEffect(() => {
-    void refreshAll()
-  }, [refreshAll])
+    void validateOnStartup()
+  }, [validateOnStartup])
 
   useEffect(() => {
     if (!qqLoggedIn) return
@@ -211,7 +213,6 @@ export default function App(): React.JSX.Element {
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode | null>(initialBackgroundMode)
   const [backgroundMediaFailed, setBackgroundMediaFailed] = useState(false)
   const [backgroundBusy, setBackgroundBusy] = useState(false)
-  const [backgroundError, setBackgroundError] = useState('')
   const [wallpaperEngineState, setWallpaperEngineState] = useState<WallpaperEngineState>(() => ({
     version: DEFAULT_WALLPAPER_ENGINE_STATE.version,
     selection: { ...DEFAULT_WALLPAPER_ENGINE_STATE.selection },
@@ -409,7 +410,6 @@ export default function App(): React.JSX.Element {
       command: () => Promise<import('@shared/custom-background-contract').CustomBackgroundResult> | undefined,
     ) => {
       setBackgroundBusy(true)
-      setBackgroundError('')
       try {
         const result = await command()
         if (!result || result.canceled) return
@@ -418,7 +418,11 @@ export default function App(): React.JSX.Element {
         setBackgroundMode(result.background ? 'wallpaper' : 'dynamic')
         setBackgroundMediaFailed(false)
       } catch (error) {
-        setBackgroundError(error instanceof Error ? error.message : '背景导入失败')
+        showToast(error instanceof Error ? error.message : '背景导入失败', {
+          title: '背景设置失败',
+          tone: 'error',
+          duration: 8000,
+        })
       } finally {
         setBackgroundBusy(false)
       }
@@ -433,6 +437,16 @@ export default function App(): React.JSX.Element {
     const id = wallpaperEngineState.selection.id
     return id ? (wallpaperEngineSnapshot?.projects.find((project) => project.id === id) ?? null) : null
   }, [wallpaperEngineSnapshot, wallpaperEngineState.selection.id])
+
+  const dwmActive =
+    wallpaperEngineRuntimeStatus.active &&
+    wallpaperEngineRuntimeStatus.mode === 'dwm' &&
+    wallpaperEngineRuntimeStatus.phase === 'active'
+
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-wallpaper-dwm-active', dwmActive)
+    return () => document.documentElement.removeAttribute('data-wallpaper-dwm-active')
+  }, [dwmActive])
 
   const handleWallpaperEngineStateChange = useCallback((next: WallpaperEngineState): void => {
     setWallpaperEngineState(next)
@@ -474,6 +488,11 @@ export default function App(): React.JSX.Element {
       projectId: id,
       glassSamplerAvailable: false,
       error,
+    })
+    showToast(`Wallpaper Engine 项目不可用，已恢复原背景（${error}）`, {
+      title: '背景运行失败',
+      tone: 'error',
+      duration: 8000,
     })
     if (!desktop) return
     void desktop
@@ -529,22 +548,11 @@ export default function App(): React.JSX.Element {
       ref={appRef}
       className="app group/app relative flex h-full flex-col overflow-hidden bg-[var(--flux-bg)]"
       style={{
-        backgroundColor:
-          wallpaperEngineRuntimeStatus.active &&
-          wallpaperEngineRuntimeStatus.mode === 'dwm' &&
-          wallpaperEngineRuntimeStatus.phase === 'active'
-            ? 'transparent'
-            : undefined,
+        backgroundColor: dwmActive ? 'transparent' : undefined,
       }}
       data-app-root=""
       data-background-mode={effectiveBackgroundMode}
-      data-wallpaper-dwm-active={
-        wallpaperEngineRuntimeStatus.active &&
-        wallpaperEngineRuntimeStatus.mode === 'dwm' &&
-        wallpaperEngineRuntimeStatus.phase === 'active'
-          ? ''
-          : undefined
-      }
+      data-wallpaper-dwm-active={dwmActive ? '' : undefined}
       data-focus-mode={focusMode || undefined}
     >
       {effectiveBackgroundMode === 'wallpaper' && customBackground && !wallpaperEngineReady ? (
@@ -562,7 +570,10 @@ export default function App(): React.JSX.Element {
               onError={() => {
                 setBackgroundMediaFailed(true)
                 setBackgroundMode('dynamic')
-                setBackgroundError('背景视频加载失败，已恢复动态背景。')
+                showToast('背景视频加载失败，已恢复动态背景。', {
+                  title: '背景加载失败',
+                  tone: 'error',
+                })
               }}
             />
           ) : (
@@ -574,7 +585,10 @@ export default function App(): React.JSX.Element {
               onError={() => {
                 setBackgroundMediaFailed(true)
                 setBackgroundMode('dynamic')
-                setBackgroundError('背景图片加载失败，已恢复动态背景。')
+                showToast('背景图片加载失败，已恢复动态背景。', {
+                  title: '背景加载失败',
+                  tone: 'error',
+                })
               }}
             />
           )}
@@ -623,13 +637,11 @@ export default function App(): React.JSX.Element {
             onBackgroundModeChange={(mode) => {
               if (mode === 'wallpaper') {
                 setBackgroundMediaFailed(false)
-                setBackgroundError('')
               }
               setBackgroundMode(mode)
             }}
             customBackground={customBackground}
             backgroundBusy={backgroundBusy}
-            backgroundError={backgroundError}
             wallpaperEngineSelection={wallpaperEngineState.selection}
             onWallpaperEngineStateChange={handleWallpaperEngineStateChange}
             onWallpaperEngineSnapshotChange={handleWallpaperEngineSnapshotChange}
@@ -651,6 +663,7 @@ export default function App(): React.JSX.Element {
         </Suspense>
       ) : null}
       <StageLyricsSynchronizer />
+      <ToastViewport />
       <LibraryWorkspace provider={provider} onProviderChange={setProvider} />
       <div
         data-app-chrome="content"
@@ -658,7 +671,6 @@ export default function App(): React.JSX.Element {
       >
         <SearchPanel provider={provider} onProviderChange={setProvider} />
         <PlayerBar />
-        <FallbackNotice />
       </div>
     </div>
   )

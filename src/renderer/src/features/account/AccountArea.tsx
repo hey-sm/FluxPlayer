@@ -33,7 +33,6 @@ export function AccountArea({
   const qq = useAuth((state) => state.qq)
   const neteaseBusy = useAuth((state) => state.neteaseBusy)
   const qqBusy = useAuth((state) => state.qqBusy)
-  const message = useAuth((state) => state.message)
   const loginNetease = useAuth((state) => state.loginNetease)
   const logoutNetease = useAuth((state) => state.logoutNetease)
   const loginQQ = useAuth((state) => state.loginQQ)
@@ -60,7 +59,7 @@ export function AccountArea({
           {qq.playbackKeyReady === false ? (
             <span
               className={accountBadgeVariants({ tone: 'warning' })}
-              title="播放授权不完整，部分歌曲将自动换源"
+              title="播放授权不完整，部分歌曲可能无法播放"
             >
               授权不完整
             </span>
@@ -79,9 +78,6 @@ export function AccountArea({
     }
     return (
       <div className={cn(accountRootClassName, className)} data-account-area="">
-        {message ? (
-          <span className="max-w-[200px] truncate text-[11px] text-[var(--flux-text-muted)]">{message}</span>
-        ) : null}
         <Button
           variant="glassSoft"
           size="compact"
@@ -126,9 +122,6 @@ export function AccountArea({
   }
   return (
     <div className={cn(accountRootClassName, className)} data-account-area="">
-      {message ? (
-        <span className="max-w-[200px] truncate text-[11px] text-[var(--flux-text-muted)]">{message}</span>
-      ) : null}
       <Button
         variant="glassSoft"
         size="compact"

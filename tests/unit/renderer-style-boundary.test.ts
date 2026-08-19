@@ -49,6 +49,46 @@ describe('renderer style migration boundary', () => {
     }
   })
 
+  it('keeps all transient feedback on the non-glass shadcn Toast', () => {
+    const toast = projectFile('src/renderer/src/components/ui/toast.tsx')
+    const viewport = projectFile('src/renderer/src/components/ui/toast-viewport.tsx')
+    const app = projectFile('src/renderer/src/App.tsx')
+    const auth = projectFile('src/renderer/src/stores/auth.ts')
+    const account = projectFile('src/renderer/src/features/account/AccountArea.tsx')
+    const settings = projectFile('src/renderer/src/features/settings/SettingsPanel.tsx')
+    const wallpaper = projectFile('src/renderer/src/features/settings/WallpaperEngineLibraryDialog.tsx')
+    const player = projectFile('src/renderer/src/components/player/PlayerBar.tsx')
+    const playback = projectFile('src/renderer/src/playback/engine.ts')
+    const packageJson = JSON.parse(projectFile('package.json')) as {
+      devDependencies: Record<string, string>
+    }
+
+    expect(toast).toContain("from '@radix-ui/react-toast'")
+    expect(toast).toContain('data-slot="toast"')
+    expect(toast).toContain('rounded-full')
+    expect(toast).toContain('bg-background')
+    expect(toast).not.toContain('GlassSurface')
+    expect(toast).not.toContain('backdrop')
+    expect(toast).not.toContain('ToastClose')
+    expect(viewport).toContain('<Toast')
+    expect(viewport).toContain('<ToastViewportPrimitive')
+    expect(viewport).not.toContain('ToastClose')
+    expect(viewport).not.toContain('lucide-react')
+    expect(viewport).not.toContain('bg-[rgba(20,22,28,0.94)]')
+    expect(packageJson.devDependencies['@radix-ui/react-toast']).toBe('1.2.23')
+
+    expect(app).toContain("import { showToast } from './stores/toast'")
+    expect(auth).toContain('showToast(')
+    expect(account).not.toContain('state.message')
+    expect(settings).not.toContain('<Alert')
+    expect(wallpaper).toContain('reportWallpaperError(')
+    expect(wallpaper).not.toContain('setError(')
+    expect(playback).toContain("title: '音质已自动调整'")
+    expect(player).not.toContain('FallbackNotice')
+    expect(player).not.toContain('bg-[rgba(20,22,34,0.88)]')
+    expect(existsSync(new URL('../../src/renderer/src/components/ui/alert.tsx', import.meta.url))).toBe(false)
+  })
+
   it('keeps migrated edge sheets out of the frozen legacy stylesheet', () => {
     const migratedSources = [
       projectFile('src/renderer/src/components/shell/HoverEdgeSheet.tsx'),
@@ -253,6 +293,15 @@ describe('renderer style migration boundary', () => {
     expect(globalCss).not.toMatch(/\*\s*\{[^}]*(?:margin|padding)\s*:/s)
   })
 
+  it('makes the document background transparent only after native DWM activation', () => {
+    const globalCss = projectFile('src/renderer/src/styles/global.css')
+    const appSource = projectFile('src/renderer/src/App.tsx')
+
+    expect(globalCss).toContain('html[data-wallpaper-dwm-active] body')
+    expect(globalCss).toContain('background: transparent')
+    expect(appSource).toContain("toggleAttribute('data-wallpaper-dwm-active', dwmActive)")
+  })
+
   it('keeps global.css limited to document, selection, drag, and scroll behavior', () => {
     const globalCss = projectFile('src/renderer/src/styles/global.css')
     const accountSource = projectFile('src/renderer/src/features/account/AccountArea.tsx')
@@ -339,8 +388,9 @@ describe('renderer style migration boundary', () => {
 
     expect(surfaceSource).toContain("import { GlassCard } from 'react-glass-ui'")
     expect(surfaceSource).toContain('data-edge={edge}')
-    expect(surfaceSource).toContain('data-glass-scope="global"')
-    expect(surfaceSource).not.toContain('glassConfig')
+    expect(surfaceSource).toContain("data-glass-scope={glassConfig ? 'local' : 'global'}")
+    expect(surfaceSource).toContain('glassConfigToSurfaceCssVariables(config)')
+    expect(surfaceSource).not.toContain('borderRadius?: number')
     expect(sheetSource).toContain('<GlassSurface edge={side}')
     expect(sheetSource).toContain('data-edge-sheet=""')
     expect(sheetSource).toContain('data-edge-sheet-sensor=""')
@@ -374,9 +424,9 @@ describe('renderer style migration boundary', () => {
 
     for (const setting of [
       'blur: 10',
-      'distortion: 40',
+      'distortion: 50',
       'flexibility: 0',
-      'borderRadius: 30',
+      'borderRadius: 20',
       'borderOpacity: 0',
       "backgroundColor: '#000000ff'",
       'backgroundOpacity: 0',
@@ -409,6 +459,12 @@ describe('renderer style migration boundary', () => {
     expect(glassPatch).toContain('onMouseEnter: hasHoverTransform ? handleOnMouseEnter : void 0')
     expect(glassPatch).toContain('willChange: hasHoverTransform ? "transform" : void 0')
     expect(glassPatch).toContain('const staticStyle = {')
+    expect(glassPatch).toContain(
+      'outerBoxShadow: `0 0 ${cardProps.outerLightBlur}px ${cardProps.outerLightSpread}px ${cardProps.outerLightColor}`',
+    )
+    expect(glassPatch).toContain('cardProps.outerLightBlur,')
+    expect(glassPatch).toContain('cardProps.outerLightSpread,')
+    expect(glassPatch).toContain('cardProps.outerLightColor')
     expect(glassPatch).toContain('if (!hasHoverTransform) return;')
     expect(glassPatch).toContain('hasHoverTransform ? style : staticStyle')
     expect(glassPatch).toContain('-  }, [style]);')

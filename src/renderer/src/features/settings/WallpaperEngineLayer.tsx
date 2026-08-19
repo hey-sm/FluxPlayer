@@ -110,9 +110,9 @@ function DwmGlassSampler({ sessionId, suspended }: { sessionId: string; suspende
     if (!desktop || !video || !sessionId) return
     let cancelled = false
     let stream: MediaStream | null = null
-    void desktop
-      .prepareWallpaperEngineGlassSampler(sessionId)
-      .then(async (prepared) => {
+    void (async () => {
+      try {
+        const prepared = await desktop.prepareWallpaperEngineGlassSampler(sessionId)
         if (!prepared || cancelled) throw new Error('WALLPAPER_ENGINE_GLASS_SAMPLER_UNAVAILABLE')
         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
         if (cancelled) {
@@ -122,10 +122,16 @@ function DwmGlassSampler({ sessionId, suspended }: { sessionId: string; suspende
         video.srcObject = stream
         video.muted = true
         await video.play()
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setReady(false)
-      })
+      } finally {
+        // The capture stream only samples glass regions. The native Scene is
+        // activated even when sampling fails, so glass can degrade independently.
+        if (!cancelled) {
+          await desktop.activateWallpaperEngineDwmSurface(sessionId).catch(() => false)
+        }
+      }
+    })()
     return () => {
       cancelled = true
       setReady(false)
@@ -194,6 +200,13 @@ export function WallpaperEngineLayer({
     runtimeStatus.mode === 'dwm' &&
     runtimeStatus.phase === 'active' &&
     runtimeStatus.projectId === selection.id
+  const dwmSessionReady =
+    selection.active &&
+    selection.kind === 'engine' &&
+    runtimeStatus.mode === 'dwm' &&
+    (runtimeStatus.phase === 'starting' || runtimeStatus.phase === 'active') &&
+    runtimeStatus.projectId === selection.id &&
+    Boolean(runtimeStatus.sessionId)
 
   useEffect(() => {
     setMediaReady(false)
@@ -213,7 +226,7 @@ export function WallpaperEngineLayer({
     }
   }, [onFailure, project, selection.active, selection.id, selection.kind])
 
-  if (dwmActive) {
+  if (dwmSessionReady) {
     return runtimeStatus.glassSamplerAvailable ? (
       <DwmGlassSampler sessionId={runtimeStatus.sessionId} suspended={suspended} />
     ) : null

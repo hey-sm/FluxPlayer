@@ -1,7 +1,14 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "oxc", "react"],
-  "ignorePatterns": ["out/**", "dist/**", "node_modules/**", "scripts/**"],
+  "ignorePatterns": [
+    "out/**",
+    "dist/**",
+    "node_modules/**",
+    "scripts/**",
+    "Mineradio/**",
+    "cineshader-mirror/**"
+  ],
   "categories": {
     "correctness": "error"
   },

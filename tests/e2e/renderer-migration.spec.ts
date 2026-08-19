@@ -113,12 +113,16 @@ test('Renderer 样式迁移最终交互、长列表与布局性能验收', async
   expect(edgeStyles.right.childBackdropFilter).toBe('none')
   expect(edgeStyles.left.viewTransitionName).toBe('none')
   expect(edgeStyles.right.viewTransitionName).toBe('none')
-  expect(edgeStyles.left.cardRadius).toBe('30px')
-  expect(edgeStyles.right.cardRadius).toBe('30px')
-  expect(edgeStyles.left.cardLeft).toBeLessThanOrEqual(edgeStyles.left.surfaceLeft - 29)
+  expect(edgeStyles.left.cardRadius).toBe('20px')
+  expect(edgeStyles.right.cardRadius).toBe('20px')
+  expect(edgeStyles.left.cardLeft).toBeLessThanOrEqual(
+    edgeStyles.left.surfaceLeft - Number.parseFloat(edgeStyles.left.cardRadius) + 1,
+  )
   expect(edgeStyles.left.cardRight).toBeCloseTo(edgeStyles.left.surfaceRight, 0)
   expect(edgeStyles.right.cardLeft).toBeCloseTo(edgeStyles.right.surfaceLeft, 0)
-  expect(edgeStyles.right.cardRight).toBeGreaterThanOrEqual(edgeStyles.right.surfaceRight + 29)
+  expect(edgeStyles.right.cardRight).toBeGreaterThanOrEqual(
+    edgeStyles.right.surfaceRight + Number.parseFloat(edgeStyles.right.cardRadius) - 1,
+  )
 
   const originalEdgeBackdrop = await leftPanel.evaluate((element: HTMLElement) =>
     element.style.getPropertyValue('backdrop-filter'),

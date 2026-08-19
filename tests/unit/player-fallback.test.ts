@@ -1,21 +1,33 @@
 /**
- * PlaybackEngine 的取链、降档、换源与竞态回归测试。
- * 所有上游交互都通过 typed musicClient mock；renderer 永远只接收 opaque media URL。
+ * PlaybackEngine failure behavior: one source attempt, stable context, and an actionable Toast.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FluxMusicApi, PlaybackResolveResult } from '@shared/music-contract'
 import type { ProviderId, UnifiedSong } from '@shared/models'
 import { makeSong } from '../helpers/song'
 
+const mocks = vi.hoisted(() => ({
+  resolvePlayback: vi.fn(),
+  search: vi.fn(),
+  showToast: vi.fn(),
+}))
+
 vi.mock('@renderer/api', () => ({
   musicClient: {
-    resolvePlayback: vi.fn(),
-    search: vi.fn(),
+    resolvePlayback: mocks.resolvePlayback,
+    search: mocks.search,
   },
+  musicErrorMessage: (error: unknown, fallback: string) =>
+    error instanceof Error && error.message ? error.message : fallback,
+}))
+
+vi.mock('@renderer/stores/toast', () => ({
+  showToast: mocks.showToast,
 }))
 
 class FakeAudio extends EventTarget {
   static playScript: (src: string, audio: FakeAudio) => Promise<void> = () => Promise.resolve()
+  error: MediaError | null = null
   src = ''
   volume = 1
   preload = ''
@@ -81,171 +93,153 @@ function unavailable(provider: ProviderId, message = '版权受限'): PlaybackRe
 
 let usePlayer: (typeof import('@renderer/stores/player'))['usePlayer']
 let resolvePlayback: ReturnType<typeof vi.fn<FluxMusicApi['resolvePlayback']>>
-let search: ReturnType<typeof vi.fn<FluxMusicApi['search']>>
 
 beforeEach(async () => {
   vi.resetModules()
   vi.unstubAllGlobals()
   vi.stubGlobal('Audio', FakeAudio)
   FakeAudio.playScript = () => Promise.resolve()
-
-  const { musicClient } = await import('@renderer/api')
-  resolvePlayback = vi.mocked(musicClient.resolvePlayback)
-  search = vi.mocked(musicClient.search)
-  resolvePlayback.mockReset()
-  search.mockReset()
+  mocks.resolvePlayback.mockReset()
+  mocks.search.mockReset()
+  mocks.showToast.mockReset()
+  resolvePlayback = mocks.resolvePlayback
   ;({ usePlayer } = await import('@renderer/stores/player'))
 })
 
-describe('PlaybackEngine fallback orchestration', () => {
-  it('plays a primary source returned by the typed bridge', async () => {
-    const primary = song(1, 'netease')
+describe('PlaybackEngine failure behavior', () => {
+  it('plays a source returned by the typed bridge', async () => {
+    const current = song(1, 'netease')
     resolvePlayback.mockResolvedValue(playable('netease', 'primary'))
 
-    await usePlayer.getState().setQueue([primary], 0)
+    await usePlayer.getState().setQueue([current], 0)
 
     expect(resolvePlayback).toHaveBeenCalledOnce()
-    expect(resolvePlayback).toHaveBeenCalledWith({ song: primary, quality: 'hires' })
-    expect(search).not.toHaveBeenCalled()
+    expect(resolvePlayback).toHaveBeenCalledWith({ song: current, quality: 'hires' })
+    expect(mocks.search).not.toHaveBeenCalled()
+    expect(mocks.showToast).not.toHaveBeenCalled()
     expect(usePlayer.getState()).toMatchObject({
-      current: primary,
+      current,
       status: 'playing',
       resolvedQuality: 'hires',
     })
-    expect(usePlayer.getState().audio.src).toBe('flux-media://audio/primary')
   })
 
-  it('downgrades QQ from hires to exhigh after media playback rejects and keeps the session ceiling', async () => {
-    const first = song(1, 'qq')
-    const second = song(2, 'qq')
-    resolvePlayback.mockImplementation(async ({ song: requestedSong, quality }) =>
-      playable('qq', `${requestedSong.id}-${quality}`, quality),
-    )
-    FakeAudio.playScript = (src) =>
-      src.endsWith('-hires') ? Promise.reject(new Error('CDN rejected hires')) : Promise.resolve()
+  it('routes automatic quality downgrade feedback through the shared Toast', async () => {
+    const current = song(1, 'netease')
+    resolvePlayback.mockResolvedValue(playable('netease', 'standard-fallback', 'standard'))
 
-    await usePlayer.getState().setQueue([first, second], 0)
-    await usePlayer.getState().next()
+    await usePlayer.getState().setQueue([current], 0)
 
-    expect(resolvePlayback.mock.calls.map(([request]) => [request.song.id, request.quality])).toEqual([
-      [1, 'hires'],
-      [1, 'exhigh'],
-      [2, 'exhigh'],
-    ])
-    expect(usePlayer.getState()).toMatchObject({
-      current: second,
-      status: 'playing',
-      resolvedQuality: 'exhigh',
+    expect(mocks.showToast).toHaveBeenCalledOnce()
+    expect(mocks.showToast).toHaveBeenCalledWith('网易云音质自动降级：请求高清臻音，实际播放标准', {
+      title: '音质已自动调整',
+      tone: 'warning',
     })
-    expect(search).not.toHaveBeenCalled()
   })
 
-  it('leaves loading and retries when the media element emits an error while play remains pending', async () => {
+  it('does not retry quality, search another provider, replace context, or skip after resolve failure', async () => {
     const current = song(1, 'qq')
-    resolvePlayback.mockImplementation(async ({ quality }) => playable('qq', `media-${quality}`, quality))
-    FakeAudio.playScript = (src, audio) => {
-      if (!src.endsWith('-hires')) return Promise.resolve()
+    const nextSong = song(2, 'qq')
+    const queue = [current, nextSong]
+    resolvePlayback.mockResolvedValue(unavailable('qq', '当前歌曲因版权限制无法播放'))
+
+    await usePlayer.getState().setQueue(queue, 0)
+
+    expect(resolvePlayback).toHaveBeenCalledOnce()
+    expect(resolvePlayback).toHaveBeenCalledWith({ song: current, quality: 'hires' })
+    expect(mocks.search).not.toHaveBeenCalled()
+    expect(usePlayer.getState().queue).toEqual(queue)
+    expect(usePlayer.getState()).toMatchObject({
+      index: 0,
+      current,
+      status: 'error',
+      message: '当前歌曲因版权限制无法播放',
+    })
+    expect(mocks.showToast).toHaveBeenCalledOnce()
+    expect(mocks.showToast).toHaveBeenCalledWith('当前歌曲因版权限制无法播放', {
+      title: '播放失败',
+      tone: 'error',
+      duration: 8000,
+    })
+  })
+
+  it('does not retry or advance after the media element rejects playback', async () => {
+    const current = song(1, 'qq')
+    const nextSong = song(2, 'qq')
+    resolvePlayback.mockResolvedValue(playable('qq', 'media-hires'))
+    FakeAudio.playScript = () => Promise.reject(new Error('CDN 拒绝了音频请求'))
+
+    await usePlayer.getState().setQueue([current, nextSong], 0)
+
+    expect(resolvePlayback).toHaveBeenCalledOnce()
+    expect(mocks.search).not.toHaveBeenCalled()
+    expect(usePlayer.getState()).toMatchObject({
+      index: 0,
+      current,
+      status: 'error',
+      message: 'CDN 拒绝了音频请求',
+    })
+    expect(mocks.showToast).toHaveBeenCalledWith(
+      'CDN 拒绝了音频请求',
+      expect.objectContaining({ tone: 'error' }),
+    )
+  })
+
+  it('leaves loading as an error when the media element emits an error while play is pending', async () => {
+    const current = song(1, 'qq')
+    resolvePlayback.mockResolvedValue(playable('qq', 'media'))
+    FakeAudio.playScript = (_src, audio) => {
       queueMicrotask(() => audio.dispatchEvent(new Event('error')))
       return new Promise<void>(() => {})
     }
 
     await usePlayer.getState().setQueue([current], 0)
 
-    expect(resolvePlayback.mock.calls.map(([request]) => request.quality)).toEqual(['hires', 'exhigh'])
-    expect(usePlayer.getState()).toMatchObject({ status: 'playing', resolvedQuality: 'exhigh' })
-  })
-
-  it('cancels a pending media load when a newer queue selection starts', async () => {
-    const first = song(1, 'netease')
-    const second = song(2, 'netease')
-    resolvePlayback.mockImplementation(async ({ song: requestedSong }) =>
-      playable('netease', String(requestedSong.id)),
-    )
-    FakeAudio.playScript = (src) => (src.endsWith('/1') ? new Promise<void>(() => {}) : Promise.resolve())
-
-    const staleLoad = usePlayer.getState().setQueue([first], 0)
-    await vi.waitFor(() => expect(usePlayer.getState().audio.src).toContain('/1'))
-    await usePlayer.getState().setQueue([second], 0)
-    await staleLoad
-
-    expect(usePlayer.getState()).toMatchObject({ current: second, status: 'playing' })
-    expect(usePlayer.getState().audio.src).toContain('/2')
-  })
-
-  it('automatically switches an unavailable Netease song to a matching QQ source', async () => {
-    const original = song(1, 'netease')
-    const alternate = song(101, 'qq', { name: original.name })
-    resolvePlayback.mockImplementation(async ({ song: requestedSong }) =>
-      requestedSong.provider === 'netease'
-        ? unavailable('netease')
-        : playable('qq', 'qq-alternate', 'exhigh'),
-    )
-    search.mockResolvedValue({ provider: 'qq', songs: [alternate] })
-
-    await usePlayer.getState().setQueue([original], 0)
-
-    expect(search).toHaveBeenCalledOnce()
-    expect(search).toHaveBeenCalledWith({
-      provider: 'qq',
-      keywords: `${original.name} ${original.artist}`,
-      limit: 8,
-    })
+    expect(resolvePlayback).toHaveBeenCalledOnce()
     expect(usePlayer.getState()).toMatchObject({
-      current: alternate,
-      status: 'playing',
-      resolvedQuality: 'exhigh',
+      current,
+      status: 'error',
+      message: '音频地址加载失败',
     })
-    expect(usePlayer.getState().queue[0]).toBe(alternate)
+    expect(mocks.showToast).toHaveBeenCalledOnce()
   })
 
-  it('automatically switches an unavailable QQ song to a matching Netease source', async () => {
-    const original = song(1, 'qq')
-    const alternate = song(101, 'netease', { name: original.name })
+  it('shows only one Toast when a failed media element emits duplicate error events', async () => {
+    const current = song(1, 'qq')
+    resolvePlayback.mockResolvedValue(playable('qq', 'media'))
+    FakeAudio.playScript = (_src, audio) => {
+      queueMicrotask(() => {
+        audio.dispatchEvent(new Event('error'))
+        audio.dispatchEvent(new Event('error'))
+      })
+      return new Promise<void>(() => {})
+    }
+
+    await usePlayer.getState().setQueue([current], 0)
+
+    expect(usePlayer.getState().status).toBe('error')
+    expect(mocks.showToast).toHaveBeenCalledOnce()
+  })
+
+  it('still allows an explicit Next action after a failure', async () => {
+    const failed = song(1, 'netease')
+    const nextSong = song(2, 'netease')
     resolvePlayback.mockImplementation(async ({ song: requestedSong }) =>
-      requestedSong.provider === 'qq'
-        ? unavailable('qq')
-        : playable('netease', 'netease-alternate', 'exhigh'),
+      requestedSong.id === failed.id
+        ? unavailable('netease', '第一首无法播放')
+        : playable('netease', 'next-song'),
     )
-    search.mockResolvedValue({ provider: 'netease', songs: [alternate] })
 
-    await usePlayer.getState().setQueue([original], 0)
+    await usePlayer.getState().setQueue([failed, nextSong], 0)
+    expect(usePlayer.getState()).toMatchObject({ current: failed, status: 'error' })
 
-    expect(search).toHaveBeenCalledOnce()
-    expect(search).toHaveBeenCalledWith({
-      provider: 'netease',
-      keywords: `${original.name} ${original.artist}`,
-      limit: 12,
-    })
-    expect(usePlayer.getState()).toMatchObject({
-      current: alternate,
-      status: 'playing',
-      resolvedQuality: 'exhigh',
-    })
+    await usePlayer.getState().next()
+
+    expect(resolvePlayback).toHaveBeenCalledTimes(2)
+    expect(usePlayer.getState()).toMatchObject({ current: nextSong, index: 1, status: 'playing' })
   })
 
-  it('skips to the next queue item when both the primary and alternate sources fail', async () => {
-    const original = song(1, 'qq')
-    const alternate = song(101, 'netease', { name: original.name })
-    const nextSong = song(2, 'qq')
-    resolvePlayback.mockImplementation(async ({ song: requestedSong }) =>
-      requestedSong.id === nextSong.id
-        ? playable('qq', 'next-song', 'exhigh')
-        : unavailable(requestedSong.provider),
-    )
-    search.mockResolvedValue({ provider: 'netease', songs: [alternate] })
-
-    await usePlayer.getState().setQueue([original, nextSong], 0)
-    await vi.waitFor(() => {
-      expect(usePlayer.getState()).toMatchObject({ current: nextSong, status: 'playing' })
-    })
-
-    expect(search).toHaveBeenCalledOnce()
-    expect(resolvePlayback.mock.calls.some(([request]) => request.song.id === alternate.id)).toBe(true)
-    expect(resolvePlayback.mock.calls.at(-1)?.[0].song.id).toBe(nextSong.id)
-    expect(usePlayer.getState().notice).toContain('正在播放下一首')
-  })
-
-  it('ignores a late playback result after the user quickly replaces the queue', async () => {
+  it('ignores a late playback result after the user replaces the queue', async () => {
     const firstSong = song(1, 'qq')
     const secondSong = song(2, 'qq')
     let releaseFirst: (result: PlaybackResolveResult) => void = () => {}
@@ -266,6 +260,6 @@ describe('PlaybackEngine fallback orchestration', () => {
 
     expect(usePlayer.getState()).toMatchObject({ current: secondSong, status: 'playing' })
     expect(usePlayer.getState().audio.src).toBe('flux-media://audio/second-song')
-    expect(search).not.toHaveBeenCalled()
+    expect(mocks.showToast).not.toHaveBeenCalled()
   })
 })

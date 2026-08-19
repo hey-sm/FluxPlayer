@@ -18,17 +18,17 @@
   --flux-glass-border-color: #ffffff;
   --flux-glass-border-size: 1px;
   --flux-glass-border-opacity: 0;
-  --flux-glass-distortion: 40;
+  --flux-glass-distortion: 50;
   --flux-glass-chromatic-aberration: 0;
-  --flux-glass-radius: 30px;
+  --flux-glass-radius: 20px;
   --flux-glass-color: #ffffff;
   --flux-glass-inner-light-color: #ffffff;
-  --flux-glass-inner-light-spread: 1px;
-  --flux-glass-inner-light-blur: 10px;
-  --flux-glass-inner-light-opacity: 0;
+  --flux-glass-inner-light-spread: 0px;
+  --flux-glass-inner-light-blur: 8px;
+  --flux-glass-inner-light-opacity: 0.3;
   --flux-glass-outer-light-color: #ffffff;
-  --flux-glass-outer-light-spread: 1px;
-  --flux-glass-outer-light-blur: 10px;
+  --flux-glass-outer-light-spread: 0px;
+  --flux-glass-outer-light-blur: 0px;
   --flux-glass-outer-light-opacity: 0;
 
   --flux-radius-control: clamp(4px, calc(var(--flux-glass-radius) * 0.33), 14px);

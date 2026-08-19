@@ -15,7 +15,6 @@ interface PlayerActions {
   setQueue(songs: UnifiedSong[], startIndex?: number): Promise<void>
   setMode(mode: PlaybackMode): void
   setQualityPreference(level: QualityLevel): Promise<void>
-  retryWithAlternateSource(): Promise<void>
   next(): Promise<void>
   prev(): Promise<void>
   toggle(): void
@@ -44,7 +43,6 @@ export const usePlayer = create<PlayerState>((set, get) => {
     current: null,
     status: 'idle',
     message: '',
-    notice: '',
     duration: 0,
     position: 0,
     volume: playbackEngine.initialVolume,
@@ -55,7 +53,6 @@ export const usePlayer = create<PlayerState>((set, get) => {
     setQueue: (songs, startIndex) => playbackEngine.setQueue(songs, startIndex),
     setMode: (mode) => playbackEngine.setMode(mode),
     setQualityPreference: (level) => playbackEngine.setQualityPreference(level),
-    retryWithAlternateSource: () => playbackEngine.retryWithAlternateSource(),
     next: () => playbackEngine.next(),
     prev: () => playbackEngine.prev(),
     toggle: () => playbackEngine.toggle(),
