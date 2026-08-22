@@ -5,6 +5,14 @@ import { resolve } from 'node:path'
 
 export default defineConfig({
   main: {
+    // 打包模型是「全部内联」：electron-builder.yml 的 files 含 '!node_modules/**/*'，
+    // 安装包里没有可解析的 node_modules。因此 externalizeDepsPlugin externalize 掉的
+    // 任何包（= package.json `dependencies` 里的包）在装机后都会 import 失败，而 pnpm dev
+    // 走源码解析永远复现不出来。
+    //
+    // 不变量：main/preload 只要 import 某个包，它就必须 **不在** `dependencies` 里，
+    // 或者显式列进下面的 exclude。exclude 三项正是 node 侧仅有的运行时依赖：
+    // zod（'zod/mini'）、electron-updater、NeteaseCloudMusicApi（SDK 门面的 deep import）。
     plugins: [externalizeDepsPlugin({ exclude: ['NeteaseCloudMusicApi', 'electron-updater', 'zod'] })],
     resolve: {
       alias: {

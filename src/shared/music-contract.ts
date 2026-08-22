@@ -36,6 +36,8 @@ export interface MusicSearchRequest {
   limit?: number
   /** 1-based 页码，省略即第一页 */
   page?: number
+  /** 指定后端：chksz 强制走聚合 API、direct 强制走直连。省略时按密钥配置自动选择。 */
+  backend?: 'direct' | 'chksz'
 }
 
 export interface MusicSearchResult {

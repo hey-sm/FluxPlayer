@@ -1,4 +1,5 @@
-import { QueryClient, QueryObserver } from '@tanstack/react-query'
+import { InfiniteQueryObserver, QueryClient } from '@tanstack/react-query'
+import type { InfiniteData } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MusicSearchResult, MusicSearchRequest } from '@shared/music-contract'
 import type { UnifiedSong } from '@shared/models'
@@ -56,15 +57,18 @@ describe('search query cancellation', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } },
     })
-    const observer = new QueryObserver(queryClient, {
+    // 生产侧 SearchPanel 用的是 useInfiniteQuery，所以这里必须用 InfiniteQueryObserver，
+    // 否则测的是一条真实代码不会走的路径。
+    const observer = new InfiniteQueryObserver(queryClient, {
       ...createSearchQuery('netease', 'first', 20),
       retry: false,
     })
-    const results: Array<MusicSearchResult | undefined> = []
+    const results: Array<InfiniteData<MusicSearchResult> | undefined> = []
     const unsubscribe = observer.subscribe((result) => results.push(result.data))
 
     await vi.waitFor(() => expect(pending).toHaveLength(1))
-    expect(pending[0].request).toEqual({ provider: 'netease', keywords: 'first', limit: 20 })
+    // initialPageParam 为 1，首页请求必须带上 page —— 这是生产 useInfiniteQuery 的真实行为。
+    expect(pending[0].request).toEqual({ provider: 'netease', keywords: 'first', limit: 20, page: 1 })
 
     observer.setOptions({
       ...createSearchQuery('netease', 'second', 20),
@@ -79,12 +83,14 @@ describe('search query cancellation', () => {
     const latest: MusicSearchResult = {
       provider: 'netease',
       songs: [song('second-song', 'Second result')],
+      page: 1,
+      hasMore: false,
     }
     pending[1].resolve(latest)
 
-    await vi.waitFor(() => expect(observer.getCurrentResult().data).toEqual(latest))
-    expect(observer.getCurrentResult().data?.songs[0]?.name).toBe('Second result')
-    expect(results.filter(Boolean)).toEqual([latest])
+    await vi.waitFor(() => expect(observer.getCurrentResult().data?.pages).toEqual([latest]))
+    expect(observer.getCurrentResult().data?.pages[0]?.songs[0]?.name).toBe('Second result')
+    expect(results.filter((data) => data !== undefined).map((data) => data.pages)).toEqual([[latest]])
 
     unsubscribe()
     queryClient.clear()

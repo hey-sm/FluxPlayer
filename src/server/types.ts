@@ -1,6 +1,8 @@
 import type { LikedTracksResult, PlaybackResolveResult } from '@shared/music-contract'
 /** Provider credentials are owned by the Electron main process and never exposed to renderer code. */
-export type CredentialKey = 'netease' | 'qq'
+export type ProviderCredentialKey = 'netease' | 'qq'
+/** ChKSz 聚合 API 密钥，独立于 provider 凭据存储。 */
+export type CredentialKey = ProviderCredentialKey | 'chksz'
 
 export interface CredentialStore {
   get(key: CredentialKey): string

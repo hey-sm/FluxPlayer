@@ -33,9 +33,21 @@ const music: FluxMusicApi = {
   getDiscover: (request) => ipcRenderer.invoke(IPC.musicGetDiscover, request),
 }
 
+/** ChKSz 聚合 API 密钥管理：密钥在主进程加密存储，renderer 只能查询是否已配置。 */
+const chksz = {
+  getStatus: (): Promise<{ configured: boolean; enabled: boolean }> => ipcRenderer.invoke(IPC.chkszGetKey),
+  setKey: (key: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.chkszSetKey, { key }),
+  clearKey: (): Promise<{ ok: boolean }> => ipcRenderer.invoke(IPC.chkszClearKey),
+  setEnabled: (enabled: boolean): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke(IPC.chkszSetEnabled, { enabled }),
+  onQuotaWarning: (callback: (payload: { title: string; message: string }) => void): (() => void) =>
+    bind(IPC.chkszQuotaWarning, callback),
+}
+
 const api = {
   isDesktop: true as const,
   music,
+  chksz,
   minimize: (): Promise<void> => ipcRenderer.invoke(IPC.windowMinimize),
   toggleMaximize: (): Promise<void> => ipcRenderer.invoke(IPC.windowToggleMaximize),
   toggleFullscreen: (): Promise<void> => ipcRenderer.invoke(IPC.windowToggleFullscreen),

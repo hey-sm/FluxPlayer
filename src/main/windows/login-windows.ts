@@ -155,6 +155,86 @@ async function readNeteaseLoginCookieHeader(cookieSession: Electron.Session): Pr
   return buildCookieHeaderFor(cookies, isNeteaseCookieDomain, NETEASE_LOGIN_COOKIE_PRIORITY)
 }
 
+function parseUrl(rawUrl: string): URL | null {
+  try {
+    return new URL(rawUrl)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 只有 http(s) 能交给系统浏览器。把其它 scheme 转给 shell.openExternal 等于把任意 URI handler
+ * （ms-msdt:、search-ms:、file:、smb: …）暴露给登录窗口里的远程页面。
+ */
+function openExternalHttpUrl(rawUrl: string): void {
+  const target = parseUrl(rawUrl)
+  if (target && (target.protocol === 'https:' || target.protocol === 'http:')) {
+    void shell.openExternal(target.href).catch(() => {
+      // 交给系统失败不影响登录流程。
+    })
+  }
+}
+
+/**
+ * 目标是否属于「可以留在登录窗口内」的站内地址：必须是 http(s)，且主机命中 provider 自有域。
+ */
+function isInSiteLoginUrl(rawUrl: string, isAllowedDomain: (domain: string | undefined) => boolean): boolean {
+  const target = parseUrl(rawUrl)
+  if (!target) return false
+  if (target.protocol !== 'https:' && target.protocol !== 'http:') return false
+  return isAllowedDomain(target.hostname)
+}
+
+/**
+ * 登录窗口是全项目唯一加载远程第三方页面的地方，同时持有 provider 的 cookie partition，
+ * 且没有地址栏——用户无法看出自己已被导到别处。导航策略因此收紧为三条：
+ *
+ * 1. 非 http(s) 目标一律拒绝，绝不下发给操作系统。
+ * 2. provider 自有域（复用 cookie 域判定）在窗口内放行，登录流程要在窗口里走完。
+ * 3. 其余 http(s) 目标不得进入本窗口，改用系统浏览器打开（帮助、协议、客服等外链）。
+ *
+ * 被拦的目标都会打日志：登录流程若因某个第三方鉴权域被拦而中断，看日志即可定位补白名单。
+ */
+function applyLoginNavigationPolicy(
+  loginWindow: BrowserWindow,
+  isAllowedDomain: (domain: string | undefined) => boolean,
+  label: string,
+): void {
+  const isInSite = (rawUrl: string): boolean => isInSiteLoginUrl(rawUrl, isAllowedDomain)
+
+  loginWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isInSite(url)) {
+      loginWindow
+        .loadURL(url)
+        .catch((e) => console.warn(`${label} login popup navigation failed:`, e.message))
+    } else {
+      openExternalHttpUrl(url)
+    }
+    return { action: 'deny' }
+  })
+
+  loginWindow.webContents.on('will-navigate', (event, url) => {
+    if (isInSite(url)) return
+    event.preventDefault()
+    console.warn(`${label} login navigation blocked:`, url)
+    openExternalHttpUrl(url)
+  })
+
+  loginWindow.webContents.on('will-redirect', (event, url) => {
+    if (isInSite(url)) return
+    event.preventDefault()
+    console.warn(`${label} login redirect blocked:`, url)
+  })
+}
+
+/** 导航策略的纯函数出口，供边界测试直接断言。 */
+export const loginNavigationPolicyInternals = {
+  isInSiteLoginUrl,
+  isQQCookieDomain,
+  isNeteaseCookieDomain,
+}
+
 export async function openNeteaseMusicLoginWindow(owner?: BrowserWindow | null): Promise<LoginWindowResult> {
   const cookieSession = session.fromPartition(NETEASE_LOGIN_PARTITION)
   const initialCookie = await readNeteaseLoginCookieHeader(cookieSession)
@@ -200,16 +280,7 @@ export async function openNeteaseMusicLoginWindow(owner?: BrowserWindow | null):
       }
     }
 
-    loginWindow.webContents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\/([^/]+\.)?(163|music\.163|netease)\.com/i.test(url)) {
-        loginWindow
-          .loadURL(url)
-          .catch((e) => console.warn('Netease login popup navigation failed:', e.message))
-      } else if (/^https?:\/\//i.test(url)) {
-        shell.openExternal(url).catch(() => {})
-      }
-      return { action: 'deny' }
-    })
+    applyLoginNavigationPolicy(loginWindow, isNeteaseCookieDomain, 'Netease')
 
     loginWindow.webContents.on('did-finish-load', checkCookies)
     loginWindow.on('ready-to-show', () => loginWindow.show())
@@ -291,14 +362,7 @@ export async function openQQMusicLoginWindow(owner?: BrowserWindow | null): Prom
       }
     }
 
-    loginWindow.webContents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//i.test(url)) {
-        loginWindow.loadURL(url).catch((e) => console.warn('QQ login popup navigation failed:', e.message))
-      } else {
-        shell.openExternal(url).catch(() => {})
-      }
-      return { action: 'deny' }
-    })
+    applyLoginNavigationPolicy(loginWindow, isQQCookieDomain, 'QQ')
 
     loginWindow.webContents.on('did-finish-load', checkCookies)
     loginWindow.on('ready-to-show', () => loginWindow.show())

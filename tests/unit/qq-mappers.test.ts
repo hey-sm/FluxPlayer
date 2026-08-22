@@ -24,6 +24,7 @@ const TRACK_INFO_FIXTURE = {
     size_128mp3: 100,
   },
   pay: { pay_play: 1 },
+  action: { switch: 16889615, msgid: 0 },
 }
 
 describe('mapQQTrack', () => {
@@ -44,7 +45,7 @@ describe('mapQQTrack', () => {
       albumMid: '000MkMni19ClKG',
       duration: 269000,
       fee: 1,
-      playable: false,
+      playable: true,
       supportedQualities: ['lossless', 'exhigh', 'standard'],
     })
     expect(song.cover).toContain('000MkMni19ClKG')
@@ -55,6 +56,32 @@ describe('mapQQTrack', () => {
     expect(song.mid).toBe('mid1')
     expect(song.name).toBe('歌')
     expect(song.artist).toBe('某人')
+  })
+  it('action.switch=65537（bits 1-15 全 0）→ 无音源，playable: false', () => {
+    const song = mapQQTrack({
+      mid: 'm2',
+      name: 'Got It',
+      singer: [{ name: 'MKMS' }],
+      album: { mid: 'alb2' },
+      file: { media_mid: 'm2', size_flac: 25196104, size_320mp3: 4494344, size_128mp3: 1797880, size_try: 481070 },
+      pay: { pay_play: 0 },
+      action: { switch: 65537, msgid: 1 },
+      fnote: 3001,
+    })
+    expect(song.playable).toBe(false)
+    expect(song.supportedQualities).toEqual(['lossless', 'exhigh', 'standard'])
+  })
+  it('action.switch 有播放权限位（如 16889615）→ playable: true', () => {
+    const song = mapQQTrack({
+      mid: 'm3',
+      name: 'GigaChad',
+      singer: [{ name: '某' }],
+      album: { mid: 'alb3' },
+      file: { media_mid: 'm3', size_320mp3: 5853808, size_128mp3: 2341697 },
+      pay: { pay_play: 1 },
+      action: { switch: 16889615, msgid: 0 },
+    })
+    expect(song.playable).toBe(true)
   })
 })
 

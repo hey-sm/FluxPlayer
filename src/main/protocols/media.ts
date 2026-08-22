@@ -195,8 +195,16 @@ async function fetchAllowedCover(
   return new Response('Too many redirects', { status: 502 })
 }
 
-function validRange(value: string): boolean {
-  const normalized = value.trim()
+/** 日志用：只取主机名，绝不把带 vkey 的完整 URL 写进日志。 */
+function safeHost(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).hostname
+  } catch {
+    return 'invalid-url'
+  }
+}
+
+function validRange(value: string): boolean {  const normalized = value.trim()
   if (!/^bytes=(?:\d+-\d*|-\d+)(?:,(?:\d+-\d*|-\d+))*$/i.test(normalized)) return false
 
   return normalized
@@ -234,7 +242,12 @@ export async function handleMediaRequest(
   }
 
   const source = store.get(target.value)
-  if (!source) return new Response('Media handle expired', { status: 410 })
+  if (!source) {
+    // 渲染层拿到的是不透明句柄，失败时只会看到「媒体错误 4」。句柄丢失与上游拒绝
+    // 表现完全一样，这里必须区分开，否则线上无从定位。
+    console.warn('[FluxMedia] audio handle miss:', target.value)
+    return new Response('Media handle expired', { status: 410 })
+  }
   const range = request.headers.get('range')
   if (range && !validRange(range)) {
     return new Response('Invalid range', { status: 416, headers: { 'Accept-Ranges': 'bytes' } })
@@ -248,11 +261,23 @@ export async function handleMediaRequest(
       headers,
       redirect: 'follow',
     })
+    if (upstream.status >= 400) {
+      // 只打主机与状态码：vkey 在 URL 的查询串里，不进日志。
+      console.warn('[FluxMedia] audio upstream rejected:', {
+        status: upstream.status,
+        host: safeHost(source.url),
+        ranged: Boolean(range),
+      })
+    }
     return new Response(request.method === 'HEAD' ? null : upstream.body, {
       status: upstream.status,
       headers: filteredResponseHeaders(upstream, 'audio'),
     })
-  } catch {
+  } catch (error: unknown) {
+    console.warn('[FluxMedia] audio upstream unreachable:', {
+      host: safeHost(source.url),
+      reason: error instanceof Error ? error.message : String(error),
+    })
     return new Response('Audio upstream unavailable', { status: 502 })
   }
 }

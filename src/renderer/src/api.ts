@@ -39,9 +39,16 @@ const MUSIC_ERROR_MESSAGES: Readonly<Record<MusicErrorCode, string>> = {
   INTERNAL_ERROR: '操作失败，请稍后重试',
 }
 
-/** Maps the stable IPC error-code union to product copy without exposing provider diagnostics. */
+/**
+ * Maps the stable IPC error-code union to product copy without exposing provider diagnostics.
+ *
+ * ChKSz 聚合层抛出的错误带人类可读文案（配额耗尽 / 限流 / Key 失效），主进程以
+ * "ChKSz" 前缀文案抛 Error，跨 IPC 后这里识别前缀直接显示文案，不走 provider 码翻译。
+ */
 export function musicErrorMessage(error: unknown, fallback: string): string {
   const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  if (!raw) return fallback
+  if (raw.startsWith('ChKSz')) return raw
   const code = (Object.keys(MUSIC_ERROR_MESSAGES) as MusicErrorCode[]).find((candidate) =>
     raw.includes(candidate),
   )

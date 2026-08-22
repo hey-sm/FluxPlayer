@@ -26,6 +26,7 @@ vi.mock('@renderer/api', () => ({
 
 const playlist: UnifiedPlaylist = {
   provider: 'qq',
+  type: 'playlist',
   id: 'playlist-1',
   name: 'Typed playlist',
   cover: '',
@@ -172,7 +173,7 @@ describe('typed playlist data flow', () => {
     })
 
     expect(getPlaylistTracks).toHaveBeenCalledTimes(4)
-    expect(getPlaylistTracks.mock.calls.map(([request]) => request.id)).toEqual([
+    expect(vi.mocked(getPlaylistTracks).mock.calls.map(([request]) => request.id)).toEqual([
       'playlist-1',
       'playlist-2',
       'playlist-3',

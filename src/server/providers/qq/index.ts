@@ -13,6 +13,7 @@ import {
 } from '@shared/models'
 import { buildLyricLines } from '@shared/lyrics'
 import type { CredentialStore, ProviderLikedTracksResult, UpstreamPlaybackResource } from '../../types'
+import { probePlaybackAudioUrl } from '../../util/audio-probe'
 import { normalizeCookieHeader, rawCookieFallback } from '../../util/cookies'
 import {
   asArray,
@@ -43,6 +44,8 @@ const QQ_TRIAL_STREAM_ORIGIN = 'https://dl.stream.qqmusic.qq.com'
 const QQ_PROFILE_CACHE_MS = 60_000
 const QQ_PLAYLIST_PAGE_SIZE = 300
 const QQ_PLAYLIST_MAX_PAGES = 10
+const QQ_AUDIO_PROBE_TIMEOUT_MS = 1500
+const QQ_AUDIO_PROBE_TOTAL_MS = 3500
 /** RecommendFeed 里官方「今日为你推荐」那一行的货架 id；同一响应还会夹带 203/204，必须按 id 认 */
 const QQ_FEED_SHELF_FOR_YOU = 201
 /** RecommendFeed 卡片类型：500=歌单（id 是 dissid），800=听歌排行，-1=运营位 */
@@ -398,7 +401,7 @@ export class QQProvider {
         return {
           provider: 'qq',
           url: `${QQ_TRIAL_STREAM_ORIGIN}/${safeFilename}?${query.toString()}`,
-          headers: {},
+          headers: { Referer: 'https://y.qq.com/' },
           trial: true,
           playable: true,
           level: 'aac',
@@ -425,6 +428,17 @@ export class QQProvider {
       }
     }
     return null
+  }
+
+  protected async probeUrl(
+    audioUrl: string,
+    timeoutMs: number,
+  ): Promise<{ ok: boolean; status: number; reason?: string }> {
+    const result = await probePlaybackAudioUrl(audioUrl, {
+      timeoutMs,
+      headers: { Referer: 'https://y.qq.com/' },
+    })
+    return { ok: result.ok, status: result.status, reason: result.reason }
   }
 
   async songUrl(mid: string, mediaMid: string, qualityPreference: string): Promise<UpstreamPlaybackResource> {
@@ -476,24 +490,70 @@ export class QQProvider {
     })
     const data = at(json, 'req_0', 'data')
     const infos = asArray(field(data, 'midurlinfo'))
-    const info = infos.find((candidate) => Boolean(stringValue(field(candidate, 'purl')))) ?? infos[0]
-    const purl = stringValue(field(info, 'purl'))
-    if (purl) {
-      const sip = stringValue(asArray(field(data, 'sip'))[0], 'https://ws.stream.qqmusic.qq.com/')
-      const returnedFilename = stringValue(field(info, 'filename'))
-      const fileMeta = fileCandidates.find((candidate) => candidate.filename === returnedFilename)
-      return {
-        provider: 'qq',
-        url: `${sip}${purl}`,
-        headers: {},
-        trial: false,
-        playable: true,
-        level: fileMeta?.level || returnedFilename,
-        quality: fileMeta?.label || returnedFilename,
-        filename: returnedFilename,
-        requestedQuality,
+    const sipCandidates = asArray(field(data, 'sip'))
+      .map((candidate) => stringValue(candidate))
+      .filter(Boolean)
+      .map((sip) => sip.replace(/^http:\/\//, 'https://'))
+    const defaultSip = sipCandidates[0] || 'https://ws.stream.qqmusic.qq.com/'
+    const playableInfos = infos
+      .map((candidate) => {
+        const filename = stringValue(field(candidate, 'filename'))
+        const candidatePurl = stringValue(field(candidate, 'purl'))
+        return { info: candidate, filename, purl: candidatePurl, fileMeta: fileCandidates.find((item) => item.filename === filename) }
+      })
+      .filter((entry) => Boolean(entry.purl))
+      .sort((left, right) => {
+        const leftIndex = fileCandidates.findIndex((item) => item.filename === left.filename)
+        const rightIndex = fileCandidates.findIndex((item) => item.filename === right.filename)
+        return (leftIndex < 0 ? 999 : leftIndex) - (rightIndex < 0 ? 999 : rightIndex)
+      })
+    if (playableInfos.length) {
+      const probeDeadline = Date.now() + QQ_AUDIO_PROBE_TOTAL_MS
+      const probeFailures: string[] = []
+      for (const entry of playableInfos) {
+        let verifiedUrl = ''
+        for (const sip of sipCandidates.length ? sipCandidates : [defaultSip]) {
+          const candidateUrl = `${sip}${entry.purl}`
+          const remaining = probeDeadline - Date.now()
+          if (remaining < 300) break
+          const probe = await this.probeUrl(candidateUrl, Math.min(QQ_AUDIO_PROBE_TIMEOUT_MS, remaining))
+          if (probe.ok) {
+            verifiedUrl = candidateUrl
+            break
+          }
+          probeFailures.push(`${entry.filename}:${probe.reason || probe.status || 'failed'}`)
+        }
+        if (verifiedUrl) {
+          console.warn('[QQPlayback] resolved', {
+            mid: songmid,
+            requestedQuality,
+            returnedFilename: entry.filename,
+            sipCandidates,
+            chosenUrl: verifiedUrl,
+            probed: true,
+            probeFailures: probeFailures.slice(0, 8),
+          })
+          return {
+            provider: 'qq',
+            url: verifiedUrl,
+            headers: { Referer: 'https://y.qq.com/' },
+            trial: false,
+            playable: true,
+            level: entry.fileMeta?.level || entry.filename,
+            quality: entry.fileMeta?.label || entry.filename,
+            filename: entry.filename,
+            requestedQuality,
+          }
+        }
       }
+      console.warn('[QQPlayback] all probed purls failed, falling through', {
+        mid: songmid,
+        requestedQuality,
+        probeFailures: probeFailures.slice(0, 8),
+      })
     }
+
+    const info = infos.find((candidate) => Boolean(stringValue(field(candidate, 'purl')))) ?? infos[0]
 
     const trialFallback = await this.legacyTrialUrl(songmid, mediaIds, guid, requestedQuality)
     if (trialFallback) {

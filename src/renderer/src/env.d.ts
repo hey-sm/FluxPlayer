@@ -1,8 +1,22 @@
 /// <reference types="vite/client" />
 
+interface ChkszApi {
+  /** 查询 ChKSz 密钥是否已配置、是否已启用（不返回明文密钥）。 */
+  getStatus(): Promise<{ configured: boolean; enabled: boolean }>
+  /** 保存 ChKSz API Key（DPAPI 加密落盘）并自动启用。 */
+  setKey(key: string): Promise<{ ok: boolean }>
+  /** 清除已保存的 ChKSz API Key。 */
+  clearKey(): Promise<{ ok: boolean }>
+  /** 切换 ChKSz 启用状态（停用不清除密钥）。 */
+  setEnabled(enabled: boolean): Promise<{ ok: boolean }>
+  /** 主进程配额/限流告警 → renderer 顶栏 toast。 */
+  onQuotaWarning(callback: (payload: { title: string; message: string }) => void): () => void
+}
+
 interface FluxDesktopApi {
   isDesktop: boolean
   music: import('@shared/music-contract').FluxMusicApi
+  chksz: ChkszApi
   minimize(): Promise<void>
   toggleMaximize(): Promise<void>
   toggleFullscreen(): Promise<void>

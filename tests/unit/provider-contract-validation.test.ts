@@ -1,15 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  LikedTracksResult,
-  MusicAuthResult,
-  PlaylistListResult,
-  PlaylistTracksResult,
-} from '@shared/music-contract'
+import type { MusicAuthResult, PlaylistListResult, PlaylistTracksResult } from '@shared/music-contract'
 import type { ProviderId, UnifiedPlaylist, UnifiedSong } from '@shared/models'
 import { MusicService, MusicServiceError, musicErrorCode } from '@server/music'
 import { QQClient } from '@server/providers/qq/client'
 import { QQProvider } from '@server/providers/qq'
-import type { CredentialStore, UpstreamPlaybackResource } from '@server/types'
+import type { CredentialStore, ProviderLikedTracksResult, UpstreamPlaybackResource } from '@server/types'
 
 const credentials: CredentialStore = {
   get: vi.fn(() => ''),
@@ -73,10 +68,7 @@ function playlistTracks(provider: ProviderId): PlaylistTracksResult {
   return { provider, loggedIn: true, playlist: playlist(provider), tracks: [song(provider)] }
 }
 
-function likedTracks(provider: ProviderId): LikedTracksResult & {
-  error?: string
-  message?: string
-} {
+function likedTracks(provider: ProviderId): ProviderLikedTracksResult {
   return {
     provider,
     loggedIn: true,
@@ -86,7 +78,8 @@ function likedTracks(provider: ProviderId): LikedTracksResult & {
     limit: 200,
     total: 1,
     hasMore: false,
-    error: 'provider-only-error',
+    // provider 层独有的诊断字段，用来验证它们不会越过跨进程边界。
+    error: 'LIKED_TRACKS_UNAVAILABLE',
     message: 'provider-only-message',
   }
 }

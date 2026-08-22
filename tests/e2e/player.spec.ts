@@ -1,8 +1,9 @@
 import sharp from 'sharp'
 import type { Locator, Page, TestInfo } from '@playwright/test'
+import type { UnifiedSong } from '../../src/shared/models'
 import { E2E_AUDIO_URL, expect, test } from './electron.fixture'
 
-const TRACK = {
+const TRACK: UnifiedSong = {
   provider: 'netease',
   type: 'song',
   id: 61_000_001,
@@ -15,7 +16,7 @@ const TRACK = {
   fee: 0,
   playable: true,
   supportedQualities: ['lossless'],
-} as const
+}
 
 async function inspectTrackedAudio(page: import('@playwright/test').Page) {
   return page.evaluate(() => {
@@ -86,7 +87,7 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(page.locator('[data-stage-background]')).toBeVisible()
   const stageCanvas = page.locator('[data-stage-background] canvas')
   await expect(stageCanvas).toHaveCount(1)
-  await captureVisual(page, stageCanvas, testInfo, 'light-rays-desktop')
+  await captureVisual(page, stageCanvas, testInfo, 'rain-desktop')
   await expect(page.locator('.visual-toggle')).toHaveCount(0)
   const mainWindow = await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()
@@ -255,10 +256,11 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(lyricsColorSwitch).toHaveAttribute('aria-checked', 'true')
   await page.getByRole('tab', { name: '背景', exact: true }).click()
   const backgroundSelect = page.getByRole('combobox', { name: '动态背景' })
-  await expect(backgroundSelect).toContainText('光线')
+  await expect(backgroundSelect).toContainText('雨窗')
   await backgroundSelect.click()
   await expect(page.locator('[data-glass-select-surface]')).toBeVisible()
   await expect(page.getByRole('option', { name: '星河' })).toHaveCount(0)
+  await expect(page.getByRole('option', { name: '光线' })).toHaveCount(0)
   await page.getByRole('option', { name: '吊灯' }).click()
   await expect(backgroundSelect).toContainText('吊灯')
   await expect(page.locator('[data-app-root]')).toHaveAttribute('data-background-mode', 'dynamic')
@@ -402,7 +404,7 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(librarySheet).toHaveAttribute('data-animation-state', 'enter')
   expect(
     await page.evaluate(() =>
-      document.getAnimations({ subtree: true }).some((animation) => {
+      document.getAnimations().some((animation) => {
         const effect = animation.effect
         return (
           effect instanceof KeyframeEffect &&
@@ -662,16 +664,16 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
 
   await page.getByRole('button', { name: '设置' }).click()
   await backgroundSelect.click()
-  await page.getByRole('option', { name: '星系' }).click()
-  await expect(backgroundSelect).toContainText('星系')
+  await page.getByRole('option', { name: '水纹' }).click()
+  await expect(backgroundSelect).toContainText('水纹')
   await expect
     .poll(() => page.evaluate(() => localStorage.getItem('fluxplayer-dynamic-background-v1')))
-    .toBe('galaxy')
+    .toBe('caustic')
   await page.getByRole('button', { name: '关闭' }).click()
-  await captureVisual(page, stageCanvas, testInfo, 'galaxy-narrow')
+  await captureVisual(page, stageCanvas, testInfo, 'caustic-narrow')
 
   await expect.poll(() => resizeMainWindow(app, page, 1280, 720)).toBeGreaterThan(960)
-  await captureVisual(page, stageCanvas, testInfo, 'galaxy-wide')
+  await captureVisual(page, stageCanvas, testInfo, 'caustic-wide')
   expect(rendererCrashes).toEqual([])
 
   await page.getByRole('button', { name: '关闭', exact: true }).click()

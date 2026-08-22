@@ -48,7 +48,7 @@ export const DEFAULT_GLASS_CONFIG = Object.freeze({
   backgroundOpacity: 0,
   innerLightColor: '#ffffff',
   innerLightSpread: 0,
-  innerLightBlur: 8,
+  innerLightBlur: 60,
   innerLightOpacity: 0.3,
   outerLightColor: '#ffffff',
   outerLightSpread: 0,

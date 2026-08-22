@@ -9,8 +9,8 @@ import {
   type WallpaperEngineState,
 } from '@shared/wallpaper-engine-contract'
 import { AppTopBar, FocusModeExitControls } from './components/shell/AppTopBar'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { PlayerBar } from './components/player/PlayerBar'
-import { ToastViewport } from './components/ui/toast-viewport'
 import { LibraryWorkspace } from './features/library'
 import { StageLyricsSynchronizer } from './features/lyrics'
 import { SearchPanel } from './features/search'
@@ -29,22 +29,23 @@ const StageCanvas = lazy(() =>
   import('./visual/StageCanvas').then((module) => ({ default: module.StageCanvas })),
 )
 
+// 两处懒加载都可能因 chunk 加载失败而抛错（网络抖动、更新后 hash 失配）。兜底 UI 是静默的，
+// 所以必须显式告诉用户发生了什么，否则背景/设置凭空消失会被当成 bug。
+function reportVisualLayerFailure(): void {
+  showToast('视觉效果加载失败，已切换为纯色背景，播放不受影响。', { title: '视觉效果', tone: 'warning' })
+}
+
+function reportSettingsFailure(): void {
+  showToast('设置面板加载失败，请重新打开；若反复出现请重启应用。', { title: '设置面板', tone: 'error' })
+}
+
 const DYNAMIC_BACKGROUND_KEY = 'fluxplayer-dynamic-background-v1'
 const LEGACY_VISUAL_PRESET_KEY = 'fluxplayer-visual-preset-v1'
 const LEGACY_UI_MOTION_KEY = 'flux-ui-motion'
-const LYRICS_DRAG_KEY = 'flux-lyrics-drag-enabled'
 const LYRICS_OFFSET_KEY = 'flux-lyrics-offset'
 const LYRICS_ANIMATION_KEY = 'flux-lyrics-animation-mode-v1'
 const LYRICS_FOCUS_ONLY_KEY = 'flux-lyrics-focus-only-v1'
 const BACKGROUND_MODE_KEY = 'fluxplayer-background-mode-v1'
-
-function initialLyricsDragEnabled(): boolean {
-  try {
-    return localStorage.getItem(LYRICS_DRAG_KEY) === '1'
-  } catch {
-    return false
-  }
-}
 
 function initialLyricsOffset(): LyricsOffset {
   try {
@@ -62,9 +63,9 @@ function initialLyricsOffset(): LyricsOffset {
 function initialDynamicBackground(): DynamicBackgroundEffect {
   try {
     const raw = localStorage.getItem(DYNAMIC_BACKGROUND_KEY)
-    return isDynamicBackgroundEffect(raw) ? raw : 'light-rays'
+    return isDynamicBackgroundEffect(raw) ? raw : 'rain'
   } catch {
-    return 'light-rays'
+    return 'rain'
   }
 }
 
@@ -166,7 +167,6 @@ export default function App(): React.JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsMounted, setSettingsMounted] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
-  const [lyricsDragEnabled, setLyricsDragEnabled] = useState(initialLyricsDragEnabled)
   const [lyricsAnimationMode, setLyricsAnimationMode] =
     useState<LyricsAnimationMode>(initialLyricsAnimationMode)
   const [lyricsFocusOnly, setLyricsFocusOnly] = useState(initialLyricsFocusOnly)
@@ -348,14 +348,6 @@ export default function App(): React.JSX.Element {
       // Keep the setting for this session when persistence is unavailable.
     }
   }, [lyricsFocusOnly])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LYRICS_DRAG_KEY, lyricsDragEnabled ? '1' : '0')
-    } catch {
-      // Keep the setting for this session when persistence is unavailable.
-    }
-  }, [lyricsDragEnabled])
 
   useEffect(() => {
     try {
@@ -562,18 +554,20 @@ export default function App(): React.JSX.Element {
         onReadyChange={setWallpaperEngineReady}
         onFailure={handleWallpaperEngineFailure}
       />
-      <Suspense fallback={null}>
-        <StageCanvas
-          className="pointer-events-auto absolute inset-0 z-[1]"
-          backgroundEffect={dynamicBackground}
-          backgroundEnabled={effectiveBackgroundMode === 'dynamic' && !wallpaperEngineReady}
-          lyricsDragEnabled={lyricsDragEnabled}
-          lyricsAnimationMode={lyricsAnimationMode}
-          lyricsFocusOnly={lyricsFocusOnly}
-          lyricsOffset={lyricsOffset}
-          onLyricsOffsetChange={setLyricsOffset}
-        />
-      </Suspense>
+      {/* 视觉层是纯装饰：它挂了不该拖垮播放，所以单独兜底并静默降级。 */}
+      <ErrorBoundary onError={reportVisualLayerFailure}>
+        <Suspense fallback={null}>
+          <StageCanvas
+            className="pointer-events-auto absolute inset-0 z-[1]"
+            backgroundEffect={dynamicBackground}
+            backgroundEnabled={effectiveBackgroundMode === 'dynamic' && !wallpaperEngineReady}
+            lyricsAnimationMode={lyricsAnimationMode}
+            lyricsFocusOnly={lyricsFocusOnly}
+            lyricsOffset={lyricsOffset}
+            onLyricsOffsetChange={setLyricsOffset}
+          />
+        </Suspense>
+      </ErrorBoundary>
       <AppTopBar
         settingsOpen={settingsOpen}
         onToggleSettings={() => {
@@ -584,46 +578,45 @@ export default function App(): React.JSX.Element {
       />
       {focusMode ? <FocusModeExitControls onExit={exitFocusMode} /> : null}
       {settingsMounted ? (
-        <Suspense fallback={null}>
-          <SettingsPanel
-            open={settingsOpen}
-            onClose={() => setSettingsOpen(false)}
-            dynamicBackground={dynamicBackground}
-            onDynamicBackgroundChange={(effect) => {
-              setDynamicBackground(effect)
-              setBackgroundMode('dynamic')
-            }}
-            backgroundMode={effectiveBackgroundMode}
-            onBackgroundModeChange={(mode) => {
-              if (mode === 'wallpaper') {
-                setBackgroundMediaFailed(false)
+        <ErrorBoundary resetKey={settingsOpen} onError={reportSettingsFailure}>
+          <Suspense fallback={null}>
+            <SettingsPanel
+              open={settingsOpen}
+              onClose={() => setSettingsOpen(false)}
+              dynamicBackground={dynamicBackground}
+              onDynamicBackgroundChange={(effect) => {
+                setDynamicBackground(effect)
+                setBackgroundMode('dynamic')
+              }}
+              backgroundMode={effectiveBackgroundMode}
+              onBackgroundModeChange={(mode) => {
+                if (mode === 'wallpaper') {
+                  setBackgroundMediaFailed(false)
+                }
+                setBackgroundMode(mode)
+              }}
+              customBackground={customBackground}
+              backgroundBusy={backgroundBusy}
+              wallpaperEngineSelection={wallpaperEngineState.selection}
+              onWallpaperEngineStateChange={handleWallpaperEngineStateChange}
+              onWallpaperEngineSnapshotChange={handleWallpaperEngineSnapshotChange}
+              onWallpaperEngineDeactivate={handleWallpaperEngineDeactivate}
+              onChooseBackground={() =>
+                void runBackgroundCommand(() => window.fluxDesktop?.chooseCustomBackgroundFile())
               }
-              setBackgroundMode(mode)
-            }}
-            customBackground={customBackground}
-            backgroundBusy={backgroundBusy}
-            wallpaperEngineSelection={wallpaperEngineState.selection}
-            onWallpaperEngineStateChange={handleWallpaperEngineStateChange}
-            onWallpaperEngineSnapshotChange={handleWallpaperEngineSnapshotChange}
-            onWallpaperEngineDeactivate={handleWallpaperEngineDeactivate}
-            onChooseBackground={() =>
-              void runBackgroundCommand(() => window.fluxDesktop?.chooseCustomBackgroundFile())
-            }
-            onClearBackground={() =>
-              void runBackgroundCommand(() => window.fluxDesktop?.clearCustomBackground())
-            }
-            lyricsDragEnabled={lyricsDragEnabled}
-            lyricsAnimationMode={lyricsAnimationMode}
-            onLyricsAnimationModeChange={setLyricsAnimationMode}
-            lyricsFocusOnly={lyricsFocusOnly}
-            onLyricsFocusOnlyChange={setLyricsFocusOnly}
-            onLyricsDragEnabledChange={setLyricsDragEnabled}
-            onResetLyricsPosition={() => setLyricsOffset({ x: 0, y: 0 })}
-          />
-        </Suspense>
+              onClearBackground={() =>
+                void runBackgroundCommand(() => window.fluxDesktop?.clearCustomBackground())
+              }
+              lyricsAnimationMode={lyricsAnimationMode}
+              onLyricsAnimationModeChange={setLyricsAnimationMode}
+              lyricsFocusOnly={lyricsFocusOnly}
+              onLyricsFocusOnlyChange={setLyricsFocusOnly}
+              onResetLyricsPosition={() => setLyricsOffset({ x: 0, y: 0 })}
+            />
+          </Suspense>
+        </ErrorBoundary>
       ) : null}
       <StageLyricsSynchronizer />
-      <ToastViewport />
       <LibraryWorkspace provider={provider} onProviderChange={setProvider} />
       <div
         data-app-chrome="content"

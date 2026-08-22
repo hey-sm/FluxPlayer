@@ -12,7 +12,6 @@ export interface LyricsOffset {
 export interface StageCanvasProps {
   backgroundEffect?: DynamicBackgroundEffect
   backgroundEnabled?: boolean
-  lyricsDragEnabled?: boolean
   lyricsAnimationMode?: LyricsAnimationMode
   lyricsFocusOnly?: boolean
   lyricsOffset?: LyricsOffset
@@ -29,9 +28,8 @@ function isProtectedUiTarget(target: EventTarget | null): boolean {
 }
 
 export function StageCanvas({
-  backgroundEffect = 'light-rays',
+  backgroundEffect = 'rain',
   backgroundEnabled = true,
-  lyricsDragEnabled = false,
   lyricsAnimationMode = 'compact',
   lyricsFocusOnly = false,
   lyricsOffset = { x: 0, y: 0 },
@@ -45,7 +43,6 @@ export function StageCanvas({
   const backgroundEffectRef = useRef(backgroundEffect)
   const backgroundEnabledRef = useRef(backgroundEnabled)
   const accentColorRef = useRef(accentColor)
-  const lyricsDragEnabledRef = useRef(lyricsDragEnabled)
   const lyricsAnimationModeRef = useRef(lyricsAnimationMode)
   const lyricsFocusOnlyRef = useRef(lyricsFocusOnly)
   const lyricsOffsetRef = useRef(lyricsOffset)
@@ -60,7 +57,6 @@ export function StageCanvas({
       stage.mount(container)
       stage.setBackgroundEffect(backgroundEffectRef.current)
       stage.setBackgroundEnabled(backgroundEnabledRef.current)
-      stage.setLyricsDragEnabled(lyricsDragEnabledRef.current)
       stage.setLyricsAnimationMode(lyricsAnimationModeRef.current)
       stage.setLyricsFocusOnly(lyricsFocusOnlyRef.current)
       stage.setLyricsOffset(lyricsOffsetRef.current.x, lyricsOffsetRef.current.y)
@@ -97,27 +93,30 @@ export function StageCanvas({
       }
       const onPointerDown = (event: PointerEvent): void => {
         if (isProtectedUiTarget(event.target)) return
-        if (
-          stage.beginBackgroundPointer(
-            event.clientX,
-            event.clientY,
-            event.button,
-            event.pointerId,
-          )
-        ) {
-          backgroundPointerId = event.pointerId
-          event.preventDefault()
-          return
+        // 左键长按滑动 → 旋转视角；右键长按滑动 → 拖拽歌词位置。
+        // 左键优先让背景交互接管（html-light 仅响应左键中心区域），右键留给拖拽。
+        if (event.button === 0) {
+          if (
+            stage.beginBackgroundPointer(
+              event.clientX,
+              event.clientY,
+              event.button,
+              event.pointerId,
+            )
+          ) {
+            backgroundPointerId = event.pointerId
+            event.preventDefault()
+            return
+          }
         }
-        if (
-          event.button !== 0 ||
-          !isLyricsRegion(event.clientX, event.clientY)
-        )
-          return
+        if (!isLyricsRegion(event.clientX, event.clientY)) return
+        if (event.button === 0) interactionMode = 'rotate'
+        else if (event.button === 2) interactionMode = 'move'
+        else return
         pointerId = event.pointerId
-        interactionMode = lyricsDragEnabledRef.current ? 'move' : 'rotate'
         startX = lastX = event.clientX
         startY = lastY = event.clientY
+        if (event.button === 2) event.preventDefault()
       }
       const onPointerMove = (event: PointerEvent): void => {
         stage.setPointer(event.clientX, event.clientY, true)
@@ -186,10 +185,16 @@ export function StageCanvas({
         stage.zoomLyrics(Math.max(-160, Math.min(160, delta)))
         event.preventDefault()
       }
+      const onContextMenu = (event: MouseEvent): void => {
+        if (isProtectedUiTarget(event.target)) return
+        if (!isLyricsRegion(event.clientX, event.clientY)) return
+        event.preventDefault()
+      }
       window.addEventListener('pointerdown', onPointerDown, true)
       window.addEventListener('pointermove', onPointerMove, { capture: true, passive: false })
       window.addEventListener('pointerup', onPointerUp, true)
       window.addEventListener('pointercancel', onPointerUp, true)
+      window.addEventListener('contextmenu', onContextMenu, true)
       document.addEventListener('visibilitychange', onVisibilityChange)
       window.addEventListener('wheel', onWheel, { capture: true, passive: false })
       const onBlur = (): void => {
@@ -207,6 +212,7 @@ export function StageCanvas({
         window.removeEventListener('pointermove', onPointerMove, true)
         window.removeEventListener('pointerup', onPointerUp, true)
         window.removeEventListener('pointercancel', onPointerUp, true)
+        window.removeEventListener('contextmenu', onContextMenu, true)
         document.removeEventListener('visibilitychange', onVisibilityChange)
         window.removeEventListener('wheel', onWheel, true)
         window.removeEventListener('blur', onBlur)
@@ -232,11 +238,6 @@ export function StageCanvas({
   }, [accentColor])
 
   useEffect(() => {
-    lyricsDragEnabledRef.current = lyricsDragEnabled
-    stageRef.current?.setLyricsDragEnabled(lyricsDragEnabled)
-  }, [lyricsDragEnabled])
-
-  useEffect(() => {
     lyricsAnimationModeRef.current = lyricsAnimationMode
     stageRef.current?.setLyricsAnimationMode(lyricsAnimationMode)
   }, [lyricsAnimationMode])
@@ -260,8 +261,8 @@ export function StageCanvas({
       ref={containerRef}
       className={className}
       data-stage-background=""
-      data-lyrics-draggable={lyricsDragEnabled || undefined}
-      data-lyrics-interaction={lyricsDragEnabled ? 'move' : 'rotate'}
+      data-lyrics-draggable=""
+      data-lyrics-interaction="dual"
       data-lyrics-animation-mode={lyricsAnimationMode}
       data-lyrics-focus-only={lyricsFocusOnly || undefined}
       style={{ width: '100%', height: '100%', ...style }}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ProviderId, QualityLevel } from '@shared/models'
 import { cn } from '@/lib/utils'
 import { gsap, motionDurations, motionEases, useGSAP, useReducedMotion } from '@/motion'
@@ -37,23 +37,38 @@ function QualityMenu({
   provider,
   preference,
   resolved,
+  supportedQualities,
   onChange,
 }: {
   provider: ProviderId
   preference: QualityLevel
   resolved: QualityLevel | null
+  supportedQualities?: readonly QualityLevel[]
   onChange(value: QualityLevel): Promise<void>
 }): React.JSX.Element {
   const [busy, setBusy] = useState(false)
-  const options: readonly QualityLevel[] =
+  const allOptions: readonly QualityLevel[] =
     provider === 'qq'
       ? ['hires', 'lossless', 'exhigh', 'standard']
       : ['jymaster', 'hires', 'lossless', 'exhigh', 'standard']
+  // 按当前歌曲实际支持的音质过滤；无数据时回退到全量
+  const options = useMemo(
+    () => supportedQualities && supportedQualities.length > 0
+      ? allOptions.filter((q) => supportedQualities.includes(q))
+      : allOptions,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [provider, supportedQualities],
+  )
   const actual = resolved ?? preference
+  // 下拉打开时自动滚动到「当前播放音质」而非「偏好音质」——用户体验最直观
+  const selectValue = options.includes(actual) ? actual : preference
+  // supportedQualities 变化时强制 GlassSelect 重新挂载，确保下拉列表项同步更新
+  const qualityKey = (supportedQualities ?? []).join(',')
 
   return (
     <GlassSelect
-      value={preference}
+      key={qualityKey}
+      value={selectValue}
       ariaLabel="选择播放音质"
       title={`当前音质：${QUALITY_LABELS[actual]}`}
       disabled={busy}
@@ -241,6 +256,7 @@ export function PlayerBar(): React.JSX.Element | null {
         provider={current.provider}
         preference={qualityPreference}
         resolved={resolvedQuality}
+        supportedQualities={current.supportedQualities}
         onChange={setQualityPreference}
       />
       <div

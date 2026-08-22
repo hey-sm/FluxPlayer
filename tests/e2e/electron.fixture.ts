@@ -451,10 +451,10 @@ class VerifiedProcessTree {
   private samplingLoop: Promise<void> | undefined
   private lastSamplingError: Error | undefined
 
-  private constructor(private readonly rootPid: number) {}
+  private constructor() {}
 
   static async create(rootPid: number, timeoutMs = 5_000): Promise<VerifiedProcessTree> {
-    const tracker = new VerifiedProcessTree(rootPid)
+    const tracker = new VerifiedProcessTree()
     const deadline = Date.now() + timeoutMs
     let lastError: Error | undefined
 

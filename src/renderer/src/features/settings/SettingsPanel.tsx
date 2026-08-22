@@ -38,6 +38,12 @@ const SystemMaintenancePanel = lazy(() =>
   })),
 )
 
+const ChkszKeyPanel = lazy(() =>
+  import('./ChkszKeyPanel').then((module) => ({
+    default: module.ChkszKeyPanel,
+  })),
+)
+
 const dynamicBackgroundSelectOptions = DYNAMIC_BACKGROUND_OPTIONS.map((option) => ({
   value: option.value,
   label: option.label,
@@ -142,12 +148,10 @@ export interface SettingsPanelProps {
   onWallpaperEngineStateChange(state: WallpaperEngineState): void
   onWallpaperEngineSnapshotChange(snapshot: WallpaperEngineLibrarySnapshot): void
   onWallpaperEngineDeactivate(): void
-  lyricsDragEnabled: boolean
   lyricsAnimationMode: LyricsAnimationMode
   onLyricsAnimationModeChange(mode: LyricsAnimationMode): void
   lyricsFocusOnly: boolean
   onLyricsFocusOnlyChange(focusOnly: boolean): void
-  onLyricsDragEnabledChange(enabled: boolean): void
   onResetLyricsPosition(): void
 }
 
@@ -166,12 +170,10 @@ export default function SettingsPanel({
   onWallpaperEngineStateChange,
   onWallpaperEngineSnapshotChange,
   onWallpaperEngineDeactivate,
-  lyricsDragEnabled,
   lyricsAnimationMode,
   onLyricsAnimationModeChange,
   lyricsFocusOnly,
   onLyricsFocusOnlyChange,
-  onLyricsDragEnabledChange,
   onResetLyricsPosition,
 }: SettingsPanelProps): React.JSX.Element | null {
   const [activeTab, setActiveTab] = useState<SettingsTab>('theme')
@@ -460,17 +462,14 @@ export default function SettingsPanel({
                     </h2>
                   </header>
                   <div className={settingsRowClass}>
-                    <span className="min-w-0 flex-1 text-[11px] font-medium text-[var(--flux-text)]">
-                      拖拽歌词
-                    </span>
-                    <span className="text-[10px] text-[var(--flux-text-muted)]">
-                      {lyricsDragEnabled ? '移动位置' : '3D 旋转'}
-                    </span>
-                    <SettingsSwitch
-                      checked={lyricsDragEnabled}
-                      label="允许拖拽歌词"
-                      onCheckedChange={onLyricsDragEnabledChange}
-                    />
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-[11px] font-medium text-[var(--flux-text)]">
+                        鼠标手势
+                      </span>
+                      <span className="mt-0.5 block text-[10px] text-[var(--flux-text-muted)]">
+                        左键长按滑动旋转视角，右键长按滑动拖拽位置，滚轮缩放。
+                      </span>
+                    </div>
                     <Button
                       type="button"
                       variant="ghost"
@@ -488,15 +487,26 @@ export default function SettingsPanel({
             </TabsContent>
 
             <TabsContent value="system" className={settingsContentClass} data-settings-system="">
-              <Suspense
-                fallback={
-                  <div className="grid h-full place-items-center text-[11px] text-[var(--flux-text-muted)]">
-                    正在加载维护工具…
-                  </div>
-                }
-              >
-                <SystemMaintenancePanel />
-              </Suspense>
+              <div className="grid gap-5">
+                <Suspense
+                  fallback={
+                    <div className="grid place-items-center text-[11px] text-[var(--flux-text-muted)]">
+                      正在加载…
+                    </div>
+                  }
+                >
+                  <ChkszKeyPanel />
+                </Suspense>
+                <Suspense
+                  fallback={
+                    <div className="grid h-full place-items-center text-[11px] text-[var(--flux-text-muted)]">
+                      正在加载维护工具…
+                    </div>
+                  }
+                >
+                  <SystemMaintenancePanel />
+                </Suspense>
+              </div>
             </TabsContent>
           </div>
         </Tabs>

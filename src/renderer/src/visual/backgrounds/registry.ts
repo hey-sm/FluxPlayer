@@ -1,13 +1,13 @@
-import { GalaxyBackground } from './galaxy'
+import { CausticBackground } from './caustic'
 import { HtmlLightBackground } from './html-light'
-import { LightRaysBackground } from './light-rays'
+import { RainBackground } from './rain'
 import type { DynamicBackgroundEffect } from './dynamic'
 import type { DynamicBackgroundDefinition } from './types'
 
 export const DYNAMIC_BACKGROUND_DEFINITIONS: readonly DynamicBackgroundDefinition[] = Object.freeze([
-  Object.freeze({ effect: 'light-rays', create: () => new LightRaysBackground() }),
   Object.freeze({ effect: 'html-light', create: () => new HtmlLightBackground() }),
-  Object.freeze({ effect: 'galaxy', create: () => new GalaxyBackground() }),
+  Object.freeze({ effect: 'caustic', create: () => new CausticBackground() }),
+  Object.freeze({ effect: 'rain', create: () => new RainBackground() }),
 ])
 
 export const DYNAMIC_BACKGROUND_BY_EFFECT: ReadonlyMap<DynamicBackgroundEffect, DynamicBackgroundDefinition> =

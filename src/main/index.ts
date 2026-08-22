@@ -20,6 +20,7 @@ import {
   registerProtocolHandlers,
 } from './protocols'
 import { createMainMusicService } from './music-service'
+import { ChkszPreferenceStore } from './chksz-preferences'
 
 const APP_NAME = 'FluxPlayer'
 const APP_USER_MODEL_ID = 'com.fluxplayer.app'
@@ -28,6 +29,15 @@ const APP_USER_MODEL_ID = 'com.fluxplayer.app'
 app.setName(APP_NAME)
 if (process.platform === 'win32') app.setAppUserModelId(APP_USER_MODEL_ID)
 registerPrivilegedSchemes()
+
+// 主进程未捕获异常默认直接终止进程，用户看到的是「程序凭空消失」。这里兜住并留下日志，
+// 让崩因至少可追。不做自动恢复：状态已不可信，继续跑比退出更危险。
+process.on('uncaughtException', (error) => {
+  console.error('[FluxPlayer] uncaught exception in main process:', error)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[FluxPlayer] unhandled rejection in main process:', reason)
+})
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
 const isSmokeTest = process.env.FLUX_SMOKE === '1'
@@ -45,7 +55,8 @@ let runtimeCleaned = false
 let shutdownPromise: Promise<void> | null = null
 const perfGovernor = new PerfGovernor()
 const credentialStore = new SafeCredentialStore()
-const musicService = createMainMusicService(credentialStore)
+const chkszPreferences = new ChkszPreferenceStore(app.getPath('userData'))
+const musicService = createMainMusicService(credentialStore, chkszPreferences)
 const audioHandles = new AudioHandleStore()
 
 function isTrustedDisplayMediaRequest(request: Electron.DisplayMediaRequestHandlerHandlerRequest): boolean {
@@ -382,6 +393,8 @@ if (!gotSingleInstanceLock) {
         getUpdaterController: () => updaterController,
         getUpdaterFallbackState: () => initialUpdaterState,
         getMusicService: () => musicService,
+        getCredentialStore: () => credentialStore,
+        getChkszPreferences: () => chkszPreferences,
         audioHandles,
         requestQuit,
         restartApp,

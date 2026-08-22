@@ -32,6 +32,11 @@ export interface AnimatedListProps<T> {
   displayScrollbar?: boolean
   enableArrowNavigation?: boolean
   virtualization?: AnimatedListVirtualization
+  /** 当前展开的 item key；为 null 表示无展开。设置后内部自动关闭虚拟化（展开行高度不固定）。 */
+  expandedKey?: Key | null
+  /** 展开行下方渲染的子内容（如换源面板）。提供此函数后行容器从 <button> 改为 <div role="button">，
+   *  以允许子内容内嵌交互元素（<button> 等）。 */
+  renderExpansion?(item: T, index: number): ReactNode
 }
 
 interface WindowSlice {
@@ -85,6 +90,8 @@ export function AnimatedList<T>({
   displayScrollbar = false,
   enableArrowNavigation = true,
   virtualization,
+  expandedKey = null,
+  renderExpansion,
 }: AnimatedListProps<T>): JSX.Element {
   const shellRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -111,18 +118,20 @@ export function AnimatedList<T>({
     setFocusedIndex(items.length ? items.length - 1 : -1)
   }, [focusedIndex, items.length])
 
+  // 展开行高度不固定，虚拟化会裁切展开内容，因此有展开项时自动关闭虚拟化
+  const effectiveVirtualization = expandedKey ? undefined : virtualization
   const windowSlice = useMemo(
     () =>
-      virtualization
+      effectiveVirtualization
         ? calculateAnimatedListWindow(
             items.length,
             scrollTop,
             viewportHeight,
-            virtualization.rowHeight,
-            virtualization.overscan,
+            effectiveVirtualization.rowHeight,
+            effectiveVirtualization.overscan,
           )
         : { start: 0, end: items.length, offsetTop: 0, offsetBottom: 0 },
-    [items.length, scrollTop, viewportHeight, virtualization],
+    [items.length, scrollTop, viewportHeight, effectiveVirtualization],
   )
   const visibleItems = items.slice(windowSlice.start, windowSlice.end)
   const visibleKeySignature = visibleItems
@@ -245,7 +254,7 @@ export function AnimatedList<T>({
     },
     {
       scope: shellRef,
-      dependencies: [focusedIndex, reducedMotion, selectedKey, visibleKeySignature],
+      dependencies: [focusedIndex, reducedMotion, selectedKey, visibleKeySignature, expandedKey],
       // The row offset is diffed against the last applied value, so reverting on update would strip the
       // inline transform while the dataset still claims it is applied — selection would stop nudging.
     },
@@ -255,9 +264,9 @@ export function AnimatedList<T>({
     (index: number): void => {
       const list = listRef.current
       if (!list) return
-      if (virtualization) {
-        const top = index * virtualization.rowHeight
-        const bottom = top + virtualization.rowHeight
+      if (effectiveVirtualization) {
+        const top = index * effectiveVirtualization.rowHeight
+        const bottom = top + effectiveVirtualization.rowHeight
         if (top < list.scrollTop) list.scrollTo({ top, behavior: reducedMotion ? 'auto' : 'smooth' })
         else if (bottom > list.scrollTop + list.clientHeight) {
           list.scrollTo({
@@ -272,7 +281,7 @@ export function AnimatedList<T>({
         behavior: reducedMotion ? 'auto' : 'smooth',
       })
     },
-    [reducedMotion, virtualization],
+    [reducedMotion, effectiveVirtualization],
   )
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
@@ -323,32 +332,50 @@ export function AnimatedList<T>({
           const state = { selected: key === selectedKey, focused: index === focusedIndex }
           const resolvedClassName =
             typeof itemClassName === 'function' ? itemClassName(item, index, state) : itemClassName
+          const isExpanded = expandedKey !== null && key === expandedKey
+          // 当提供 renderExpansion 时，行容器从 <button> 改为 <div role="button">，
+          // 以允许展开内容内嵌交互元素（<button> 等）。
+          const RowTag = renderExpansion ? 'div' : 'button'
+          const rowProps = renderExpansion
+            ? {
+                role: 'button' as const,
+                tabIndex: -1 as const,
+              }
+            : {
+                type: 'button' as const,
+                tabIndex: -1 as const,
+              }
           return (
-            <button
-              key={key}
-              type="button"
-              tabIndex={-1}
-              data-animated-list-item=""
-              data-animated-list-index={index}
-              data-animated-list-key={String(key)}
-              data-selected={state.selected || undefined}
-              data-focused={state.focused || undefined}
-              className={cn('w-full', resolvedClassName)}
-              style={virtualization ? { height: virtualization.rowHeight } : undefined}
-              aria-current={state.selected ? 'true' : undefined}
-              aria-label={getItemAriaLabel?.(item, index)}
-              onFocus={() => {
-                setFocusedIndex(index)
-                onItemIntent?.(item, index)
-              }}
-              onMouseEnter={() => {
-                setFocusedIndex(index)
-                onItemIntent?.(item, index)
-              }}
-              onClick={() => onItemSelect?.(item, index)}
-            >
-              {renderItem(item, index, state)}
-            </button>
+            <div key={key} data-animated-list-row="">
+              <RowTag
+                {...rowProps}
+                data-animated-list-item=""
+                data-animated-list-index={index}
+                data-animated-list-key={String(key)}
+                data-selected={state.selected || undefined}
+                data-focused={state.focused || undefined}
+                data-expanded={isExpanded || undefined}
+                className={cn('w-full', resolvedClassName)}
+                style={effectiveVirtualization ? { height: effectiveVirtualization.rowHeight } : undefined}
+                aria-current={state.selected ? 'true' : undefined}
+                aria-label={getItemAriaLabel?.(item, index)}
+                aria-expanded={renderExpansion ? isExpanded || undefined : undefined}
+                onFocus={() => {
+                  setFocusedIndex(index)
+                  onItemIntent?.(item, index)
+                }}
+                onMouseEnter={() => {
+                  setFocusedIndex(index)
+                  onItemIntent?.(item, index)
+                }}
+                onClick={() => onItemSelect?.(item, index)}
+              >
+                {renderItem(item, index, state)}
+              </RowTag>
+              {renderExpansion && isExpanded ? (
+                <div data-animated-list-expansion="">{renderExpansion(item, index)}</div>
+              ) : null}
+            </div>
           )
         })}
         {windowSlice.offsetBottom > 0 ? (

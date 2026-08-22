@@ -24,7 +24,7 @@ const song: UnifiedSong = {
   duration: 180_000,
 }
 
-const searchResult: MusicSearchResult = { provider: 'qq', songs: [song] }
+const searchResult: MusicSearchResult = { provider: 'qq', songs: [song], page: 1, hasMore: false }
 
 function createMusicBridge(): { [K in keyof FluxMusicApi]: ReturnType<typeof vi.fn> } {
   return {
@@ -54,6 +54,10 @@ function createMusicBridge(): { [K in keyof FluxMusicApi]: ReturnType<typeof vi.
       limit: 50,
       total: 0,
       hasMore: false,
+    }),
+    getDiscover: vi.fn().mockResolvedValue({
+      provider: 'qq',
+      sections: [],
     }),
   }
 }

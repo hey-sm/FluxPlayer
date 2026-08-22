@@ -40,6 +40,7 @@ export const musicSearchRequestSchema = z.object({
   keywords: z.string().check(z.minLength(1), z.maxLength(200)),
   limit: positiveLimitSchema,
   page: z.optional(z.int().check(z.gte(1), z.lte(100))),
+  backend: z.optional(z.enum(['direct', 'chksz'])),
 })
 
 export const playbackResolveRequestSchema = z.object({
@@ -74,6 +75,14 @@ export const likedTracksRequestSchema = z.object({
 export const discoverRequestSchema = z.object({
   provider: providerIdSchema,
   limit: positiveLimitSchema,
+})
+
+export const chkszKeySchema = z.object({
+  key: z.string().check(z.maxLength(256)),
+})
+
+export const chkszSetEnabledSchema = z.object({
+  enabled: z.boolean(),
 })
 
 export type MusicRequestSchema =

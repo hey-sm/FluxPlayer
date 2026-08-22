@@ -1,7 +1,8 @@
 import { expect, test } from './electron.fixture'
 import sharp from 'sharp'
+import type { UnifiedSong } from '../../src/shared/models'
 
-const TRACK = {
+const TRACK: UnifiedSong = {
   provider: 'netease',
   type: 'song',
   id: 62_000_001,
@@ -99,10 +100,6 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
   // 关回去，后面的可见性断言仍在默认的多行状态下跑
   await focusOnlySwitch.click()
   await expect(focusOnlySwitch).toHaveAttribute('aria-checked', 'false')
-  const lyricsDragSwitch = page.getByRole('switch', { name: '允许拖拽歌词' })
-  await expect(lyricsDragSwitch).toHaveAttribute('aria-checked', 'false')
-  await lyricsDragSwitch.click()
-  await expect(lyricsDragSwitch).toHaveAttribute('aria-checked', 'true')
   await page.getByRole('button', { name: '关闭', exact: true }).click()
 
   const searchInput = page.getByPlaceholder(/搜索歌曲/)
@@ -161,10 +158,11 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
   const bounds = await canvas.boundingBox()
   expect(bounds).not.toBeNull()
   if (bounds) {
+    // 右键长按滑动 → 拖拽歌词位置（写入 flux-lyrics-offset）
     await page.mouse.move(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5)
-    await page.mouse.down()
+    await page.mouse.down({ button: 'right' })
     await page.mouse.move(bounds.x + bounds.width * 0.62, bounds.y + bounds.height * 0.58, { steps: 8 })
-    await page.mouse.up()
+    await page.mouse.up({ button: 'right' })
     await page.waitForTimeout(450)
     expect(await canvasDelta(compactShot, await canvas.screenshot())).toBeGreaterThan(2)
     await expect
@@ -172,9 +170,6 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
       .not.toBe('{"x":0,"y":0}')
 
     const movedOffset = await page.evaluate(() => localStorage.getItem('flux-lyrics-offset'))
-    await page.getByRole('button', { name: '设置' }).click()
-    await page.getByRole('switch', { name: '允许拖拽歌词' }).click()
-    await page.getByRole('button', { name: '关闭', exact: true }).click()
 
     await page.evaluate(() => {
       const audio = (
@@ -186,6 +181,7 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
       }
     })
     await page.waitForTimeout(300)
+    // 左键长按滑动 → 旋转视角（flux-lyrics-offset 不应被改写）
     const beforeRotation = await canvas.screenshot()
     await page.mouse.move(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5)
     await page.mouse.down()

@@ -59,13 +59,15 @@ pnpm exec playwright test tests/e2e/player.spec.ts     # 单个 e2e（需先 pnp
 
 ### 播放引擎
 
-[src/renderer/src/playback/engine.ts](src/renderer/src/playback/engine.ts) 的 `PlaybackEngine` 是单例，**独占唯一 `HTMLAudioElement` 和所有异步播放状态机**。Zustand store（[src/renderer/src/stores/player.ts](src/renderer/src/stores/player.ts)）只是它的可观察 UI 投影和用户动作门面 —— 通过 `connect(port)` 注入 state 读写口，别在 store 里塞播放逻辑。高频进度用独立 `usePlaybackProgress` store 隔离，避免整树重渲染。引擎内建：`loadGeneration` 防竞态、音质自动降级重试（`tryQualityRetry`）、跨 provider 自动换源（`tryAlternateSource`）、失败黑名单、试听 30s 截断、shuffle 环形游标。
+[src/renderer/src/playback/engine.ts](src/renderer/src/playback/engine.ts) 的 `PlaybackEngine` 是单例，**独占唯一 `HTMLAudioElement` 和所有异步播放状态机**。Zustand store（[src/renderer/src/stores/player.ts](src/renderer/src/stores/player.ts)）只是它的可观察 UI 投影和用户动作门面 —— 通过 `connect(port)` 注入 state 读写口，别在 store 里塞播放逻辑。高频进度用独立 `usePlaybackProgress` store 隔离，避免整树重渲染。引擎内建：`loadGeneration` 防竞态、20s 媒体加载超时（`MEDIA_LOAD_TIMEOUT_MS`）、试听 30s 截断、shuffle 环形游标。
+
+注意这三件事**引擎不做**，别去找对应实现：音质降级发生在**服务端**（provider 内部按候选链逐档回退，见 [src/server/providers/netease/index.ts](src/server/providers/netease/index.ts) 的 qualities 循环），引擎侧只用 `isQualityDowngrade` 提示实际档位低于偏好；**没有跨 provider 自动换源**；**没有失败黑名单** —— `resolvePlayback` 一次失败即 `failPlayback` 进 error 态，同一首歌只提示一次。
 
 ### 视觉系统（Three.js）
 
 - **单一 Stage**：`VisualStage`（[src/renderer/src/visual/stage.ts](src/renderer/src/visual/stage.ts)）持有唯一 renderer/scene/camera，所有子层共用它，绝不自建动画时钟。
-- **单一 RAF**：全局 `ticker`（[src/renderer/src/perf/ticker.ts](src/renderer/src/perf/ticker.ts)）是唯一 `requestAnimationFrame` 注册表，受主进程 `PerfGovernor` 广播的 `PerfState` 约束（minimize/hide → background/suspended 降频）。视觉循环别自己开 RAF。
-- **动态背景**：`DynamicBackgroundManager` 只实例化 Light Rays / HTML Light / Galaxy 中当前选中的一个。三者共享 renderer/ticker；不再存在音频分析器、封面粒子或 legacy preset。Galaxy 是自写的螺旋星系点云（种子固定 → 每次启动构图一致，`setPointer` 刻意空实现，只有极慢自转），构图参考见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+- **单一 RAF**：全局 `ticker`（[src/renderer/src/perf/ticker.ts](src/renderer/src/perf/ticker.ts)）是**视觉循环**唯一的 `requestAnimationFrame` 注册表，受主进程 `PerfGovernor` 广播的 `PerfState` 约束（minimize/hide → background/suspended 降频）。视觉循环别自己开 RAF。例外只有两类：GSAP 自带 ticker（`@gsap/react` 是动画主干，刻意如此），以及一次性的非循环 RAF（如 dialog/sheet 的焦点还原）。已知有两处自建 RAF 节流绕过了 `PerfState`（`components/glass/store.ts`、`features/settings/WallpaperEngineLayer.tsx`），是待收敛的债，不是可效仿的先例。
+- **动态背景**：`DynamicBackgroundManager` 只实例化 HTML Light / Caustic / Rain 中当前选中的一个，默认 Rain。三者共享 renderer/ticker；不再存在音频分析器、封面粒子或 legacy preset。Caustic 是 Shadertoy "Tileable Water Caustic" 的移植（青蓝水底 + 白色焦散脊，配色固定、`setAccentColor` 刻意空实现）；Rain 是 Shadertoy "Heartfelt" 的移植（CC BY-NC-SA 3.0，雨打玻璃 + 心形故事自动循环、移除了全部鼠标交互、iChannel0 使用随项目分发的 Pexels 照片）。构图参考与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 - **React 边界**：`StageCanvas` 只传入 `backgroundEffect`、启用状态和歌词交互参数；自定义图片/视频背景启用时释放动态背景，但保留歌词场景。
 - **上游许可**：React Bits 适配代码保留来源注释，许可证全文与依赖说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
@@ -78,6 +80,7 @@ pnpm exec playwright test tests/e2e/player.spec.ts     # 单个 e2e（需先 pnp
 ### 约束
 
 - **玻璃组件必须经 `@/components/glass` 包装层**，业务代码 oxlint 禁止直接 import `react-glass-ui`（.oxlintrc.json `no-restricted-imports`，glass 目录自身豁免）。
+- **全局玻璃设置控制范围**（设置 → 玻璃 → 滑块/取色器，通过 `glassStore` 写 CSS 变量到 `document.documentElement`）：仅控制三处 `GlassSurface`——左侧列表（`LibrarySheet` → `HoverEdgeSheet` edge=left）、右侧列表（`PlaylistDetailSheet` → `HoverEdgeSheet` edge=right）、设置面板（`SettingsPanel`）。其余 `GlassSurface` 各自携带固定 `glassConfig` 覆盖，不跟随全局设置：搜索栏（`SearchPanel` 搜索框，blur=50 / borderRadius=28 / innerLightBlur=50 / color=#fff / h-56px）、搜索结果浮窗（`SearchPanel` popover）、`GlassSelect` 下拉、`WallpaperEngineLibraryDialog`。
 - shadcn 组件配置在 components.json（new-york 风格，CSS 变量在 `src/renderer/src/styles/shadcn.css`）。
-- 更新发布固定 GitHub `hey-sm/FluxPlayer`；未签名，release 文档需标 SmartScreen 风险。图标源是 `resources/icon.svg`，`scripts/gen-icons.mjs` 生成 png。
+- 更新发布固定 GitHub `hey-sm/FluxPlayer`。**tag 发布强制签名**：CI 在缺少 Windows Authenticode / macOS Developer ID 凭据时直接失败，构建后还会验签（`.github/workflows/release.yml`），发版步骤见 [docs/releasing.md](docs/releasing.md)。图标源是 `resources/icon.svg`，`scripts/gen-icons.mjs` 生成 png（未接入 npm script，手动调用），macOS 的 icns 走 `pnpm icons:mac`。
 - UI 文案用简体中文。

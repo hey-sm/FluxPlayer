@@ -1,6 +1,6 @@
 import type { PlaybackResolveResult } from '@shared/music-contract'
 import type { QualityLevel, UnifiedSong } from '@shared/models'
-import { normalizeQualityPreference } from '@shared/models'
+import { normalizeQualityPreference, QUALITY_ORDER } from '@shared/models'
 import {
   bindMediaSession,
   updateMediaMetadata,
@@ -11,6 +11,28 @@ import { musicClient, musicErrorMessage } from '../api'
 import { showToast } from '../stores/toast'
 import { DEFAULT_QUALITY, isQualityDowngrade, qualityLabel } from './quality'
 import { restrictionMessage } from './restriction'
+
+/** renderer 侧 abort 包装：signal abort 时立即 reject，不等待 IPC 返回。
+ *  主进程的 resolvePlayback 仍会完成但结果被忽略。 */
+function abortableResolve<T>(operation: Promise<T>, signal: AbortSignal | null): Promise<T> {
+  if (!signal) return operation
+  if (signal.aborted) return Promise.reject(new DOMException('The operation was aborted', 'AbortError'))
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(new DOMException('The operation was aborted', 'AbortError'))
+    signal.addEventListener('abort', onAbort, { once: true })
+    operation.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort)
+        if (signal.aborted) reject(new DOMException('The operation was aborted', 'AbortError'))
+        else resolve(value)
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      },
+    )
+  })
+}
 
 export type PlayStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error'
 export type PlaybackMode = 'sequence' | 'repeat-one' | 'shuffle'
@@ -115,6 +137,7 @@ export class PlaybackEngine {
   private shuffleCursor = -1
   private mediaSessionBound = false
   private pendingAudioLoadCancel: (() => void) | null = null
+  private resolveAbort: AbortController | null = null
 
   constructor(audio: HTMLAudioElement = new Audio()) {
     this.audio = audio
@@ -152,6 +175,8 @@ export class PlaybackEngine {
     if (!queue.length) {
       this.loadGeneration += 1
       this.cancelPendingAudioLoad()
+      this.resolveAbort?.abort()
+      this.resolveAbort = null
       this.audio.pause()
       this.audio.src = ''
       this.activeTrialLimitSeconds = null
@@ -311,6 +336,9 @@ export class PlaybackEngine {
     if (!song) return
     const generation = ++this.loadGeneration
     this.cancelPendingAudioLoad()
+    // 取消上一首歌的取链请求（IPC + 探针），避免快速切歌时多个 resolvePlayback 并发竞争网络
+    this.resolveAbort?.abort()
+    this.resolveAbort = new AbortController()
     this.activeTrialLimitSeconds = null
     const duration = song.duration / 1000 || 0
     this.patch({
@@ -330,7 +358,7 @@ export class PlaybackEngine {
     const requested = normalizeQualityPreference(options.qualityOverride || this.state().qualityPreference)
 
     try {
-      const info: PlaybackResolveResult = await musicClient.resolvePlayback({ song, quality: requested })
+      const info: PlaybackResolveResult = await abortableResolve(musicClient.resolvePlayback({ song, quality: requested }), this.resolveAbort.signal)
       if (this.stale(generation)) return
       if (!isOpaqueAudioUrl(info.url)) {
         this.failPlayback(restrictionMessage(song, info))
@@ -351,13 +379,27 @@ export class PlaybackEngine {
           tone: 'warning',
         })
       }
+      const resolvedLevel = info.level ? normalizeQualityPreference(info.level) : requested
+      // resolvePlayback 实际返回的音质可能高于歌单数据中的 supportedQualities
+      // （歌单数据未必包含 size_hires，但实际取链成功），合并进去让下拉列表显示完整档位
+      const existingQualities = this.state().current?.supportedQualities
+      let updatedSong = this.state().current
+      if (updatedSong && existingQualities && !existingQualities.includes(resolvedLevel)) {
+        const merged = new Set<QualityLevel>(existingQualities)
+        merged.add(resolvedLevel)
+        const sorted = QUALITY_ORDER.filter((q) => merged.has(q))
+        updatedSong = { ...updatedSong, supportedQualities: sorted }
+      }
       this.patch({
+        ...(updatedSong ? { current: updatedSong } : {}),
         status: 'playing',
-        resolvedQuality: info.level ? normalizeQualityPreference(info.level) : requested,
+        resolvedQuality: resolvedLevel,
         message: info.trial ? '当前为试听片段' : info.quality ? `音质：${info.quality}` : '',
       })
     } catch (error) {
       if (this.stale(generation)) return
+      // AbortError: resolvePlayback 被新切歌取消，静默返回，新 loadIndex 已在管理状态
+      if (error instanceof Error && error.name === 'AbortError') return
       if (error instanceof Error && error.name === 'NotAllowedError') {
         this.patch({ status: 'paused', message: '歌曲已载入，点击播放按钮继续播放' })
         updatePlaybackState('paused')

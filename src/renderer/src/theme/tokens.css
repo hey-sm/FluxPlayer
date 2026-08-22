@@ -24,7 +24,7 @@
   --flux-glass-color: #ffffff;
   --flux-glass-inner-light-color: #ffffff;
   --flux-glass-inner-light-spread: 0px;
-  --flux-glass-inner-light-blur: 8px;
+  --flux-glass-inner-light-blur: 60px;
   --flux-glass-inner-light-opacity: 0.3;
   --flux-glass-outer-light-color: #ffffff;
   --flux-glass-outer-light-spread: 0px;

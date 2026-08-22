@@ -9,6 +9,7 @@ import { usePlayer } from '../../stores/player'
 import { LibrarySheet } from '../../components/shell/LibrarySheet'
 import { PlaylistDetailSheet } from '../../components/shell/PlaylistDetailSheet'
 import { AnimatedList } from '../../components/react-bits/AnimatedList'
+import { UnplayableSongExpansion } from '../../components/UnplayableSongExpansion'
 import { ClockIcon, HeartIcon } from '../../components/Icons'
 import { DiscoverPanel } from '../discover'
 import {
@@ -83,6 +84,7 @@ function PlaylistDetailPanel({
   onTrackSelect(): void
 }): React.JSX.Element {
   const setQueue = usePlayer((state) => state.setQueue)
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
 
   return (
     <aside
@@ -127,30 +129,55 @@ function PlaylistDetailPanel({
           className="min-h-0 flex-1 overflow-hidden"
           itemClassName={libraryRowVariants({ layout: 'detail' })}
           virtualization={{ rowHeight: DETAIL_ROW_HEIGHT, overscan: 3 }}
-          getItemAriaLabel={(song) => `播放 ${song.name}，${song.artist || '未知歌手'}`}
-          onItemSelect={(_song, index) => {
+          expandedKey={expandedKey}
+          getItemAriaLabel={(song) =>
+            song.playable === false
+              ? `${song.name}，${song.artist || '未知歌手'}（无音源）`
+              : `播放 ${song.name}，${song.artist || '未知歌手'}`
+          }
+          onItemSelect={(song, index) => {
+            if (song.playable === false) {
+              const key = `${detail.provider}:${song.id}:${index}`
+              setExpandedKey((prev) => (prev === key ? null : key))
+              return
+            }
+            // 点击可播放歌曲时收起展开项
+            setExpandedKey(null)
             onTrackSelect()
             void setQueue([...detail.tracks], index)
           }}
-          renderItem={(song) => (
-            <>
-              {song.cover ? (
-                <img
-                  className="size-10 rounded-[var(--flux-radius-control)] bg-[color-mix(in_srgb,var(--flux-panel-border)_7%,transparent)] object-cover"
-                  src={coverProxyUrl(song.cover)}
-                  alt=""
-                  loading="lazy"
-                />
-              ) : (
-                <span className="size-10 rounded-[var(--flux-radius-control)] bg-[color-mix(in_srgb,var(--flux-panel-border)_7%,transparent)]" />
-              )}
-              <span className="min-w-0">
-                <strong className="block truncate">{song.name}</strong>
-                <small className="mt-[3px] block truncate text-[11px] text-[var(--flux-text-muted)]">
-                  {song.artist || '未知歌手'}
-                </small>
-              </span>
-            </>
+          renderItem={(song) => {
+            const unplayable = song.playable === false
+            return (
+              <>
+                {song.cover ? (
+                  <img
+                    className={`size-10 rounded-[var(--flux-radius-control)] bg-[color-mix(in_srgb,var(--flux-panel-border)_7%,transparent)] object-cover${unplayable ? ' opacity-45 grayscale' : ''}`}
+                    src={coverProxyUrl(song.cover)}
+                    alt=""
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="size-10 rounded-[var(--flux-radius-control)] bg-[color-mix(in_srgb,var(--flux-panel-border)_7%,transparent)]" />
+                )}
+                <span className="min-w-0" title={unplayable ? '无音源' : undefined}>
+                  <strong className={`block truncate${unplayable ? ' opacity-45' : ''}`}>{song.name}</strong>
+                  <small className="mt-[3px] block truncate text-[11px] text-[var(--flux-text-muted)]">
+                    {song.artist || '未知歌手'}
+                  </small>
+                </span>
+              </>
+            )
+          }}
+          renderExpansion={(song) => (
+            <UnplayableSongExpansion
+              song={song}
+              onPlay={(replacement) => {
+                setExpandedKey(null)
+                onTrackSelect()
+                void setQueue([replacement], 0)
+              }}
+            />
           )}
         />
       ) : null}

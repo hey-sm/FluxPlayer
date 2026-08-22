@@ -115,6 +115,8 @@ export function mapSongRecord(raw: unknown): UnifiedSong {
   const album = asRecord(song.al ?? song.album)
   const id = identifier(song.id) ?? ''
   const supportedQualities = neteaseSupportedQualities(song)
+  const privilege = asRecord(song.privilege)
+  const playable = numberValue(privilege.st) >= 0 && Boolean(supportedQualities && supportedQualities.length > 0)
   return {
     provider: 'netease',
     type: 'song',
@@ -127,6 +129,7 @@ export function mapSongRecord(raw: unknown): UnifiedSong {
     cover: stringValue(album.picUrl ?? album.coverUrl),
     duration: numberValue(song.dt ?? song.duration),
     fee: song.fee === undefined ? undefined : numberValue(song.fee),
+    playable,
     ...(supportedQualities ? { supportedQualities } : {}),
   }
 }
@@ -467,9 +470,15 @@ export class NeteaseProvider {
     }
 
     if (!stringValue(at(body, 'lrc', 'lyric')) && !stringValue(at(body, 'yrc', 'lyric'))) {
-      const legacy = await ncm.lyric({ id, cookie: this.cookie, timestamp: Date.now() })
-      body = legacy.body ?? body
-      source = 'lyric'
+      // 兜底路径自身也可能失败。它一旦抛出，整个 lyric() 就 reject 成 PROVIDER_UNAVAILABLE，
+      // 用户看到的是「歌词加载失败」而不是「这首歌没有歌词」——后者才是真实情况。
+      try {
+        const legacy = await ncm.lyric({ id, cookie: this.cookie, timestamp: Date.now() })
+        body = legacy.body ?? body
+        source = 'lyric'
+      } catch (error) {
+        console.warn('[NeteaseLyrics] lyric fallback failed:', errorMessage(error))
+      }
     }
     const lyric = stringValue(at(body, 'lrc', 'lyric'))
     const tlyric = stringValue(at(body, 'tlyric', 'lyric'))
@@ -526,6 +535,7 @@ export class NeteaseProvider {
     )
     const pageIds = ids.slice(safeOffset, safeOffset + safeLimit)
     const rawTracks: unknown[] = []
+    const rawPrivileges: unknown[] = []
     for (let start = 0; start < pageIds.length; start += 100) {
       const chunk = pageIds.slice(start, start + 100)
       const detail = await ncm.song_detail({
@@ -534,10 +544,29 @@ export class NeteaseProvider {
         timestamp: Date.now(),
       })
       rawTracks.push(...asArray(at(detail.body, 'songs')))
+      rawPrivileges.push(...asArray(at(detail.body, 'privileges')))
     }
 
+    // song_detail 返回的 privileges 是独立数组，需按 id 合并到每首歌上
+    const privilegeMap = new Map<number, unknown>()
+    rawPrivileges.forEach((priv) => {
+      const id = identifier(asRecord(priv).id)
+      if (id !== undefined) privilegeMap.set(Number(id), priv)
+    })
+    const enrichedTracks = rawTracks.map((track) => {
+      const song = asRecord(track)
+      if (!song.privilege) {
+        const songId = identifier(song.id)
+        if (songId !== undefined) {
+          const priv = privilegeMap.get(Number(songId))
+          if (priv) return { ...song, privilege: priv }
+        }
+      }
+      return track
+    })
+
     const byId = new Map(
-      rawTracks
+      enrichedTracks
         .map(mapSongRecord)
         .filter((track) => track.id !== '' && track.name)
         .map((track) => [String(track.id), track] as const),
@@ -567,6 +596,7 @@ export class NeteaseProvider {
       trackCount: 0,
     }
     let rawTracks: unknown[] = []
+    let rawPrivileges: unknown[] = []
 
     try {
       const all = await ncm.playlist_track_all({
@@ -577,18 +607,42 @@ export class NeteaseProvider {
         timestamp: Date.now(),
       })
       rawTracks = asArray(at(all.body, 'songs')).concat(asArray(at(all.body, 'tracks')))
+      rawPrivileges = asArray(at(all.body, 'privileges'))
     } catch (error) {
       console.warn('[NeteasePlaylist] playlist_track_all failed:', errorMessage(error))
     }
 
     if (!rawTracks.length) {
-      const detail = await ncm.playlist_detail({ id, s: 0, cookie: this.cookie, timestamp: Date.now() })
-      const rawPlaylist = at(detail.body, 'playlist')
-      playlist = mapPlaylist({ ...asRecord(rawPlaylist), id: identifier(field(rawPlaylist, 'id')) ?? id })
-      rawTracks = asArray(field(rawPlaylist, 'tracks'))
+      // 同上：兜底路径失败不应把整个歌单请求变成错误，返回空列表让 UI 走「空歌单」态。
+      try {
+        const detail = await ncm.playlist_detail({ id, s: 0, cookie: this.cookie, timestamp: Date.now() })
+        const rawPlaylist = at(detail.body, 'playlist')
+        playlist = mapPlaylist({ ...asRecord(rawPlaylist), id: identifier(field(rawPlaylist, 'id')) ?? id })
+        rawTracks = asArray(field(rawPlaylist, 'tracks'))
+      } catch (error) {
+        console.warn('[NeteasePlaylist] playlist_detail fallback failed:', errorMessage(error))
+      }
     }
 
-    const tracks = rawTracks.map(mapSongRecord).filter((track) => track.id !== '' && track.name)
+    // playlist_track_all 返回的 privileges 是独立数组（song.privilege 不存在），
+    // 需要按 id 合并到每首歌上，mapSongRecord 才能据此判定 playable。
+    const privilegeMap = new Map<number, unknown>()
+    asArray(rawPrivileges).forEach((priv) => {
+      const id = identifier(asRecord(priv).id)
+      if (id !== undefined) privilegeMap.set(Number(id), priv)
+    })
+    const enrichedTracks = rawTracks.map((track) => {
+      const song = asRecord(track)
+      if (!song.privilege) {
+        const songId = identifier(song.id)
+        if (songId !== undefined) {
+          const priv = privilegeMap.get(Number(songId))
+          if (priv) return { ...song, privilege: priv }
+        }
+      }
+      return track
+    })
+    const tracks = enrichedTracks.map(mapSongRecord).filter((track) => track.id !== '' && track.name)
     if (!playlist.trackCount) playlist = { ...playlist, trackCount: tracks.length }
     return { provider: 'netease', playlist, tracks }
   }

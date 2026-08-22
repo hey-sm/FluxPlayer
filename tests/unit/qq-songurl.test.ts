@@ -18,6 +18,8 @@ const trialFixture = loadFixture('qq/song-url-trial')
 beforeEach(() => {
   // 非试听用例默认让旧 mobile3 分支安全落空，禁止测试触网。
   vi.spyOn(QQClient.prototype, 'getJSON').mockResolvedValue({ data: { items: [] } })
+  // 探针默认放行：假设上游 purl 指向真实音频。逐用例可在需要时覆盖。
+  vi.spyOn(QQProvider.prototype as any, 'probeUrl').mockResolvedValue({ ok: true, status: 206 })
 })
 
 afterEach(() => {
@@ -164,5 +166,65 @@ describe('QQProvider.songUrl', () => {
     const out = await makeProvider('').songUrl('', '', '')
     expect(out.error).toBe('MISSING_MID')
     expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('探针通过：返回首个 sip + purl 组合的 URL', async () => {
+    vi.spyOn(QQClient.prototype, 'musicuRequest').mockResolvedValue(
+      vkeyResponse([{ filename: 'M800MEDIA.mp3', purl: 'M800MEDIA.mp3?vkey=abc' }]),
+    )
+    const probe = vi.spyOn(QQProvider.prototype as any, 'probeUrl').mockResolvedValue({ ok: true, status: 206 })
+    const out = await makeProvider('uin=123; qm_keyst=KEY').songUrl('SONGMID', 'MEDIA', 'exhigh')
+    expect(out.playable).toBe(true)
+    expect(out.url).toBe('https://ws.stream.qqmusic.qq.com/M800MEDIA.mp3?vkey=abc')
+    expect(probe).toHaveBeenCalledTimes(1)
+    expect(probe.mock.calls[0][0]).toBe('https://ws.stream.qqmusic.qq.com/M800MEDIA.mp3?vkey=abc')
+  })
+
+  it('首个 sip 探针失败 → 依次尝试后续 sip，命中即用', async () => {
+    vi.spyOn(QQClient.prototype, 'musicuRequest').mockResolvedValue(
+      vkeyResponse(
+        [{ filename: 'M800MEDIA.mp3', purl: 'M800MEDIA.mp3?vkey=abc' }],
+        ['https://ws.stream.qqmusic.qq.com/', 'https://dl.stream.qqmusic.qq.com/'],
+      ),
+    )
+    const probe = vi
+      .spyOn(QQProvider.prototype as any, 'probeUrl')
+      .mockResolvedValueOnce({ ok: false, status: 403, reason: 'status' })
+      .mockResolvedValueOnce({ ok: true, status: 206 })
+    const out = await makeProvider('uin=123; qm_keyst=KEY').songUrl('SONGMID', 'MEDIA', 'exhigh')
+    expect(out.playable).toBe(true)
+    expect(out.url).toBe('https://dl.stream.qqmusic.qq.com/M800MEDIA.mp3?vkey=abc')
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+
+  it('所有 purl 候选探针全失败 → 不返回已知 404 的 URL，降级到试听/版权限制', async () => {
+    vi.spyOn(QQClient.prototype, 'musicuRequest').mockResolvedValue(
+      vkeyResponse([{ filename: 'M800MEDIA.mp3', purl: 'M800MEDIA.mp3?vkey=abc' }]),
+    )
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(QQProvider.prototype as any, 'probeUrl').mockResolvedValue({ ok: false, status: 404, reason: 'status' })
+    const out = await makeProvider('uin=123; qm_keyst=KEY').songUrl('SONGMID', 'MEDIA', 'exhigh')
+    expect(out.playable).toBe(false)
+    expect(out.url).toBeNull()
+    expect(out.error).toBe('QQ_URL_UNAVAILABLE')
+  })
+
+  it('Hi-Res purl 探针 404 → 降级到 320 MP3 候选探针成功，返回可播 URL', async () => {
+    vi.spyOn(QQClient.prototype, 'musicuRequest').mockResolvedValue(
+      vkeyResponse([
+        { filename: 'RS01MEDIA.flac', purl: 'RS01MEDIA.flac?vkey=hi' },
+        { filename: 'M800MEDIA.mp3', purl: 'M800MEDIA.mp3?vkey=320' },
+      ]),
+    )
+    const probe = vi
+      .spyOn(QQProvider.prototype as any, 'probeUrl')
+      .mockResolvedValueOnce({ ok: false, status: 404, reason: 'status' })
+      .mockResolvedValueOnce({ ok: true, status: 206 })
+    const out = await makeProvider('uin=123; qm_keyst=KEY').songUrl('SONGMID', 'MEDIA', 'hires')
+    expect(out.playable).toBe(true)
+    expect(out.url).toBe('https://ws.stream.qqmusic.qq.com/M800MEDIA.mp3?vkey=320')
+    expect(out.level).toBe('exhigh')
+    expect(out.quality).toBe('320k MP3')
+    expect(probe).toHaveBeenCalledTimes(2)
   })
 })

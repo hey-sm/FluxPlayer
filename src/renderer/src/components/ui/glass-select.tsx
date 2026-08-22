@@ -57,6 +57,8 @@ interface GlassSelectProps extends VariantProps<typeof glassSelectTriggerVariant
   className?: string
   contentClassName?: string
   renderValue?(option: GlassSelectOption | undefined): React.ReactNode
+  /** 下拉列表顶部的固定文案（不随选项滚动）。 */
+  header?: React.ReactNode
 }
 
 /** Shared liquid-glass select used by compact player and settings controls. */
@@ -71,6 +73,7 @@ export function GlassSelect({
   className,
   contentClassName,
   renderValue,
+  header,
   variant,
 }: GlassSelectProps): React.JSX.Element {
   const [open, setOpen] = React.useState(false)
@@ -176,7 +179,21 @@ export function GlassSelect({
               elevation="raised"
               className="flex max-h-[min(280px,var(--radix-select-content-available-height))] w-full flex-col"
               data-glass-select-surface=""
+              glassConfig={{
+                blur: 50,
+                borderRadius: 20,
+                innerLightBlur: 50,
+                color: '#ffffff',
+              }}
             >
+              {header ? (
+                <div
+                  className="shrink-0 border-b border-[var(--flux-panel-border)] px-2.5 py-1.5 text-[10px] text-[var(--flux-text-muted)]"
+                  data-glass-select-header=""
+                >
+                  {header}
+                </div>
+              ) : null}
               <SelectPrimitive.Viewport
                 className={cn(
                   'min-h-0 w-full max-h-[min(280px,var(--radix-select-content-available-height))] overflow-y-auto',

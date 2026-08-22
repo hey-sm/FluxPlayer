@@ -8,6 +8,7 @@ import { Input } from '../../components/ui/input'
 import { cn } from '../../lib/utils'
 import { Flip, gsap, motionDurations, motionEases, useGSAP, useReducedMotion } from '../../motion'
 import { usePlayer } from '../../stores/player'
+import { UnplayableSongExpansion } from '../../components/UnplayableSongExpansion'
 import { createSearchDismissScheduler, isSearchDismissKey } from './interaction'
 import { createSearchQuery } from './queries'
 import { useDebounced } from './useDebounced'
@@ -52,6 +53,7 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
   const providerTabsRef = useRef<HTMLDivElement>(null)
   const providerFlipStateRef = useRef<ReturnType<typeof Flip.getState> | null>(null)
   const closeScheduler = useMemo(() => createSearchDismissScheduler(), [])
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const previousKeywordEmpty = useRef(true)
   const reducedMotion = useReducedMotion()
 
@@ -274,13 +276,22 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
           data-search-motion=""
           className="relative w-full pt-2"
         >
-          <GlassSurface className="searchbar relative h-[52px] w-full" data-search-glass="">
+          <GlassSurface
+            className="searchbar relative h-[56px] w-full"
+            data-search-glass=""
+            glassConfig={{
+              blur: 50,
+              borderRadius: 28,
+              innerLightBlur: 50,
+              color: '#ffffff',
+            }}
+          >
             <Input
               ref={inputRef}
               value={keyword}
               className={cn(
-                'h-[52px] min-h-[52px] w-full rounded-[var(--flux-glass-radius)] border-0 bg-transparent px-[18px] text-sm text-[var(--flux-text)] shadow-none',
-                'transition-colors duration-[var(--motion-duration-base)] placeholder:text-[var(--flux-text-muted)]',
+                'h-[56px] min-h-[56px] w-full rounded-[var(--flux-glass-radius)] border-0 bg-transparent px-[18px] text-sm text-[var(--flux-text)] shadow-none',
+                'transition-colors duration-[var(--motion-duration-base)] placeholder:text-white',
                 'focus-visible:bg-[color-mix(in_srgb,var(--flux-accent)_5%,transparent)] focus-visible:ring-0 motion-reduce:transition-none',
               )}
               placeholder="搜索歌曲 / 歌手"
@@ -304,6 +315,12 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
               className="absolute top-[69px] left-0 z-[2] max-h-[min(570px,calc(100vh-210px))] w-full"
               role="region"
               aria-label="搜索结果"
+              glassConfig={{
+                blur: 50,
+                borderRadius: 20,
+                innerLightBlur: 50,
+                color: '#ffffff',
+              }}
             >
               <div
                 ref={providerTabsRef}
@@ -369,44 +386,67 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
                     {songs.map((song, index) => {
                       const key = `${song.provider}-${song.id}`
                       const active = current && `${current.provider}-${current.id}` === key
+                      const unplayable = song.playable === false
+                      const rowKey = `${key}-${index}`
+                      const isExpanded = expandedKey === rowKey
                       return (
-                        <button
-                          type="button"
-                          key={`${key}-${index}`}
-                          data-search-result=""
-                          data-active={active || undefined}
-                          className={cn(
-                            'flex min-h-[62px] w-full cursor-pointer items-center gap-3 border-0 border-b border-[color-mix(in_srgb,var(--flux-panel-border)_55%,transparent)] bg-transparent px-3.5 py-2.5 text-left text-[var(--flux-text)]',
-                            'hover:bg-[var(--flux-accent-soft)] focus-visible:bg-[var(--flux-accent-soft)] focus-visible:outline-none',
-                            active && 'bg-[var(--flux-accent-soft)]',
-                          )}
-                          onClick={() => {
-                            dismissSearch()
-                            setKeyword('')
-                            void setQueue([...songs], index)
-                          }}
-                        >
-                          {song.cover ? (
-                            <img
-                              className="size-[42px] shrink-0 rounded-[10px] bg-[color-mix(in_srgb,var(--flux-panel-border)_9%,transparent)] object-cover"
-                              src={coverProxyUrl(song.cover)}
-                              alt=""
-                              loading="lazy"
+                        <div key={rowKey}>
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            data-search-result=""
+                            data-active={active || undefined}
+                            title={unplayable ? '无音源' : undefined}
+                            className={cn(
+                              'flex min-h-[62px] w-full cursor-pointer items-center gap-3 border-0 border-b border-[color-mix(in_srgb,var(--flux-panel-border)_55%,transparent)] bg-transparent px-3.5 py-2.5 text-left text-[var(--flux-text)]',
+                              'hover:bg-[var(--flux-accent-soft)] focus-visible:bg-[var(--flux-accent-soft)] focus-visible:outline-none',
+                              active && 'bg-[var(--flux-accent-soft)]',
+                              unplayable && 'opacity-45',
+                            )}
+                            onClick={() => {
+                              if (unplayable) {
+                                setExpandedKey((prev) => (prev === rowKey ? null : rowKey))
+                                return
+                              }
+                              setExpandedKey(null)
+                              dismissSearch()
+                              setKeyword('')
+                              void setQueue([...songs], index)
+                            }}
+                          >
+                            {song.cover ? (
+                              <img
+                                className={`size-[42px] shrink-0 rounded-[10px] bg-[color-mix(in_srgb,var(--flux-panel-border)_9%,transparent)] object-cover${unplayable ? ' grayscale' : ''}`}
+                                src={coverProxyUrl(song.cover)}
+                                alt=""
+                                loading="lazy"
+                              />
+                            ) : (
+                              <span className="size-[42px] shrink-0 rounded-[10px] bg-[color-mix(in_srgb,var(--flux-panel-border)_9%,transparent)]" />
+                            )}
+                            <span className="min-w-0 flex-1">
+                              <strong className="block truncate text-sm">{song.name}</strong>
+                              <small className="mt-1 block truncate text-xs text-[var(--flux-text-muted)]">
+                                {song.artist}
+                                {song.album ? ` · ${song.album}` : ''}
+                              </small>
+                            </span>
+                            <span className="text-[11px] text-[var(--flux-text-muted)]">
+                              {song.provider === 'qq' ? 'QQ' : '网易云'}
+                            </span>
+                          </div>
+                          {unplayable && isExpanded ? (
+                            <UnplayableSongExpansion
+                              song={song}
+                              onPlay={(replacement) => {
+                                setExpandedKey(null)
+                                dismissSearch()
+                                setKeyword('')
+                                void setQueue([replacement], 0)
+                              }}
                             />
-                          ) : (
-                            <span className="size-[42px] shrink-0 rounded-[10px] bg-[color-mix(in_srgb,var(--flux-panel-border)_9%,transparent)]" />
-                          )}
-                          <span className="min-w-0 flex-1">
-                            <strong className="block truncate text-sm">{song.name}</strong>
-                            <small className="mt-1 block truncate text-xs text-[var(--flux-text-muted)]">
-                              {song.artist}
-                              {song.album ? ` · ${song.album}` : ''}
-                            </small>
-                          </span>
-                          <span className="text-[11px] text-[var(--flux-text-muted)]">
-                            {song.provider === 'qq' ? 'QQ' : '网易云'}
-                          </span>
-                        </button>
+                          ) : null}
+                        </div>
                       )
                     })}
                     {isFetchingNextPage ? (

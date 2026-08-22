@@ -50,7 +50,7 @@ export function mapQQSmartSong(raw: unknown): UnifiedSong {
     cover: '',
     duration: 0,
     fee: 0,
-    playable: false,
+    playable: true,
   }
 }
 
@@ -87,7 +87,7 @@ export function mapQQTrack(raw: unknown, fallback: Partial<UnifiedSong> = {}): U
     cover: qqAlbumCover(albumMid) || fallback.cover || '',
     duration: numberValue(track.interval) * 1000,
     fee: numberValue(pay.pay_play ?? pay.payplay) ? 1 : 0,
-    playable: false,
+    playable: qqTrackPlayable(track, file, supportedQualities),
     ...(supportedQualities ? { supportedQualities } : {}),
   }
 }
@@ -104,6 +104,19 @@ export function qqSupportedQualities(file: Record<string, unknown>): QualityLeve
     fields.some((fieldName) => numberValue(file[fieldName]) > 0),
   ).map(([quality]) => quality)
   return supported.length ? supported : undefined
+}
+
+export function qqTrackPlayable(
+  track: Record<string, unknown>,
+  _file: Record<string, unknown>,
+  _supportedQualities: QualityLevel[] | undefined,
+): boolean {
+  const action = asRecord(track.action)
+  const switchValue = numberValue(action.switch)
+  if (switchValue > 0) {
+    return (switchValue & 0xfffe) !== 0
+  }
+  return true
 }
 
 export function mapQQPlaylistTrack(raw: unknown): UnifiedSong {
@@ -137,7 +150,7 @@ export function mapQQPlaylistTrack(raw: unknown): UnifiedSong {
     cover: qqAlbumCover(albumMid),
     duration: numberValue(track.interval ?? root.interval) * 1000,
     fee: numberValue(pay.pay_play) ? 1 : 0,
-    playable: false,
+    playable: qqTrackPlayable(track, file, supportedQualities),
     ...(supportedQualities ? { supportedQualities } : {}),
   }
 }

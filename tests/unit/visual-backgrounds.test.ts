@@ -7,9 +7,9 @@ import {
   isDynamicBackgroundEffect,
   type DynamicBackgroundEffect,
 } from '@renderer/visual/backgrounds'
-import { GalaxyBackground } from '@renderer/visual/backgrounds/galaxy'
+import { CausticBackground } from '@renderer/visual/backgrounds/caustic'
 import { HtmlLightBackground } from '@renderer/visual/backgrounds/html-light'
-import { LightRaysBackground } from '@renderer/visual/backgrounds/light-rays'
+import { RainBackground } from '@renderer/visual/backgrounds/rain'
 import type { DynamicBackground, DynamicBackgroundDefinition } from '@renderer/visual/backgrounds/types'
 import { readFileSync } from 'node:fs'
 
@@ -43,15 +43,17 @@ describe('dynamic background registry', () => {
     expect(stageCanvasSource).not.toContain("import('./stage')")
   })
 
-  it('exposes Light Rays, HTML Light and Galaxy and rejects removed persisted values', () => {
+  it('exposes HTML Light, Caustic and Rain and rejects removed persisted values', () => {
     expect(DYNAMIC_BACKGROUND_DEFINITIONS.map(({ effect }) => effect)).toEqual([
-      'light-rays',
       'html-light',
-      'galaxy',
+      'caustic',
+      'rain',
     ])
-    expect(isDynamicBackgroundEffect('light-rays')).toBe(true)
     expect(isDynamicBackgroundEffect('html-light')).toBe(true)
-    expect(isDynamicBackgroundEffect('galaxy')).toBe(true)
+    expect(isDynamicBackgroundEffect('caustic')).toBe(true)
+    expect(isDynamicBackgroundEffect('rain')).toBe(true)
+    expect(isDynamicBackgroundEffect('light-rays')).toBe(false)
+    expect(isDynamicBackgroundEffect('galaxy')).toBe(false)
     expect(isDynamicBackgroundEffect('cinematic-vista')).toBe(false)
     expect(isDynamicBackgroundEffect('cover-particles')).toBe(false)
     expect(isDynamicBackgroundEffect(null)).toBe(false)
@@ -70,11 +72,11 @@ describe('dynamic background registry', () => {
 
 describe('DynamicBackgroundManager lifecycle', () => {
   it('owns one effect, restores viewport/pointer state and disposes replacements once', () => {
-    const lightRays = fakeDefinition('light-rays')
+    const caustic = fakeDefinition('caustic')
     const htmlLight = fakeDefinition('html-light')
     const manager = new DynamicBackgroundManager(
       new Map([
-        ['light-rays', lightRays.definition],
+        ['caustic', caustic.definition],
         ['html-light', htmlLight.definition],
       ]),
     )
@@ -82,15 +84,15 @@ describe('DynamicBackgroundManager lifecycle', () => {
     manager.setViewport(1280, 720, 1.25)
     manager.setPointer(0.2, 0.7, true)
     manager.setAccentColor('#3b82f6')
-    manager.setEffect('light-rays')
-    expect(lightRays.background.setAccentColor).toHaveBeenCalledWith('#3b82f6')
-    expect(lightRays.background.setViewport).toHaveBeenCalledWith(1280, 720, 1.25)
-    expect(lightRays.background.setPointer).toHaveBeenCalledWith(0.2, 0.7, true)
+    manager.setEffect('caustic')
+    expect(caustic.background.setAccentColor).toHaveBeenCalledWith('#3b82f6')
+    expect(caustic.background.setViewport).toHaveBeenCalledWith(1280, 720, 1.25)
+    expect(caustic.background.setPointer).toHaveBeenCalledWith(0.2, 0.7, true)
     manager.update(1 / 60)
-    expect(lightRays.background.update).toHaveBeenCalledWith(1 / 60)
+    expect(caustic.background.update).toHaveBeenCalledWith(1 / 60)
 
     manager.setEffect('html-light')
-    expect(lightRays.background.dispose).toHaveBeenCalledOnce()
+    expect(caustic.background.dispose).toHaveBeenCalledOnce()
     expect(manager.activeEffectId).toBe('html-light')
     manager.setEffect(null)
     expect(htmlLight.background.dispose).toHaveBeenCalledOnce()
@@ -133,16 +135,25 @@ describe('DynamicBackgroundManager lifecycle', () => {
   })
 })
 
-describe('React Bits shader ports', () => {
-  it('light-rays owns one fullscreen material and disposes it idempotently', () => {
-    const create = () => new LightRaysBackground()
-    const background = create()
+describe('Caustic background', () => {
+  it('owns one fullscreen material with the fixed upstream palette and disposes it idempotently', () => {
+    const background = new CausticBackground()
     const mesh = background.group.children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>
+    expect(mesh.name).toBe('caustic-fullscreen-quad')
+    // The caustic palette is fixed to the upstream original (teal water + white
+    // ridges), so there is no theme-tint uniform and setAccentColor is inert.
+    expect(mesh.material.uniforms.uTint).toBeUndefined()
     const geometryDispose = vi.spyOn(mesh.geometry, 'dispose')
     const materialDispose = vi.spyOn(mesh.material, 'dispose')
-    background.setViewport(800, 600, 1.25)
+    background.setAccentColor('#ff3d5a')
+    background.setViewport(1280, 720, 1.25)
+    const resolution = mesh.material.uniforms.iResolution.value as THREE.Vector2
+    expect(resolution.x).toBeGreaterThan(0)
+    expect(resolution.y).toBeGreaterThan(0)
+    // setPointer is a deliberate no-op for the caustic composition.
     background.setPointer(0.25, 0.75, true)
     background.update(1 / 60)
+    expect(mesh.material.uniforms.iTime.value).toBeCloseTo(1 / 60)
     background.dispose()
     background.dispose()
     expect(geometryDispose).toHaveBeenCalledOnce()
@@ -151,96 +162,38 @@ describe('React Bits shader ports', () => {
   })
 })
 
-describe('Galaxy background', () => {
-  it('generates a deterministic tilted spiral disc that fits the viewport', () => {
-    const background = new GalaxyBackground()
-    const stars = background.group.getObjectByName('galaxy-stars') as THREE.Points<
-      THREE.BufferGeometry,
-      THREE.ShaderMaterial
-    >
-    const disc = background.group.getObjectByName('galaxy-disc')!
-    const positions = stars.geometry.getAttribute('position')
-    expect(positions.count).toBe(80_000)
-    expect(stars.geometry.getAttribute('aRadius').count).toBe(80_000)
-    expect(stars.geometry.getAttribute('aSize').count).toBe(80_000)
-    expect(stars.geometry.getAttribute('aSeed').count).toBe(80_000)
-    // Oblique tilt: neither edge-on (the disc would vanish) nor face-on.
-    expect(background.group.rotation.x).toBeGreaterThan(0.15)
-    expect(background.group.rotation.x).toBeLessThan(Math.PI / 2 - 0.15)
-
-    let maxPlanarRadius = 0
-    let maxThickness = 0
-    for (let index = 0; index < positions.count; index += 1) {
-      maxPlanarRadius = Math.max(maxPlanarRadius, Math.hypot(positions.getX(index), positions.getZ(index)))
-      maxThickness = Math.max(maxThickness, Math.abs(positions.getY(index)))
-    }
-    expect(maxPlanarRadius).toBeGreaterThan(0.9)
-    // Rim plus the widest scatter stays inside 1 + SCATTER_STRENGTH * sqrt(2).
-    expect(maxPlanarRadius).toBeLessThan(1.8)
-    // A lens, not a ball: vertical scatter stays a fraction of the planar scatter.
-    expect(maxThickness).toBeGreaterThan(0.1)
-    expect(maxThickness).toBeLessThan(maxPlanarRadius * 0.35)
-
-    const twin = new GalaxyBackground()
-    const twinStars = twin.group.getObjectByName('galaxy-stars') as THREE.Points
-    expect(
-      Array.from((twinStars.geometry.getAttribute('position').array as Float32Array).slice(0, 300)),
-    ).toEqual(Array.from((positions.array as Float32Array).slice(0, 300)))
-    twin.dispose()
-
-    background.setViewport(1280, 720, 1.25)
-    expect(background.group.scale.x).toBeGreaterThan(4)
-    expect(background.group.position.y).toBeLessThan(0)
-    expect(stars.material.uniforms.uSizeScale.value).toBeGreaterThan(0)
-    background.setViewport(720, 1280, 1.25)
-    expect(background.group.scale.x).toBeLessThan(6)
-
-    // Tuned constants stay free to move: assert the behaviour, not the current INITIAL_SPIN value.
-    const initialSpin = disc.rotation.y
-    expect(initialSpin).toBeGreaterThan(0)
-    background.update(1)
-    expect(disc.rotation.y).toBeGreaterThan(initialSpin)
-    expect(stars.material.uniforms.uTime.value).toBeCloseTo(1)
-    background.dispose()
-  })
-
-  it('tints the rim with the theme accent and releases every owned resource once', () => {
-    const background = new GalaxyBackground()
-    const stars = background.group.getObjectByName('galaxy-stars') as THREE.Points<
-      THREE.BufferGeometry,
-      THREE.ShaderMaterial
-    >
-    const glow = background.group.getObjectByName('galaxy-core-glow') as THREE.Mesh<
-      THREE.PlaneGeometry,
-      THREE.MeshBasicMaterial
-    >
-    const edge = stars.material.uniforms.uEdgeColor.value as THREE.Color
-    const before = edge.clone()
+describe('Rain background', () => {
+  it('owns one fullscreen material, a scene texture and disposes both idempotently', () => {
+    // The TextureLoader loads a real image via the DOM Image API, which does not
+    // exist in the node test environment. Stub it to return an empty texture so
+    // the background can be instantiated without a browser.
+    const loadStub = vi
+      .spyOn(THREE.TextureLoader.prototype, 'load')
+      .mockReturnValue(new THREE.Texture())
+    const background = new RainBackground()
+    const mesh = background.group.children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>
+    expect(mesh.name).toBe('rain-fullscreen-quad')
+    expect(mesh.material.uniforms.iChannel0.value).toBeInstanceOf(THREE.Texture)
+    const geometryDispose = vi.spyOn(mesh.geometry, 'dispose')
+    const materialDispose = vi.spyOn(mesh.material, 'dispose')
+    const textureDispose = vi.spyOn(mesh.material.uniforms.iChannel0.value as THREE.Texture, 'dispose')
+    // The rain palette is fixed to the auto-cycling story, so setAccentColor is inert.
     background.setAccentColor('#ff3d5a')
-    // The rim leans toward the accent but keeps the reference blue as its base.
-    expect(edge.r).toBeGreaterThan(before.r)
-    expect(edge.b).toBeGreaterThan(edge.r)
-    // The bulge stays essentially white.
-    expect(glow.material.color.r).toBeGreaterThan(glow.material.color.b)
-    expect(glow.material.color.g).toBeGreaterThan(0.9)
-
-    const disposals = [
-      vi.spyOn(stars.geometry, 'dispose'),
-      vi.spyOn(stars.material, 'dispose'),
-      vi.spyOn(glow.geometry, 'dispose'),
-      vi.spyOn(glow.material, 'dispose'),
-      vi.spyOn(glow.material.map!, 'dispose'),
-    ]
-    background.dispose()
-    background.dispose()
-    for (const dispose of disposals) expect(dispose).toHaveBeenCalledOnce()
-    expect(background.group.children).toHaveLength(0)
-
-    const idleTime = stars.material.uniforms.uTime.value
+    background.setViewport(1280, 720, 1.25)
+    const resolution = mesh.material.uniforms.iResolution.value as THREE.Vector2
+    expect(resolution.x).toBeGreaterThan(0)
+    expect(resolution.y).toBeGreaterThan(0)
+    // setPointer is a deliberate no-op — no click/scrub control.
+    background.setPointer(0.25, 0.75, true)
     background.update(1 / 60)
-    background.setViewport(800, 600, 1)
-    background.setAccentColor('#00f5d4')
-    expect(stars.material.uniforms.uTime.value).toBe(idleTime)
+    expect(mesh.material.uniforms.iTime.value).toBeCloseTo(1 / 60)
+    background.dispose()
+    background.dispose()
+    expect(geometryDispose).toHaveBeenCalledOnce()
+    expect(materialDispose).toHaveBeenCalledOnce()
+    expect(textureDispose).toHaveBeenCalledOnce()
+    expect(background.group.children).toHaveLength(0)
+    loadStub.mockRestore()
   })
 })
 

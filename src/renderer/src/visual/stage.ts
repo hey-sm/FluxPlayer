@@ -30,10 +30,9 @@ export class VisualStage {
   private readonly cameraTarget: CameraOrbit = { radius: 10.8, phi: 0.02, theta: 0 }
   private container: HTMLElement | null = null
   private stopTick: (() => void) | null = null
-  private backgroundEffect: DynamicBackgroundEffect = 'light-rays'
+  private backgroundEffect: DynamicBackgroundEffect = 'rain'
   private backgroundEnabled = true
   private accentColor = '#00f5d4'
-  private lyricsDragEnabled = false
   private reducedMotion = false
   private disposed = false
 
@@ -176,10 +175,6 @@ export class VisualStage {
     })
   }
 
-  setLyricsDragEnabled(enabled: boolean): void {
-    this.lyricsDragEnabled = enabled
-  }
-
   setLyricsAnimationMode(mode: LyricsAnimationMode): void {
     this.lyricsLayer.setAnimationMode(mode)
   }
@@ -197,7 +192,6 @@ export class VisualStage {
   }
 
   moveLyricsBy(deltaX: number, deltaY: number): Readonly<{ x: number; y: number }> {
-    if (!this.lyricsDragEnabled) return this.lyricsLayer.getOffset()
     const height = Math.max(1, this.container?.clientHeight ?? 1)
     const visibleHeight =
       2 * Math.tan(THREE.MathUtils.degToRad(this.lyricsCamera.fov * 0.5)) * this.cameraState.radius

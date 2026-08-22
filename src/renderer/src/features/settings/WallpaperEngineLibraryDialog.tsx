@@ -356,6 +356,12 @@ export function WallpaperEngineLibraryDialog({
             className="size-full min-h-0 overflow-hidden rounded-[22px]"
             contentClassName="flex size-full min-h-0 flex-col overflow-hidden"
             data-wallpaper-library-glass=""
+            glassConfig={{
+              blur: 50,
+              borderRadius: 22,
+              innerLightBlur: 50,
+              color: '#ffffff',
+            }}
           >
             <DialogHeader className="shrink-0 border-b border-[color-mix(in_srgb,var(--flux-glass-border)_80%,transparent)] px-6 pb-5 pt-6">
               <div className="flex items-start justify-between gap-5 pr-8">

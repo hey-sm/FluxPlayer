@@ -185,4 +185,36 @@ describe('SafeCredentialStore', () => {
     expect(recovered.get('netease')).toBe('old')
     expect(fs.readdirSync(directory)).toEqual(['netease.bin'])
   })
+
+  it('preserves both ciphertexts when a journal is found while encryption is unavailable', () => {
+    // keyring 不可用时 isEncryptedCredentialFile 对任何文件都返回 false，无法区分「密文损坏」
+    // 与「暂时解不开」。恢复逻辑若照常清理，会把两份完好的密文一起删掉 —— 用户表现为
+    // 「登录态凭空消失」。Linux/macOS 上 safeStorage 依赖 libsecret/kwallet，这条路径真实可达。
+    const directory = createTemporaryDirectory()
+    const file = credentialFile(directory)
+    const previous = `${file}.crash.previous`
+    const temporary = `${file}.crash.tmp`
+    const journal = path.join(directory, 'netease.replace.json')
+    fs.writeFileSync(file, `${ENCRYPTED_PREFIX}current`, 'utf8')
+    fs.writeFileSync(previous, `${ENCRYPTED_PREFIX}old`, 'utf8')
+    fs.writeFileSync(temporary, `${ENCRYPTED_PREFIX}new`, 'utf8')
+    fs.writeFileSync(
+      journal,
+      JSON.stringify({ temporary: path.basename(temporary), previous: path.basename(previous) }),
+      'utf8',
+    )
+
+    const unavailable = new SafeCredentialStore({ directory, encryption: createEncryption(false) })
+
+    // 一个字节都不许删，journal 也要留着，好让下次启动继续恢复。
+    expect(fs.existsSync(file)).toBe(true)
+    expect(fs.existsSync(previous)).toBe(true)
+    expect(fs.existsSync(journal)).toBe(true)
+    expect(unavailable.get('netease')).toBe('')
+
+    // keyring 恢复可用后，同一份磁盘状态仍然能被正常恢复。
+    const recovered = new SafeCredentialStore({ directory, encryption: createEncryption() })
+    expect(recovered.get('netease')).toBe('current')
+    expect(fs.readdirSync(directory)).toEqual(['netease.bin'])
+  })
 })

@@ -2,7 +2,7 @@ import { app, safeStorage, type SafeStorage } from 'electron'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import type { CredentialKey, CredentialStore } from '@server/types'
+import type { CredentialKey, CredentialStore, ProviderCredentialKey } from '@server/types'
 
 export interface VerifiedCredentialWriteResult {
   ok: boolean
@@ -45,7 +45,11 @@ export class SafeCredentialStore implements CredentialStore {
   }
 
   private recoverInterruptedReplacements(): void {
-    for (const key of ['netease', 'qq'] as const) {
+    // 加密不可用时 isEncryptedCredentialFile 对任何文件都返回 false，无法区分「密文损坏」
+    // 与「暂时解不开」。此时任何清理都可能删掉完好的凭据，因此整体跳过：保留 journal 与
+    // 两份文件，等下次 keyring 可用时再恢复。
+    if (!this.encryption.isEncryptionAvailable()) return
+    for (const key of ['netease', 'qq'] as const satisfies ProviderCredentialKey[]) {
       const journal = this.replacementJournalFor(key)
       if (!fs.existsSync(journal)) continue
       try {

@@ -96,6 +96,28 @@ export const NCM_ENDPOINT_ALLOWLIST = Object.freeze(Object.keys(endpointLoaders)
 const endpointCache = new Map<NcmEndpointName, Promise<NcmEndpoint>>()
 let requestPromise: Promise<NcmRequest> | undefined
 
+/** 上游无响应时的兜底时限。QQ 侧走 util/http 的 AbortSignal.timeout，这里对齐同一量级。 */
+const NCM_TIMEOUT_MS = 12_000
+
+/**
+ * NCM SDK 不接受 AbortSignal，内部自建 HTTP 栈，因此请求无法真正取消。用超时竞速把
+ * 「无限挂起」降级成确定性失败：底层请求可能仍在飞，但调用方不会被永久阻塞，
+ * MusicService.execute 会把它归一成 PROVIDER_UNAVAILABLE，UI 也就不会停在 loading。
+ */
+async function withTimeout<T>(operation: Promise<T>, name: NcmEndpointName): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`NETEASE_TIMEOUT:${name}`)), NCM_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 function endpoint(name: NcmEndpointName): Promise<NcmEndpoint> {
   const cached = endpointCache.get(name)
   if (cached) return cached
@@ -110,7 +132,7 @@ async function invoke(name: NcmEndpointName, input: NcmParams = {}): Promise<Ncm
 
   requestPromise ??= loadRequest()
   const [handler, request] = await Promise.all([endpoint(name), requestPromise])
-  const raw = await handler(params, request)
+  const raw = await withTimeout(Promise.resolve(handler(params, request)), name)
   return asRecord(raw) as NcmResponse
 }
 

@@ -4,7 +4,7 @@
 
 **沉浸式桌面音乐播放器**
 
-聚合网易云音乐与 QQ 音乐 · Light Rays / HTML Light / Galaxy 动态背景 · 隐私优先的进程隔离架构
+聚合网易云音乐与 QQ 音乐 · HTML Light / 水纹焦散 / 雨窗 动态背景 · 隐私优先的进程隔离架构
 
 `Electron 42` · `React 19` · `Three.js` · `TypeScript` · `Vite 8`
 
@@ -46,7 +46,7 @@ FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云�
 - **双 provider 聚合**：网易云 / QQ 音乐统一搜索、歌单、我喜欢、逐字歌词。
 - **多档音质**：超清母带 / 高清臻音 / 无损 / 极高 / 标准，跨 provider 归一化。
 - **明确的失败反馈**：播放地址不可用时保留当前队列并展示原因，由用户手动重试或切歌；试听片段在 30 秒处截断。
-- **动态背景与 3D 歌词**：内置 Light Rays 光线、HTML Light 吊灯与 Galaxy 螺旋星系背景，歌词继续使用 Three.js 网格渲染并支持旋转、拖拽和缩放。
+- **动态背景与 3D 歌词**：内置 HTML Light 吊灯、水纹焦散与雨窗背景，歌词继续使用 Three.js 网格渲染并支持旋转、拖拽和缩放。
 - **全局液态玻璃**：左右栏、PlayerBar、搜索、设置与浮层统一使用可实时调节和持久化的 react-glass-ui 配置。
 - **自定义背景**：支持导入本地图片/视频，以及 Wallpaper Engine 视频项目。
 - **系统媒体集成**：Media Session（系统媒体控制中心 / 键盘媒体键）。
@@ -257,7 +257,7 @@ Three.js 动态背景遵循「单一实例」原则，避免资源泄漏与多�
 
 - **单一 Stage** —— `VisualStage`（[src/renderer/src/visual/stage.ts](src/renderer/src/visual/stage.ts)）持有唯一的 renderer / scene / camera，所有子层（歌词层、背景管理器）共用它。
 - **单一 RAF** —— 全局 `ticker`（[src/renderer/src/perf/ticker.ts](src/renderer/src/perf/ticker.ts)）是唯一的 `requestAnimationFrame` 注册表，所有视觉循环都注册到它，受主进程 `PerfState` 约束降频。视觉代码不应自建动画时钟。
-- **三种动态背景** —— Light Rays 使用全屏 shader；HTML Light 使用可拖拽物理吊灯、暖色聚光灯和程序化承光平面；Galaxy 使用 8 万颗加色混合星点组成的螺旋星系（固定种子、白色核球 + 随主题色微调的蓝色外圈、极慢自转）。三者由 `DynamicBackgroundManager` 懒加载并在切换时释放旧 GPU 资源。
+- **三种动态背景** —— HTML Light 使用可拖拽物理吊灯、暖色聚光灯和程序化承光平面；水纹焦散使用可平铺的水面焦散 shader（青蓝水底 + 白色焦散脊，配色固定）；雨窗移植自 Shadertoy "Heartfelt"（雨打玻璃 + 心形故事，自动循环、无鼠标交互，背景为真实照片纹理）。三者由 `DynamicBackgroundManager` 懒加载并在切换时释放旧 GPU 资源。
 - **独立歌词数据流** —— `stageLyricsChannel` 只向 3D 歌词层发布当前歌词窗口和播放位置；动态背景不接入音频频谱。
 - **自定义背景优先** —— 本地图片、视频或 Wallpaper Engine 背景启用时释放动态 shader，3D 歌词仍由同一个 Stage 渲染。
 - **单层液态玻璃** —— `components/glass` 是配置、持久化、CSS 变量和 `react-glass-ui` 的唯一入口；设置面板“玻璃”Tab 实时控制所有真实表面。实现和动画禁令见 [docs/liquid-glass-system.md](docs/liquid-glass-system.md)。

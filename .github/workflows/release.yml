@@ -17,7 +17,7 @@ jobs:
   verify:
     name: Verify source
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -28,11 +28,28 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # 注意：打包模型是「全部内联」，dependencies 只剩 electron-updater，因此 --prod
+      # 只审这一个包。真正随包分发的是全部被 bundle 的依赖，dependencies/devDependencies
+      # 的划分已无法表达「什么会被发出去」。放宽为全量 audit 见 TODO.md。
       - run: pnpm audit --registry=https://registry.npmjs.org --prod --audit-level=high
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format
       - run: pnpm test
+      # Electron 在 headless runner 上需要虚拟显示。这两步此前从未在 CI 跑过，
+      # 而它们恰好是唯一能验证「安装包真的能启动」的手段。
+      - name: Smoke test (headless Electron)
+        run: xvfb-run -a pnpm smoke
+      - name: End-to-end tests (real Electron)
+        run: xvfb-run -a pnpm test:e2e
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Verify tag matches package version
         if: startsWith(github.ref, 'refs/tags/v')
         run: node -e "const version=require('./package.json').version; if (process.env.GITHUB_REF_NAME !== 'v' + version) throw new Error('Tag must equal v' + version)"

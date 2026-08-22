@@ -158,6 +158,9 @@ export const QQ_QUALITY_CANDIDATE_TEMPLATES = [
 
 export type QualityLevel = 'jymaster' | 'hires' | 'lossless' | 'exhigh' | 'standard'
 
+/** 音质从高到低的排序，用于合并 supportedQualities */
+export const QUALITY_ORDER: readonly QualityLevel[] = ['jymaster', 'hires', 'lossless', 'exhigh', 'standard']
+
 export function normalizeQualityPreference(value: unknown): QualityLevel {
   const raw = String(value || '')
     .toLowerCase()

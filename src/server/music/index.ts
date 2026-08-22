@@ -21,6 +21,7 @@ import type { CredentialStore, MainPlaybackResource } from '../types'
 import { errorMessage } from '../util/unknown'
 import { NeteaseProvider } from '../providers/netease'
 import { QQProvider } from '../providers/qq'
+import { ChkszProvider, chkszErrorToast, ChkszApiError } from '../providers/chksz'
 
 export class MusicServiceError extends Error {
   readonly payload: MusicErrorPayload
@@ -55,16 +56,47 @@ function invalidCredential(provider: ProviderId): MusicServiceError {
 }
 
 /**
- * Main-process music orchestration for the two product providers.
- * Provider selection is intentionally centralized here; adding another provider requires changing this switch.
+ * 直连解析结果是否应触发 chksz 回退。
+ * - url 为 null（无法播放）→ 回退
+ * - trial=true（仅试听片段）→ 回退（chksz 可能拿到完整地址）
+ * - 正常可播 → 不回退
+ */
+function shouldFallbackToChksz(result: { url: string | null; trial: boolean; playable: boolean }): boolean {
+  if (!result.playable || !result.url) return true
+  if (result.trial) return true
+  return false
+}
+
+/**
+ * Main-process music orchestration for the two product providers + ChKSz aggregation fallback.
+ *
+ * ChKSz 接入策略（与直连完全独立，密钥存在才启用）：
+ * - search：有 chksz key → 走 chksz 搜索；无 → 走直连
+ * - resolvePlayback：先走直连，直连判定无音源 / 仅试听 → 用 chksz 同 id 重解析
+ * - getLyrics：有 chksz key → 走 chksz（更稳）；无 → 走直连
+ * - 账号 / 歌单列表 / 我喜欢 / 发现页：永远走直连，不受 chksz 影响
  */
 export class MusicService {
   readonly netease: NeteaseProvider
   readonly qq: QQProvider
+  private readonly credentials: CredentialStore
+  private readonly chkszPreferences?: { enabled: boolean }
 
-  constructor(credentials: CredentialStore) {
+  constructor(credentials: CredentialStore, chkszPreferences?: { enabled: boolean }) {
     this.netease = new NeteaseProvider(credentials)
     this.qq = new QQProvider(credentials)
+    this.credentials = credentials
+    this.chkszPreferences = chkszPreferences
+  }
+
+  /** 密钥实时读取 + 启用状态检查：停用时密钥仍在磁盘，但 enabled=false 则不启用 chksz。 */
+  private get chkszKey(): string {
+    if (this.chkszPreferences && !this.chkszPreferences.enabled) return ''
+    return this.credentials.get('chksz')
+  }
+
+  private get chksz(): ChkszProvider | null {
+    return this.chkszKey ? new ChkszProvider(this.chkszKey) : null
   }
 
   private select(provider: ProviderId): NeteaseProvider | QQProvider {
@@ -88,21 +120,90 @@ export class MusicService {
     const provider = this.select(request.provider)
     const limit = Math.max(1, Math.min(200, Math.floor(request.limit ?? 30)))
     const page = Math.max(1, Math.floor(request.page ?? 1))
+    const useChksz = request.backend === 'chksz' || (request.backend !== 'direct' && Boolean(this.chksz))
+
+    // backend=chksz 或未指定但有 key → 走 chksz 搜索
+    if (useChksz) {
+      const chksz = this.chksz
+      if (chksz) {
+        try {
+          const songs = await chksz.search(request.provider, request.keywords.trim(), limit, page)
+          return { provider: request.provider, songs, page, hasMore: songs.length >= limit }
+        } catch (error) {
+          // backend=chksz 时失败不回退（用户明确要求 chksz），向上抛错让面板提示
+          if (request.backend === 'chksz') throw providerError(request.provider, error)
+          console.warn('[ChKSz] search fallback to direct:', errorMessage(error))
+        }
+      }
+    }
+
     const songs = await this.execute(request.provider, () =>
       provider.search(request.keywords.trim(), limit, page),
     )
-    // 上游不回总数，用"本页拿满 limit"推断还有下一页；最后一页会多触发一次空请求，可接受。
     return { provider: request.provider, songs, page, hasMore: songs.length >= limit }
   }
 
   /** Returns an upstream resource only to Electron main. Main must replace it with a flux-media handle before IPC. */
   async resolvePlayback(request: PlaybackResolveRequest): Promise<MainPlaybackResource> {
     const provider = this.select(request.song.provider)
-    const resolved = await this.execute(request.song.provider, () =>
+    const direct = await this.execute(request.song.provider, () =>
       provider.resolvePlayback(request.song, request.quality),
     )
+
+    // 直连能正常播放 → 直接返回，不消耗 chksz 配额
+    if (!shouldFallbackToChksz(direct)) {
+      return this.toMainPlaybackResource(direct)
+    }
+
+    // 直连无音源 / 仅试听 → 尝试 chksz 同 id 解析
+    const chksz = this.chksz
+    if (chksz) {
+      try {
+        const chkszResult = await chksz.resolvePlayback(request.song, request.quality)
+        if (chkszResult.url && chkszResult.playable && !chkszResult.trial) {
+          return this.toMainPlaybackResource(chkszResult)
+        }
+        // chksz 也没拿到完整地址，返回直连结果（带原始 restriction 信息）
+      } catch (error) {
+        // chksz 错误：用户可见的（配额/限流/Key）需向上传，否则播放器看不到原因。
+        // 用 ChKSz 前缀文案抛 Error（非 MusicServiceError），跨 IPC 后 renderer 侧
+        // musicErrorMessage 识别 ChKSz 前缀并直接显示文案，不走 provider 错误码翻译。
+        if (error instanceof ChkszApiError) {
+          const toast = chkszErrorToast(error)
+          if (toast) {
+            throw new Error(`ChKSz ${toast.title}：${toast.message}`, { cause: error })
+          }
+        }
+        // 其它 chksz 错误静默，回退到直连结果
+        console.warn('[ChKSz] resolvePlayback failed, using direct result:', errorMessage(error))
+      }
+    }
+
+    return this.toMainPlaybackResource(direct)
+  }
+
+  private toMainPlaybackResource(resolved: {
+    provider: string
+    url: string | null
+    headers: Readonly<Record<string, string>>
+    trial: boolean
+    playable: boolean
+    level?: string
+    quality?: string
+    br?: number
+    filename?: string
+    requestedQuality?: string
+    trialInfo?: unknown
+    restriction?: import('@shared/models').PlaybackRestriction
+    reason?: string
+    message?: string
+    error?: string
+    trialDuration?: number
+    loggedIn?: boolean
+    playbackKeyReady?: boolean
+  }): MainPlaybackResource {
     return {
-      provider: resolved.provider,
+      provider: resolved.provider as ProviderId,
       upstreamUrl: resolved.url,
       upstreamHeaders: resolved.headers,
       trial: resolved.trial,
@@ -120,6 +221,21 @@ export class MusicService {
 
   async getLyrics(request: LyricsRequest): Promise<LyricDocument> {
     const provider = this.select(request.provider)
+    // 有 chksz key 时歌词走 chksz（对无音源歌曲更稳）
+    const chksz = this.chksz
+    if (chksz) {
+      try {
+        const songLike = {
+          provider: request.provider,
+          id: request.id,
+          mid: request.mid,
+        } as import('@shared/models').UnifiedSong
+        const doc = await chksz.getLyrics(songLike)
+        if (doc.lyric || doc.lines.length) return doc
+      } catch (error) {
+        console.warn('[ChKSz] lyrics fallback to direct:', errorMessage(error))
+      }
+    }
     return this.execute(request.provider, () => provider.getLyrics(request.id, request.mid))
   }
 
