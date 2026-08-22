@@ -904,16 +904,19 @@ export class WallpaperEngineLibrary {
   }> {
     const record = this.index.get(String(id).toLowerCase())
     if (!record || !record.scenePackage) throw new Error('WALLPAPER_ENGINE_SCENE_NOT_FOUND')
+    const relativeScene = path.relative(record.sceneRoot, record.scenePackage)
     const scenePackage = await resolveProjectFile(
       record.sceneRoot,
-      path.relative(record.sceneRoot, record.scenePackage),
+      relativeScene,
       new Map([...SCENE_EXTENSIONS].map((ext) => [ext, ext])),
     )
     const _validated = await validScenePackage(scenePackage)
     if (!_validated)
       console.error('[WE-DIAG] scenePackage invalid:', {
-        scenePackage,
-        exists: scenePackage ? 'has-path' : 'empty',
+        sceneRoot: record.sceneRoot,
+        scenePackageStored: record.scenePackage,
+        relativeScene,
+        scenePackageResolved: scenePackage,
         ext: scenePackage ? path.extname(scenePackage) : '',
       })
     if (!_validated) throw new Error('WALLPAPER_ENGINE_SCENE_PACKAGE_INVALID')
