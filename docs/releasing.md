@@ -17,7 +17,7 @@ git push origin v2.0.0-alpha.1
 
 公开发布需要受信任的 Authenticode 代码签名证书。可从受信任 CA 购买 OV/EV 证书；无法导出为 PFX 的硬件令牌证书不能直接用于 GitHub hosted runner，此时应改用 Microsoft Trusted Signing、SignPath 等远程签名方案。
 
-当前工作流使用可导出的 PFX。不要提交证书文件，把 PFX 转为单行 Base64：
+当前工作流在有签名凭据时自动签名；缺少凭据时会跳过签名并产出未签名安装包，仍创建 Release。不要提交证书文件，把 PFX 转为单行 Base64：
 
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes('windows-signing.pfx')) |
@@ -48,7 +48,7 @@ base64 < AuthKey_ABC123.p8 | tr -d '\n'
 - `APPLE_API_KEY_ID`
 - `APPLE_API_ISSUER`
 
-electron-builder 会使用 hardened runtime 和 `resources/entitlements.mac.plist` 签名应用，然后通过 Apple `notarytool` 公证。标签发布缺少任一项都会失败，避免发布未签名或未公证的 macOS 安装包。
+electron-builder 会使用 hardened runtime 和 `resources/entitlements.mac.plist` 签名应用，然后通过 Apple `notarytool` 公证。缺少 macOS 凭据时，CI 会自动禁用 `notarize` 并产出未签名 DMG/ZIP，仍创建 Release。
 
 ## Linux 与自动更新
 
@@ -66,4 +66,4 @@ pnpm build:mac
 pnpm build:linux
 ```
 
-普通 `main` 构建在没有 Secrets 时仍会生成未签名 Actions Artifacts用于测试；`v*` 标签发布强制要求 Windows 与 macOS 签名凭据。
+普通 `main` 构建在没有 Secrets 时仍会生成未签名 Actions Artifacts 用于测试；`v*` 标签发布在有凭据时签名，无凭据时跳过签名但仍创建 Release。

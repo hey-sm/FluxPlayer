@@ -100,17 +100,16 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      - name: Require Windows signing credentials for a tagged release
+      - name: Check Windows signing credentials
         if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
         shell: pwsh
         env:
           WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
-          $missing = @()
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64)) { $missing += 'WINDOWS_CERTIFICATE_BASE64' }
-          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_KEY_PASSWORD)) { $missing += 'WINDOWS_CERTIFICATE_PASSWORD' }
-          if ($missing.Count -gt 0) { throw "Missing release secrets: $($missing -join ', ')" }
+          $hasCert = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64) -and -not [string]::IsNullOrWhiteSpace($env:WIN_CSC_KEY_PASSWORD)
+          "HAS_WIN_CERT=$hasCert" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if (-not $hasCert) { Write-Warning 'Windows signing certificate not configured; installer will be unsigned.' }
 
       - name: Prepare Windows signing certificate
         if: runner.os == 'Windows'
@@ -129,7 +128,7 @@ jobs:
           "WIN_CSC_LINK=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "WIN_CSC_KEY_PASSWORD=$env:WIN_CSC_KEY_PASSWORD" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Require macOS signing and notarization credentials for a tagged release
+      - name: Check macOS signing credentials
         if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'macOS'
         shell: bash
         env:
@@ -139,13 +138,12 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          missing=()
-          for name in MACOS_CERTIFICATE_BASE64 CSC_KEY_PASSWORD APPLE_API_KEY_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER; do
-            if [[ -z "${!name}" ]]; then missing+=("$name"); fi
-          done
-          if (( ${#missing[@]} )); then
-            printf 'Missing release secrets: %s\n' "${missing[*]}" >&2
-            exit 1
+          has_cert=0
+          [[ -n "$MACOS_CERTIFICATE_BASE64" && -n "$CSC_KEY_PASSWORD" ]] && has_cert=1
+          echo "HAS_MAC_CERT=$has_cert" >> "$GITHUB_ENV"
+          if [[ "$has_cert" == "0" ]]; then
+            echo '::warning::macOS signing certificate not configured; DMG will be unsigned.'
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
           fi
 
       - name: Prepare macOS signing certificate
@@ -183,13 +181,23 @@ jobs:
           echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID" >> "$GITHUB_ENV"
           echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
 
+      - name: Disable macOS notarization when unsigned
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT != '1'
+        shell: bash
+        run: |
+          # electron-builder.yml notarize:true 会强制要求 Apple API Key；
+          # 无证书时改为 false，让构建产出未签名的 DMG/ZIP
+          sed -i.bak 's/notarize: true/notarize: false/' electron-builder.yml
+          rm -f electron-builder.yml.bak
+          echo "::notice::Disabled macOS notarization (no signing credentials)"
+
       - name: Build installers
         run: ${{ matrix.command }}
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Verify Windows release signature
-        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows' && env.HAS_WIN_CERT == 'True'
         shell: pwsh
         run: |
           $installers = @(Get-ChildItem dist -Filter '*-Setup.exe' -File)
@@ -205,7 +213,7 @@ jobs:
           }
 
       - name: Verify macOS release signature
-        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'macOS'
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'macOS' && env.HAS_MAC_CERT == '1'
         shell: bash
         run: |
           found=0
