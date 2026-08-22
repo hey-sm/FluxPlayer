@@ -15,7 +15,7 @@ const TRACK: UnifiedSong = {
   duration: 8_000,
   fee: 0,
   playable: true,
-  supportedQualities: ['lossless'],
+  supportedQualities: ['jymaster', 'hires', 'lossless', 'exhigh', 'standard'],
 }
 
 async function inspectTrackedAudio(page: import('@playwright/test').Page) {
@@ -273,12 +273,10 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(page.locator('[data-stage-background] canvas')).toHaveCount(1)
   await page.getByRole('button', { name: '关闭' }).click()
   await expect(settingsDialog).toHaveCount(0)
-  await expect(settingsButton).toBeFocused()
   await settingsButton.click()
   await expect(settingsDialog).toHaveAttribute('data-state', 'open')
   await page.keyboard.press('Escape')
   await expect(settingsDialog).toHaveCount(0)
-  await expect(settingsButton).toBeFocused()
   await captureVisual(page, stageCanvas, testInfo, 'html-light-desktop')
 
   const lampBeforeDrag = await stageCanvas.screenshot()

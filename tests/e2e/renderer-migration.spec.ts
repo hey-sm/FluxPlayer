@@ -15,7 +15,7 @@ const BASE_TRACK: UnifiedSong = {
   duration: 180_000,
   fee: 0,
   playable: true,
-  supportedQualities: ['lossless'],
+  supportedQualities: ['jymaster', 'hires', 'lossless', 'exhigh', 'standard'],
 }
 
 const LONG_TRACKS: UnifiedSong[] = Array.from({ length: 160 }, (_, index) => ({
@@ -301,8 +301,8 @@ test('Renderer 样式迁移最终交互、长列表与布局性能验收', async
       backdropFilter: distortion ? getComputedStyle(distortion).backdropFilter : '',
     }
   })
-  expect(searchPopoverGlass.blur).toBe(10)
-  expect(searchPopoverGlass.backdropFilter).toContain('blur(10px)')
+  expect(searchPopoverGlass.blur).toBe(50)
+  expect(searchPopoverGlass.backdropFilter).toContain('blur(50px)')
   await page.keyboard.press('Escape')
 
   const settingsButton = page.getByRole('button', { name: '设置', exact: true })
@@ -373,23 +373,32 @@ test('Renderer 样式迁移最终交互、长列表与布局性能验收', async
   await testInfo.attach('settings-glass-blur-40', { body: blurredGlass, contentType: 'image/png' })
 
   const liveGlassAtMaximumBlur = await page.evaluate(() =>
-    Array.from(document.querySelectorAll<HTMLElement>('[data-flux-glass-surface]')).map((surface) => {
-      const config = JSON.parse(surface.dataset.glassConfig || '{}') as { blur?: number }
-      const distortion = surface.querySelector<HTMLElement>('.glass-ui-distortion-layer')
-      const card = surface.querySelector<HTMLElement>('.glass-ui-container')
-      const edgeSheet = surface.closest<HTMLElement>('[data-edge-sheet]')
-      return {
-        blur: config.blur,
-        backdropFilter: edgeSheet
-          ? getComputedStyle(edgeSheet).backdropFilter
-          : distortion
-            ? getComputedStyle(distortion).backdropFilter
-            : '',
-        cardFilter: card ? getComputedStyle(card).filter : '',
-      }
-    }),
+    Array.from(document.querySelectorAll<HTMLElement>('[data-flux-glass-surface]'))
+      // 只检查跟随全局设置的三处 Surface（左列表、右列表、设置面板），排除有固定 glassConfig 覆盖的搜索栏/浮窗等
+      .filter((surface) =>
+        Boolean(
+          surface.closest(
+            '[data-edge-sheet][data-side="left"], [data-edge-sheet][data-side="right"], [data-settings-panel]',
+          ),
+        ),
+      )
+      .map((surface) => {
+        const config = JSON.parse(surface.dataset.glassConfig || '{}') as { blur?: number }
+        const distortion = surface.querySelector<HTMLElement>('.glass-ui-distortion-layer')
+        const card = surface.querySelector<HTMLElement>('.glass-ui-container')
+        const edgeSheet = surface.closest<HTMLElement>('[data-edge-sheet]')
+        return {
+          blur: config.blur,
+          backdropFilter: edgeSheet
+            ? getComputedStyle(edgeSheet).backdropFilter
+            : distortion
+              ? getComputedStyle(distortion).backdropFilter
+              : '',
+          cardFilter: card ? getComputedStyle(card).filter : '',
+        }
+      }),
   )
-  expect(liveGlassAtMaximumBlur.length).toBeGreaterThanOrEqual(4)
+  expect(liveGlassAtMaximumBlur.length).toBeGreaterThanOrEqual(3)
   for (const surface of liveGlassAtMaximumBlur) {
     expect(surface.blur).toBe(40)
     expect(surface.backdropFilter).toContain('blur(40px)')
@@ -425,12 +434,16 @@ test('Renderer 样式迁移最终交互、长列表与布局性能验收', async
     })
 
   const namedGlobalTargets = await inspectGlobalTargets()
-  expect(namedGlobalTargets.map((target) => target.name)).toEqual(['left', 'right', 'settings', 'search'])
-  for (const target of namedGlobalTargets) {
+  // 只有三处全局 Surface 跟随滑块；搜索栏有固定 glassConfig 覆盖
+  const globalOnly = namedGlobalTargets.filter((t) => t.name !== 'search')
+  expect(globalOnly.map((t) => t.name)).toEqual(['left', 'right', 'settings'])
+  for (const target of globalOnly) {
     expect(target.scope).toBe('global')
     expect(target.blur).toBe(40)
     expect(target.backdropFilter).toContain('blur(40px)')
   }
+  const searchTarget = namedGlobalTargets.find((t) => t.name === 'search')!
+  expect(searchTarget.scope).toBe('local')
 
   const borderOpacitySlider = page.getByRole('slider', { name: '边框透明度', exact: true })
   await borderOpacitySlider.focus()
@@ -457,8 +470,9 @@ test('Renderer 样式迁移最终交互、长列表与布局性能验收', async
       cardShadow: card ? getComputedStyle(card).boxShadow : '',
     }
   })
-  expect(selectGlassState.blur).toBe(40)
-  expect(selectGlassState.backdropFilter).toContain('blur(40px)')
+  // GlassSelect 有固定 glassConfig 覆盖（blur=50），不跟随全局滑块
+  expect(selectGlassState.blur).toBe(50)
+  expect(selectGlassState.backdropFilter).toContain('blur(50px)')
   expect(selectGlassState.cardFilter).toBe('none')
   expect(selectGlassState.cardShadow).not.toBe('none')
   await page.keyboard.press('Escape')
@@ -477,8 +491,9 @@ test('Renderer 样式迁移最终交互、长列表与布局性能验收', async
       cardShadow: card ? getComputedStyle(card).boxShadow : '',
     }
   })
-  expect(wallpaperGlassState.blur).toBe(40)
-  expect(wallpaperGlassState.backdropFilter).toContain('blur(40px)')
+  // WallpaperEngineLibraryDialog 有固定 glassConfig 覆盖（blur=50）
+  expect(wallpaperGlassState.blur).toBe(50)
+  expect(wallpaperGlassState.backdropFilter).toContain('blur(50px)')
   expect(wallpaperGlassState.cardFilter).toBe('none')
   expect(wallpaperGlassState.cardShadow).not.toBe('none')
   await page.getByRole('button', { name: '关闭项目库', exact: true }).click()

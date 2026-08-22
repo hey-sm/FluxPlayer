@@ -42,9 +42,11 @@ function Dialog({ open: controlledOpen, defaultOpen, onOpenChange, children, ...
 
   const completeExit = React.useCallback(() => {
     if (openRef.current) return
-    setPresent(false)
     const restoreTarget = restoreFocusRef.current
-    window.requestAnimationFrame(() => restoreTarget?.focus({ preventScroll: true }))
+    setPresent(false)
+    // Defer focus to after React's re-render (setPresent(false) unmounts the dialog).
+    // Synchronous focus can be undone by React's DOM reconciliation.
+    setTimeout(() => restoreTarget?.focus({ preventScroll: true }), 0)
   }, [])
 
   const motionState = React.useMemo(() => ({ open, present, completeExit }), [completeExit, open, present])

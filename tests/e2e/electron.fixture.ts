@@ -280,7 +280,8 @@ function isAllowedAppRequest(route: Route): boolean {
     return requestUrl.hostname === 'audio' || requestUrl.hostname === 'cover'
   }
   if (requestUrl.protocol === 'flux-font:') return requestUrl.hostname === 'face'
-  return requestUrl.protocol === 'flux-background:'
+  if (requestUrl.protocol === 'flux-background:') return true
+  return requestUrl.protocol === 'flux-wallpaper:'
 }
 
 async function guardNetworkRequest(route: Route, violations: string[]): Promise<void> {
