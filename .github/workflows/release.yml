@@ -36,8 +36,15 @@ jobs:
       - run: pnpm lint
       - run: pnpm format
       - run: pnpm test
-      # Electron 在 headless runner 上需要虚拟显示。这两步此前从未在 CI 跑过，
-      # 而它们恰好是唯一能验证「安装包真的能启动」的手段。
+      # smoke/e2e 需要打包产物（out/）；wallpaper helper 在 Linux 上自动跳过
+      - run: pnpm build
+      # Electron 在 headless Linux runner 上需要虚拟显示 + 系统库
+      - name: Install Electron system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
+            libxrandr2 libgbm1 libasound2t64 libpangocairo-1.0-0
       - name: Smoke test (headless Electron)
         run: xvfb-run -a pnpm smoke
       - name: End-to-end tests (real Electron)
