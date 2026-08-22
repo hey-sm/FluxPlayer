@@ -65,7 +65,7 @@ FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云�
 | 校验       | Zod 4（IPC 入参 schema）                                                  |
 | 工具链     | oxlint · oxfmt（非 ESLint/Prettier）                                      |
 | 测试       | Vitest 3（单测）· Playwright（e2e，真实 Electron）                        |
-| 打包       | electron-builder（Windows NSIS · macOS DMG/ZIP · Linux AppImage/deb）     |
+| 打包       | electron-builder（Windows NSIS · macOS DMG/ZIP）                          |
 | 包管理     | pnpm                                                                      |
 
 ## 快速开始
@@ -95,7 +95,6 @@ pnpm dev              # 启动开发（Electron + HMR）
 | `pnpm record:fixtures`              | 重新录制 provider 测试夹具                                         |
 | `pnpm build:win`                    | 打 Windows NSIS 安装包到 `dist/`                                   |
 | `pnpm build:mac`                    | 在 macOS 打 x64/arm64 DMG 与 ZIP 到 `dist/`                        |
-| `pnpm build:linux`                  | 在 Linux 打 x64 AppImage 与 deb 到 `dist/`                         |
 
 > 开发界面时请使用 `pnpm dev` 或 `pnpm start`。`pnpm preview` 默认只在启动时构建一次，运行期间修改源码不会热更新；需要重启 `preview`，或先执行 `pnpm build` 再使用 `electron-vite preview --skipBuild` 查看新的静态产物。
 > | `pnpm build:win:dir` | 免安装目录版本 |
@@ -297,11 +296,11 @@ e2e 下 `FLUX_E2E=1` 触发网络防护（阻断非 loopback），Playwright 配
 ## 构建与发布
 
 - 产物结构：`out/main`（ESM）、`out/preload`（**CJS `.cjs`**，ESM preload 会导致页面加载静默悬死）、`out/renderer`（oxc 压缩）。
-- 本地打包：Windows 使用 `pnpm build:win`，macOS 使用 `pnpm build:mac`，Linux 使用 `pnpm build:linux`。
-- 推送 `main` 自动生成三平台 Actions Artifacts；推送与 `package.json` 版本一致的 `v*` 标签后自动创建 GitHub Release。
-- 标签发布强制校验 Windows Authenticode 签名和 macOS Developer ID 签名/公证；所需 Secrets 与发版步骤见 [docs/releasing.md](docs/releasing.md)。
-- 更新通道固定 GitHub `hey-sm/FluxPlayer`。Windows NSIS、macOS ZIP 和 Linux AppImage 会同时发布对应的更新元数据。
-- 图标：源文件 `resources/icon.svg`；Windows/Linux 使用 `icon.png`，macOS 构建时生成 `icon.icns`。
+- 本地打包：Windows 使用 `pnpm build:win`，macOS 使用 `pnpm build:mac`。不发 Linux 目标。
+- 推送 `main` **不触发 CI**；推送与 `package.json` 版本一致的 `v*` 标签才会跑校验、打包并创建 GitHub Release。想在打标签前演练，用 Actions 页面手动 `Run workflow`。
+- 标签发布优先签名：CI 检测到 Windows Authenticode / macOS Developer ID 凭据时签名并验签，缺凭据时跳过签名，仍产出未签名安装包并创建 Release。所需 Secrets 与发版步骤见 [docs/releasing.md](docs/releasing.md)。
+- 更新通道固定 GitHub `hey-sm/FluxPlayer`。Windows NSIS 与 macOS ZIP 会同时发布对应的更新元数据（`latest.yml` / `latest-mac.yml`）。
+- 图标：源文件 `resources/icon.svg`；Windows 使用 `icon.png`，macOS 构建时生成 `icon.icns`。
 
 ## 开发约定
 

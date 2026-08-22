@@ -24,7 +24,7 @@ describe('desktop release configuration', () => {
     expect(existsSync(new URL('../../resources/entitlements.mac.plist', import.meta.url))).toBe(true)
   })
 
-  it('builds every main push and publishes signed version tags', () => {
+  it('builds on version tags and publishes them with optional signing', () => {
     const workflow = projectFile('.github/workflows/release.yml')
 
     expect(workflow).toContain("tags: ['v*']")
