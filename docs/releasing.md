@@ -10,9 +10,11 @@
 | Actions 页面手动 `Run workflow` | 跑校验与打包，**不**创建 Release  |
 | 推送 `v*` 标签                  | 跑完整流水线并创建 GitHub Release |
 
-推荐节奏：日常推 `main` 不用管 CI；**准备发版时先手动 `Run workflow` 跑一遍**，绿了再打标签。手动触发时 `release` job 会因 `if: startsWith(github.ref, 'refs/tags/v')` 被跳过，不会误发。
+推荐节奏：日常推 `main` 不用管 CI；**准备发版时先本地跑一次 `pnpm test:e2e`，再手动 `Run workflow` 跑一遍**，绿了才打标签。手动触发时 `release` job 会因 `if: startsWith(github.ref, 'refs/tags/v')` 被跳过，不会误发。
 
-跳过这一步的代价是真实的：标签推出去才发现测试挂，就得回来移动标签重来。
+e2e 不在 CI 跑：它起真实 Electron 做像素与动画断言，而 GitHub runner 没有 GPU，测到的是渲染环境而不是代码（历次 CI e2e 失败全部是环境差异，零真实 bug）。所以这一步只能你本地做，约 50 秒。
+
+跳过这些的代价是真实的：标签推出去才发现挂了，就得回来移动标签重来。
 
 ## 发版两步
 
@@ -32,7 +34,7 @@ git push origin v0.1.0
 前一段挂了后面整段不跑：
 
 ```
-verify (windows-latest)          typecheck / lint / format / test / build / smoke / e2e
+verify (windows-latest)          typecheck / lint / format / test / build / smoke
    │                             + 标签触发时校验标签名与版本号一致
    ▼
 package (windows-latest ∥ macos-14)   两平台并行打包、按需签名与验签

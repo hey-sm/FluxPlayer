@@ -95,9 +95,9 @@ pnpm dev              # 启动开发（Electron + HMR）
 | `pnpm record:fixtures`              | 重新录制 provider 测试夹具                                         |
 | `pnpm build:win`                    | 打 Windows NSIS 安装包到 `dist/`                                   |
 | `pnpm build:mac`                    | 在 macOS 打 x64/arm64 DMG 与 ZIP 到 `dist/`                        |
+| `pnpm build:win:dir`                | 打 Windows 免安装目录版本到 `dist/`                                |
 
 > 开发界面时请使用 `pnpm dev` 或 `pnpm start`。`pnpm preview` 默认只在启动时构建一次，运行期间修改源码不会热更新；需要重启 `preview`，或先执行 `pnpm build` 再使用 `electron-vite preview --skipBuild` 查看新的静态产物。
-> | `pnpm build:win:dir` | 免安装目录版本 |
 
 **跑单个测试：**
 
@@ -277,12 +277,12 @@ Three.js 动态背景遵循「单一实例」原则，避免资源泄漏与多�
 
 ## 测试策略
 
-| 类型 | 环境                       | 说明                                                                           |
-| ---- | -------------------------- | ------------------------------------------------------------------------------ |
-| 单测 | Vitest（node 环境）        | provider 映射、播放逻辑、协议、安全边界；`tests/unit/__snapshots__` 存映射快照 |
-| 夹具 | —                          | `tests/fixtures` 录制真实上游响应，`pnpm record:fixtures` 重录                 |
-| e2e  | Playwright + 真实 Electron | `tests/e2e/electron.fixture.ts` 起真实应用，音乐请求靠 fixture 注入            |
-| 冒烟 | `pnpm smoke`               | 无头启动，校验窗口能加载、无本地 TCP                                           |
+| 类型 | 环境                       | 说明                                                                                         |
+| ---- | -------------------------- | -------------------------------------------------------------------------------------------- |
+| 单测 | Vitest（node 环境）        | provider 映射、播放逻辑、协议、安全边界；`tests/unit/__snapshots__` 存映射快照               |
+| 夹具 | —                          | `tests/fixtures` 录制真实上游响应，`pnpm record:fixtures` 重录                               |
+| e2e  | Playwright + 真实 Electron | `tests/e2e/electron.fixture.ts` 起真实应用，音乐请求靠 fixture 注入；**只在本地跑，不进 CI** |
+| 冒烟 | `pnpm smoke`               | 无头启动，校验窗口能加载、无本地 TCP                                                         |
 
 重点边界测试（改相关代码前先读）：
 
@@ -291,7 +291,7 @@ Three.js 动态背景遵循「单一实例」原则，避免资源泄漏与多�
 - `netease-sdk-allowlist.test.ts` —— SDK 门面 allowlist 完整性
 - `player-*.test.ts` —— 播放失败反馈 / 音质 / 模式 / 进度隔离
 
-e2e 下 `FLUX_E2E=1` 触发网络防护（阻断非 loopback），Playwright 配置 `workers: 1` 非并行。
+e2e 下 `FLUX_E2E=1` 触发网络防护（阻断非 loopback），Playwright 配置 `workers: 1` 非并行。e2e 做像素与动画断言，依赖真实 GPU，因此不在 CI 跑——发版前本地 `pnpm test:e2e` 一次即可（约 50 秒）。
 
 ## 构建与发布
 
