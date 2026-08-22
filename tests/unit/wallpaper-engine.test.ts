@@ -242,7 +242,32 @@ describe('WallpaperEngineLibrary', () => {
       safetyMode: 'native-engine',
     })
     expect(snapshot.dynamicCount).toBe(2)
-    const target = await library.getNativeSceneTarget(preset!.id)
+    let target
+    try {
+      target = await library.getNativeSceneTarget(preset!.id)
+    } catch (error) {
+      // 诊断：列出 baseRoot 下的文件和 scene.pkg 的前 12 字节
+      const files = fs.readdirSync(baseRoot)
+      const pkgPath = path.join(baseRoot, 'scene.pkg')
+      const stat = fs.statSync(pkgPath)
+      const header = Buffer.alloc(12)
+      const fd = fs.openSync(pkgPath, 'r')
+      fs.readSync(fd, header, 0, 12, 0)
+      fs.closeSync(fd)
+      throw new Error(
+        'getNativeSceneTarget failed: ' +
+          (error instanceof Error ? error.message : String(error)) +
+          '\nfiles in baseRoot: ' +
+          JSON.stringify(files) +
+          '\nscene.pkg size: ' +
+          stat.size +
+          '\nscene.pkg header: ' +
+          JSON.stringify(header.toString('ascii')) +
+          '\nscene.pkg hex: ' +
+          header.toString('hex'),
+        { cause: error },
+      )
+    }
     expect(target.projectFile).toBe(path.join(baseRoot, 'project.json'))
     expect(target.presetProperties).toMatchObject({ rain: true, rate: 100 })
   })
