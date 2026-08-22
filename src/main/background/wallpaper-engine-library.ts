@@ -909,7 +909,14 @@ export class WallpaperEngineLibrary {
       path.relative(record.sceneRoot, record.scenePackage),
       new Map([...SCENE_EXTENSIONS].map((ext) => [ext, ext])),
     )
-    if (!(await validScenePackage(scenePackage))) throw new Error('WALLPAPER_ENGINE_SCENE_PACKAGE_INVALID')
+    const _validated = await validScenePackage(scenePackage)
+    if (!_validated)
+      console.error('[WE-DIAG] scenePackage invalid:', {
+        scenePackage,
+        exists: scenePackage ? 'has-path' : 'empty',
+        ext: scenePackage ? path.extname(scenePackage) : '',
+      })
+    if (!_validated) throw new Error('WALLPAPER_ENGINE_SCENE_PACKAGE_INVALID')
     return {
       id: record.id,
       projectFile: record.runtimeProjectFile,

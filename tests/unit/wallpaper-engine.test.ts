@@ -254,9 +254,23 @@ describe('WallpaperEngineLibrary', () => {
       const fd = fs.openSync(pkgPath, 'r')
       fs.readSync(fd, header, 0, 12, 0)
       fs.closeSync(fd)
+      const realBase = fs.realpathSync(baseRoot)
+      const realPkg = fs.realpathSync(pkgPath)
+      const fd2 = fs.openSync(realPkg, 'r')
+      const header2 = Buffer.alloc(12)
+      fs.readSync(fd2, header2, 0, 12, 0)
+      fs.closeSync(fd2)
       throw new Error(
         'getNativeSceneTarget failed: ' +
           (error instanceof Error ? error.message : String(error)) +
+          '\nbaseRoot: ' +
+          baseRoot +
+          '\nrealpath(baseRoot): ' +
+          realBase +
+          '\npkgPath: ' +
+          pkgPath +
+          '\nrealpath(pkgPath): ' +
+          realPkg +
           '\nfiles in baseRoot: ' +
           JSON.stringify(files) +
           '\nscene.pkg size: ' +
@@ -264,7 +278,11 @@ describe('WallpaperEngineLibrary', () => {
           '\nscene.pkg header: ' +
           JSON.stringify(header.toString('ascii')) +
           '\nscene.pkg hex: ' +
-          header.toString('hex'),
+          header.toString('hex') +
+          '\nrealpath header: ' +
+          JSON.stringify(header2.toString('ascii')) +
+          '\nrealpath hex: ' +
+          header2.toString('hex'),
         { cause: error },
       )
     }
