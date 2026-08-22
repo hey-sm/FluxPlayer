@@ -21,9 +21,11 @@ const env = {
 // VSCode/CI 等宿主环境可能带 ELECTRON_RUN_AS_NODE=1，会让 Electron 以纯 Node 启动，必须剔除
 delete env.ELECTRON_RUN_AS_NODE
 
-const child = spawn(String(electronPath), [`--user-data-dir=${path.join(sandboxPath, 'user-data')}`, '.'], {
-  env,
-})
+const child = spawn(
+  String(electronPath),
+  [`--user-data-dir=${path.join(sandboxPath, 'user-data')}`, '--no-sandbox', '.'],
+  { env },
+)
 let sawOk = false
 const forward = (stream, out) => {
   stream.on('data', (chunk) => {
