@@ -159,6 +159,14 @@ function parseByteRange(
   return { start, end }
 }
 
+async function realpathSafe(target: string): Promise<string> {
+  try {
+    return await fsp.realpath(target)
+  } catch {
+    return ''
+  }
+}
+
 async function statSafe(target: string): Promise<fs.Stats | null> {
   try {
     return await fsp.stat(target)
@@ -904,22 +912,18 @@ export class WallpaperEngineLibrary {
   }> {
     const record = this.index.get(String(id).toLowerCase())
     if (!record || !record.scenePackage) throw new Error('WALLPAPER_ENGINE_SCENE_NOT_FOUND')
-    const relativeScene = path.relative(record.sceneRoot, record.scenePackage)
-    const scenePackage = await resolveProjectFile(
-      record.sceneRoot,
-      relativeScene,
-      new Map([...SCENE_EXTENSIONS].map((ext) => [ext, ext])),
-    )
-    const _validated = await validScenePackage(scenePackage)
-    if (!_validated)
-      console.error('[WE-DIAG] scenePackage invalid:', {
-        sceneRoot: record.sceneRoot,
-        scenePackageStored: record.scenePackage,
-        relativeScene,
-        scenePackageResolved: scenePackage,
-        ext: scenePackage ? path.extname(scenePackage) : '',
-      })
-    if (!_validated) throw new Error('WALLPAPER_ENGINE_SCENE_PACKAGE_INVALID')
+    // scenePackage was canonicalised through realpath when indexed, sceneRoot is only lexical:
+    // junctions, symlinks and 8.3 short names give the two different prefixes, so the root has
+    // to be canonicalised as well before the containment check can mean anything.
+    const sceneRoot = await realpathSafe(record.sceneRoot)
+    const scenePackage = sceneRoot
+      ? await resolveProjectFile(
+          sceneRoot,
+          path.relative(sceneRoot, record.scenePackage),
+          new Map([...SCENE_EXTENSIONS].map((ext) => [ext, ext])),
+        )
+      : ''
+    if (!(await validScenePackage(scenePackage))) throw new Error('WALLPAPER_ENGINE_SCENE_PACKAGE_INVALID')
     return {
       id: record.id,
       projectFile: record.runtimeProjectFile,

@@ -33,7 +33,10 @@ const nativeHelperSource = fs.readFileSync(path.resolve('native/wallpaper-engine
 function temporaryDirectory(): string {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'flux-wallpaper-engine-'))
   temporaryDirectories.push(directory)
-  return directory
+  // The library returns realpath-canonicalised paths; os.tmpdir() may be a symlink (macOS
+  // /var → /private/var) or an 8.3 short name (CI runners' C:\Users\RUNNER~1), so canonicalise
+  // here too or every path comparison in these tests compares two spellings of one file.
+  return fs.realpathSync.native(directory)
 }
 
 describe('Wallpaper Engine native helper lifecycle', () => {
@@ -242,52 +245,35 @@ describe('WallpaperEngineLibrary', () => {
       safetyMode: 'native-engine',
     })
     expect(snapshot.dynamicCount).toBe(2)
-    let target
-    try {
-      target = await library.getNativeSceneTarget(preset!.id)
-    } catch (error) {
-      // 诊断：列出 baseRoot 下的文件和 scene.pkg 的前 12 字节
-      const files = fs.readdirSync(baseRoot)
-      const pkgPath = path.join(baseRoot, 'scene.pkg')
-      const stat = fs.statSync(pkgPath)
-      const header = Buffer.alloc(12)
-      const fd = fs.openSync(pkgPath, 'r')
-      fs.readSync(fd, header, 0, 12, 0)
-      fs.closeSync(fd)
-      const realBase = fs.realpathSync(baseRoot)
-      const realPkg = fs.realpathSync(pkgPath)
-      const fd2 = fs.openSync(realPkg, 'r')
-      const header2 = Buffer.alloc(12)
-      fs.readSync(fd2, header2, 0, 12, 0)
-      fs.closeSync(fd2)
-      throw new Error(
-        'getNativeSceneTarget failed: ' +
-          (error instanceof Error ? error.message : String(error)) +
-          '\nbaseRoot: ' +
-          baseRoot +
-          '\nrealpath(baseRoot): ' +
-          realBase +
-          '\npkgPath: ' +
-          pkgPath +
-          '\nrealpath(pkgPath): ' +
-          realPkg +
-          '\nfiles in baseRoot: ' +
-          JSON.stringify(files) +
-          '\nscene.pkg size: ' +
-          stat.size +
-          '\nscene.pkg header: ' +
-          JSON.stringify(header.toString('ascii')) +
-          '\nscene.pkg hex: ' +
-          header.toString('hex') +
-          '\nrealpath header: ' +
-          JSON.stringify(header2.toString('ascii')) +
-          '\nrealpath hex: ' +
-          header2.toString('hex'),
-        { cause: error },
-      )
-    }
+    const target = await library.getNativeSceneTarget(preset!.id)
     expect(target.projectFile).toBe(path.join(baseRoot, 'project.json'))
     expect(target.presetProperties).toMatchObject({ rain: true, rate: 100 })
+  })
+
+  it('resolves a Scene package whose library root is reached through a junction', async () => {
+    // A record keeps its root lexically but its files realpath-canonicalised, so a junction —
+    // how Steam libraries on a second drive usually look — spells the same file two ways.
+    // Without canonicalising the root the containment check reads that as an escape attempt.
+    const root = temporaryDirectory()
+    const realRoot = path.join(root, 'library', 'ocean')
+    const linkRoot = path.join(root, 'linked')
+    writeFile(path.join(realRoot, 'scene.pkg'), scenePackage({ objects: [] }))
+    writeFile(
+      path.join(realRoot, 'project.json'),
+      JSON.stringify({ type: 'scene', title: 'Junction scene', file: 'scene.pkg' }),
+    )
+    fs.symlinkSync(path.join(root, 'library'), linkRoot, 'junction')
+
+    const library = new WallpaperEngineLibrary({
+      userDataPath: path.join(root, 'data'),
+      discoverLibraries: async () => [],
+    })
+    const snapshot = await library.addManualRoot(linkRoot)
+    const project = snapshot.projects.find((item) => item.title === 'Junction scene')
+    expect(project?.enginePlayable).toBe(true)
+
+    const target = await library.getNativeSceneTarget(project!.id)
+    expect(target.scenePackage).toBe(path.join(realRoot, 'scene.pkg'))
   })
 })
 
