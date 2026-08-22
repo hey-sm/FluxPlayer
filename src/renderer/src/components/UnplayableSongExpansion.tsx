@@ -34,7 +34,12 @@ function availableSources(songProvider: ProviderId, chkszActive: boolean): Searc
  * - 翻唱版（候选名含"翻自"/"cover"/"翻唱"）降权但不排除
  */
 function songMatchScore(original: { name: string; artist: string }, candidate: UnifiedSong): number {
-  const normalize = (s: string) => s.toLowerCase().replace(/[\s(（].*$/, '').replace(/\(.*?\)/g, '').trim()
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[\s(（].*$/, '')
+      .replace(/\(.*?\)/g, '')
+      .trim()
   const origName = normalize(original.name)
   const candName = normalize(candidate.name)
   const origArtist = normalize(original.artist)
@@ -60,7 +65,10 @@ function songMatchScore(original: { name: string; artist: string }, candidate: U
   // 歌手匹配
   let artistScore = 0
   if (origArtist && candArtist) {
-    const origTokens = origArtist.split(/[/&,，]+/).map((s) => s.trim()).filter(Boolean)
+    const origTokens = origArtist
+      .split(/[/&,，]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
     const hasMatch = origTokens.some((token) => candArtist.includes(token) || token.includes(candArtist))
     artistScore = hasMatch ? 1 : 0
   }
@@ -87,15 +95,9 @@ interface UnplayableSongExpansionProps {
  * 选中某个来源时，用歌曲名 + 歌手搜索，通过 songMatchScore 过滤候选。
  * chksz 来源的搜索结果自带 playable=true（chksz 不标记不可播），其余来源过滤掉 playable===false。
  */
-export function UnplayableSongExpansion({
-  song,
-  onPlay,
-}: UnplayableSongExpansionProps): React.JSX.Element {
+export function UnplayableSongExpansion({ song, onPlay }: UnplayableSongExpansionProps): React.JSX.Element {
   const [chkszActive, setChkszActive] = useState(false)
-  const sources = useMemo(
-    () => availableSources(song.provider, chkszActive),
-    [song.provider, chkszActive],
-  )
+  const sources = useMemo(() => availableSources(song.provider, chkszActive), [song.provider, chkszActive])
   const [selectedSource, setSelectedSource] = useState<SearchSource>(sources[0])
 
   // 检查 chksz 是否已配置且已启用
@@ -119,13 +121,25 @@ export function UnplayableSongExpansion({
       if (selectedSource === 'chksz') {
         // chksz 搜索互补平台：网易云无音源 → 搜 QQ，QQ 无音源 → 搜网易云
         return searchMusic(
-          { provider: alternateProvider, keywords: `${song.name} ${song.artist}`, limit: 20, page: 1, backend: 'chksz' },
+          {
+            provider: alternateProvider,
+            keywords: `${song.name} ${song.artist}`,
+            limit: 20,
+            page: 1,
+            backend: 'chksz',
+          },
           signal,
         )
       }
       // 直连搜索互补平台
       return searchMusic(
-        { provider: selectedSource, keywords: `${song.name} ${song.artist}`, limit: 20, page: 1, backend: 'direct' },
+        {
+          provider: selectedSource,
+          keywords: `${song.name} ${song.artist}`,
+          limit: 20,
+          page: 1,
+          backend: 'direct',
+        },
         signal,
       )
     },
@@ -187,7 +201,8 @@ export function UnplayableSongExpansion({
           </div>
         ) : error ? (
           <div className="px-2 py-2 text-[11px] text-[var(--flux-text-muted)]">
-            {SOURCE_LABELS[selectedSource]} 搜索失败：{error instanceof Error ? error.message.slice(0, 100) : '请稍后重试'}
+            {SOURCE_LABELS[selectedSource]} 搜索失败：
+            {error instanceof Error ? error.message.slice(0, 100) : '请稍后重试'}
           </div>
         ) : matchedCandidates.length === 0 ? (
           <div className="px-2 py-2 text-[11px] text-[var(--flux-text-muted)]">

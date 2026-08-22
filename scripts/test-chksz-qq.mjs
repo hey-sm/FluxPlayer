@@ -41,7 +41,11 @@ async function fetchJson(path, params) {
     console.log('<<< HTTP', res.statusCode || res.status, `(${elapsed}ms)`)
     console.log('    RateLimit headers:')
     for (const [k, v] of res.headers) {
-      if (k.toLowerCase().includes('rate') || k.toLowerCase().includes('quota') || k.toLowerCase() === 'retry-after') {
+      if (
+        k.toLowerCase().includes('rate') ||
+        k.toLowerCase().includes('quota') ||
+        k.toLowerCase() === 'retry-after'
+      ) {
         console.log('      ' + k + ':', v)
       }
     }
@@ -55,12 +59,16 @@ async function fetchJson(path, params) {
     }
 
     // 打印完整响应结构（截断大数组）
-    const preview = JSON.stringify(json, (key, value) => {
-      if (Array.isArray(value) && value.length > 3) {
-        return [`Array(${value.length})`, ...value.slice(0, 3)]
-      }
-      return value
-    }, 2)
+    const preview = JSON.stringify(
+      json,
+      (key, value) => {
+        if (Array.isArray(value) && value.length > 3) {
+          return [`Array(${value.length})`, ...value.slice(0, 3)]
+        }
+        return value
+      },
+      2,
+    )
     console.log('    response:', preview.slice(0, 2000))
     console.log()
     return { status: res.statusCode || res.status, json, elapsed }

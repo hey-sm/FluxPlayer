@@ -499,7 +499,12 @@ export class QQProvider {
       .map((candidate) => {
         const filename = stringValue(field(candidate, 'filename'))
         const candidatePurl = stringValue(field(candidate, 'purl'))
-        return { info: candidate, filename, purl: candidatePurl, fileMeta: fileCandidates.find((item) => item.filename === filename) }
+        return {
+          info: candidate,
+          filename,
+          purl: candidatePurl,
+          fileMeta: fileCandidates.find((item) => item.filename === filename),
+        }
       })
       .filter((entry) => Boolean(entry.purl))
       .sort((left, right) => {

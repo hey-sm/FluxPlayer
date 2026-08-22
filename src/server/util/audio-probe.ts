@@ -24,7 +24,8 @@ export interface AudioProbeOptions {
 
 export function audioProbeMagic(buffer: Uint8Array): string {
   if (!buffer || buffer.length === 0) return ''
-  const ascii = (start: number, len: number) => Buffer.from(buffer.subarray(start, start + len)).toString('ascii')
+  const ascii = (start: number, len: number) =>
+    Buffer.from(buffer.subarray(start, start + len)).toString('ascii')
 
   if (buffer.length >= 3 && ascii(0, 3) === 'ID3') return 'mp3-id3'
   if (buffer.length >= 4 && ascii(0, 4) === 'fLaC') return 'flac'
@@ -55,7 +56,11 @@ export async function probePlaybackAudioUrl(
     const contentType = String(response.headers.get('content-type') || '').toLowerCase()
 
     if (status !== 200 && status !== 206) {
-      try { await response.body?.cancel() } catch { /* ignore */ }
+      try {
+        await response.body?.cancel()
+      } catch {
+        /* ignore */
+      }
       return { ok: false, status, bytes: 0, contentType, magic: '', reason: 'status' }
     }
 
@@ -77,7 +82,11 @@ export async function probePlaybackAudioUrl(
         total += buf.length
       }
     } finally {
-      try { await reader.cancel() } catch { /* ignore */ }
+      try {
+        await reader.cancel()
+      } catch {
+        /* ignore */
+      }
     }
 
     const sample = chunks.length
@@ -91,7 +100,8 @@ export async function probePlaybackAudioUrl(
       bytes: sample.length,
       contentType,
       magic,
-      reason: sample.length < 512 ? 'too-short' : looksText ? 'text-body' : magic ? undefined : 'unknown-magic',
+      reason:
+        sample.length < 512 ? 'too-short' : looksText ? 'text-body' : magic ? undefined : 'unknown-magic',
     }
   } catch (error) {
     const reason = error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'network'

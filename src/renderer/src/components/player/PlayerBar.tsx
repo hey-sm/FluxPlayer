@@ -53,9 +53,10 @@ function QualityMenu({
       : ['jymaster', 'hires', 'lossless', 'exhigh', 'standard']
   // 按当前歌曲实际支持的音质过滤；无数据时回退到全量
   const options = useMemo(
-    () => supportedQualities && supportedQualities.length > 0
-      ? allOptions.filter((q) => supportedQualities.includes(q))
-      : allOptions,
+    () =>
+      supportedQualities && supportedQualities.length > 0
+        ? allOptions.filter((q) => supportedQualities.includes(q))
+        : allOptions,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [provider, supportedQualities],
   )

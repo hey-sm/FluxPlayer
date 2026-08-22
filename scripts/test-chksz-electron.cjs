@@ -76,7 +76,11 @@ async function fetchJson(url) {
   // 打印限流/配额头
   const rateHeaders = {}
   for (const [k, v] of res.headers) {
-    if (k.toLowerCase().includes('rate') || k.toLowerCase().includes('quota') || k.toLowerCase() === 'retry-after') {
+    if (
+      k.toLowerCase().includes('rate') ||
+      k.toLowerCase().includes('quota') ||
+      k.toLowerCase() === 'retry-after'
+    ) {
       rateHeaders[k] = v
     }
   }
@@ -93,12 +97,16 @@ async function fetchJson(url) {
   }
 
   // 打印响应结构（截断大数组）
-  const preview = JSON.stringify(json, (key, value) => {
-    if (Array.isArray(value) && value.length > 3) {
-      return [`Array(${value.length})`, ...value.slice(0, 3)]
-    }
-    return value
-  }, 2)
+  const preview = JSON.stringify(
+    json,
+    (key, value) => {
+      if (Array.isArray(value) && value.length > 3) {
+        return [`Array(${value.length})`, ...value.slice(0, 3)]
+      }
+      return value
+    },
+    2,
+  )
   console.log('    response:', preview.slice(0, 3000))
   console.log('')
   return { status: res.status, json, elapsed }
@@ -115,7 +123,9 @@ async function runTests(apiKey) {
   if (r1.json && r1.json.list && r1.json.list.length > 0) {
     console.log('✅ QQ 搜索成功，返回', r1.json.list.length, '首:')
     for (const item of r1.json.list) {
-      console.log(`   [${item.n}] ${item.name} - ${item.singer} | album: ${item.album} | mid: ${item.mid} | pay: ${item.pay}`)
+      console.log(
+        `   [${item.n}] ${item.name} - ${item.singer} | album: ${item.album} | mid: ${item.mid} | pay: ${item.pay}`,
+      )
     }
     console.log('')
 
@@ -168,11 +178,13 @@ async function runTests(apiKey) {
   const r5 = await fetchJson(url5)
   // data 可能是数组或 { songs: [...] }
   const neData = r5.json?.data
-  const neSongs = Array.isArray(neData) ? neData : (neData?.songs || neData?.result || [])
+  const neSongs = Array.isArray(neData) ? neData : neData?.songs || neData?.result || []
   if (neSongs.length > 0) {
     console.log('✅ 网易云搜索成功，返回', neSongs.length, '首:')
     for (const item of neSongs) {
-      console.log(`   ${item.name} - ${item.artists} | album: ${item.album} | id: ${item.id} | duration: ${item.duration}`)
+      console.log(
+        `   ${item.name} - ${item.artists} | album: ${item.album} | id: ${item.id} | duration: ${item.duration}`,
+      )
     }
   } else {
     console.log('❌ 网易云搜索失败')

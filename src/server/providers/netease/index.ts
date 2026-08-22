@@ -116,7 +116,8 @@ export function mapSongRecord(raw: unknown): UnifiedSong {
   const id = identifier(song.id) ?? ''
   const supportedQualities = neteaseSupportedQualities(song)
   const privilege = asRecord(song.privilege)
-  const playable = numberValue(privilege.st) >= 0 && Boolean(supportedQualities && supportedQualities.length > 0)
+  const playable =
+    numberValue(privilege.st) >= 0 && Boolean(supportedQualities && supportedQualities.length > 0)
   return {
     provider: 'netease',
     type: 'song',

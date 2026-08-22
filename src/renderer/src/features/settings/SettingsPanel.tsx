@@ -463,9 +463,7 @@ export default function SettingsPanel({
                   </header>
                   <div className={settingsRowClass}>
                     <div className="min-w-0 flex-1">
-                      <span className="block text-[11px] font-medium text-[var(--flux-text)]">
-                        鼠标手势
-                      </span>
+                      <span className="block text-[11px] font-medium text-[var(--flux-text)]">鼠标手势</span>
                       <span className="mt-0.5 block text-[10px] text-[var(--flux-text-muted)]">
                         左键长按滑动旋转视角，右键长按滑动拖拽位置，滚轮缩放。
                       </span>

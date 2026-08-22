@@ -176,10 +176,7 @@ function CenterStatus(): React.JSX.Element {
             aria-label="关闭通知"
           >
             {active.title ? (
-              <span
-                ref={labelRef}
-                className={cn('shrink-0 text-[10px] font-semibold leading-7', toneColor)}
-              >
+              <span ref={labelRef} className={cn('shrink-0 text-[10px] font-semibold leading-7', toneColor)}>
                 {active.title}
               </span>
             ) : null}

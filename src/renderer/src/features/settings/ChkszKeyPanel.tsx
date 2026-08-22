@@ -43,7 +43,11 @@ export function ChkszKeyPanel({ className = '' }: { className?: string }): React
       setShowInput(false)
       setKeyInput('')
       setSaveState('saved')
-      showToast('ChKSz API 已启用，无音源歌曲将自动尝试解析', { title: 'ChKSz 已接入', tone: 'info', duration: 5000 })
+      showToast('ChKSz API 已启用，无音源歌曲将自动尝试解析', {
+        title: 'ChKSz 已接入',
+        tone: 'info',
+        duration: 5000,
+      })
       setTimeout(() => setSaveState('idle'), 2000)
     } catch {
       showToast('密钥保存失败，请检查输入', { title: 'ChKSz 接入失败', tone: 'error' })
@@ -166,7 +170,12 @@ export function ChkszKeyPanel({ className = '' }: { className?: string }): React
                   {busy ? '保存中…' : '保存并启用'}
                 </Button>
                 {configured ? (
-                  <Button variant="glassSoft" size="action" disabled={busy} onClick={() => setShowInput(false)}>
+                  <Button
+                    variant="glassSoft"
+                    size="action"
+                    disabled={busy}
+                    onClick={() => setShowInput(false)}
+                  >
                     取消
                   </Button>
                 ) : null}
@@ -175,7 +184,12 @@ export function ChkszKeyPanel({ className = '' }: { className?: string }): React
           ) : (
             <footer className="flex flex-wrap items-center gap-2">
               {active ? (
-                <Button variant="glassSoft" size="action" disabled={busy} onClick={() => void handleToggleEnabled(false)}>
+                <Button
+                  variant="glassSoft"
+                  size="action"
+                  disabled={busy}
+                  onClick={() => void handleToggleEnabled(false)}
+                >
                   {busy ? '处理中…' : '停用'}
                 </Button>
               ) : configured ? (
@@ -202,7 +216,12 @@ export function ChkszKeyPanel({ className = '' }: { className?: string }): React
                   >
                     更换密钥
                   </Button>
-                  <Button variant="glassSoft" size="action" disabled={busy} onClick={() => void handleClear()}>
+                  <Button
+                    variant="glassSoft"
+                    size="action"
+                    disabled={busy}
+                    onClick={() => void handleClear()}
+                  >
                     清除密钥
                   </Button>
                 </>

@@ -358,7 +358,10 @@ export class PlaybackEngine {
     const requested = normalizeQualityPreference(options.qualityOverride || this.state().qualityPreference)
 
     try {
-      const info: PlaybackResolveResult = await abortableResolve(musicClient.resolvePlayback({ song, quality: requested }), this.resolveAbort.signal)
+      const info: PlaybackResolveResult = await abortableResolve(
+        musicClient.resolvePlayback({ song, quality: requested }),
+        this.resolveAbort.signal,
+      )
       if (this.stale(generation)) return
       if (!isOpaqueAudioUrl(info.url)) {
         this.failPlayback(restrictionMessage(song, info))

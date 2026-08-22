@@ -167,9 +167,7 @@ describe('Rain background', () => {
     // The TextureLoader loads a real image via the DOM Image API, which does not
     // exist in the node test environment. Stub it to return an empty texture so
     // the background can be instantiated without a browser.
-    const loadStub = vi
-      .spyOn(THREE.TextureLoader.prototype, 'load')
-      .mockReturnValue(new THREE.Texture())
+    const loadStub = vi.spyOn(THREE.TextureLoader.prototype, 'load').mockReturnValue(new THREE.Texture())
     const background = new RainBackground()
     const mesh = background.group.children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>
     expect(mesh.name).toBe('rain-fullscreen-quad')

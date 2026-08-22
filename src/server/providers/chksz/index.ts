@@ -8,15 +8,7 @@
 import type { LyricDoc, ProviderId, QualityLevel, UnifiedSong } from '@shared/models'
 import { buildLyricLines } from '@shared/lyrics'
 import type { UpstreamPlaybackResource } from '../../types'
-import {
-  asArray,
-  asRecord,
-  at,
-  field,
-  numberValue,
-  optionalString,
-  stringValue,
-} from '../../util/unknown'
+import { asArray, asRecord, at, field, numberValue, optionalString, stringValue } from '../../util/unknown'
 import { chkszRequest, ChkszApiError, type ChkszErrorCode } from './client'
 
 /** chksz 返回的播放直链 CDN 域名（与直连上游基本一致）。 */
@@ -190,7 +182,15 @@ export class ChkszProvider {
     const lyric = stringValue(at(data, 'lrc') ?? field(data, 'lrc'))
     const tlyric = stringValue(at(data, 'tlyric') ?? field(data, 'tlyric'))
     const roma = stringValue(at(data, 'romalrc') ?? field(data, 'romalrc'))
-    return { provider: 'netease', lyric, tlyric, yrc: '', roma, lines: buildLyricLines({ lyric, tlyric, yrc: '' }), source: 'chksz' }
+    return {
+      provider: 'netease',
+      lyric,
+      tlyric,
+      yrc: '',
+      roma,
+      lines: buildLyricLines({ lyric, tlyric, yrc: '' }),
+      source: 'chksz',
+    }
   }
 
   /** QQ 歌词：qq_music?mid= 解析响应内嵌 lrc 字段。 */
@@ -199,13 +199,29 @@ export class ChkszProvider {
     const lyric = stringValue(field(json, 'lrc'))
     const tlyric = ''
     const roma = ''
-    return { provider: 'qq', lyric, tlyric, yrc: '', roma, lines: buildLyricLines({ lyric, tlyric, yrc: '' }), source: 'chksz' }
+    return {
+      provider: 'qq',
+      lyric,
+      tlyric,
+      yrc: '',
+      roma,
+      lines: buildLyricLines({ lyric, tlyric, yrc: '' }),
+      source: 'chksz',
+    }
   }
 
   async getLyrics(song: UnifiedSong): Promise<LyricDoc> {
     if (song.provider === 'netease') return this.getNeteaseLyrics(String(song.id))
     if (song.provider === 'qq') return this.getQQLyrics(song.mid || song.songmid || String(song.id))
-    return { provider: song.provider, lyric: '', tlyric: '', yrc: '', lines: [], source: 'chksz', error: 'unsupported' }
+    return {
+      provider: song.provider,
+      lyric: '',
+      tlyric: '',
+      yrc: '',
+      lines: [],
+      source: 'chksz',
+      error: 'unsupported',
+    }
   }
 
   /**
@@ -231,23 +247,32 @@ export class ChkszProvider {
         const nested = inner.songs ?? inner.result ?? inner.list ?? inner
         items = asArray(nested)
       }
-      return items.map((raw): UnifiedSong => {
-        const item = asRecord(raw)
-        const id = numberValue(field(item, 'id')) || stringValue(field(item, 'id')) || ''
-        const artistStr = stringValue(field(item, 'artists') ?? field(item, 'artist') ?? field(item, 'singer'))
-        return {
-          provider: 'netease',
-          type: 'song',
-          id,
-          name: stringValue(field(item, 'name')),
-          artist: artistStr,
-          artists: artistStr ? artistStr.split(/[/&,，]+/).map((name) => ({ name: name.trim() })).filter((a) => a.name) : [],
-          album: stringValue(field(item, 'album')),
-          cover: stringValue(field(item, 'picUrl') ?? field(item, 'pic')),
-          duration: numberValue(field(item, 'duration')) || 0,
-          playable: true,
-        }
-      }).filter((s) => s.id !== '' && s.name)
+      return items
+        .map((raw): UnifiedSong => {
+          const item = asRecord(raw)
+          const id = numberValue(field(item, 'id')) || stringValue(field(item, 'id')) || ''
+          const artistStr = stringValue(
+            field(item, 'artists') ?? field(item, 'artist') ?? field(item, 'singer'),
+          )
+          return {
+            provider: 'netease',
+            type: 'song',
+            id,
+            name: stringValue(field(item, 'name')),
+            artist: artistStr,
+            artists: artistStr
+              ? artistStr
+                  .split(/[/&,，]+/)
+                  .map((name) => ({ name: name.trim() }))
+                  .filter((a) => a.name)
+              : [],
+            album: stringValue(field(item, 'album')),
+            cover: stringValue(field(item, 'picUrl') ?? field(item, 'pic')),
+            duration: numberValue(field(item, 'duration')) || 0,
+            playable: true,
+          }
+        })
+        .filter((s) => s.id !== '' && s.name)
     }
     if (provider === 'qq') {
       const json = await chkszRequest('/api/qq_music', this.apikey, {
@@ -255,23 +280,28 @@ export class ChkszProvider {
         num: Math.min(50, Math.max(1, limit)),
       })
       const items = asArray(field(json, 'list'))
-      return items.map((raw): UnifiedSong => {
-        const item = asRecord(raw)
-        const mid = stringValue(field(item, 'mid'))
-        return {
-          provider: 'qq',
-          type: 'song',
-          id: mid || numberValue(field(item, 'n')) || '',
-          name: stringValue(field(item, 'name')),
-          artist: stringValue(field(item, 'singer')),
-          artists: stringValue(field(item, 'singer')).split(/[/&,，]+/).map((name) => ({ name: name.trim() })).filter((a) => a.name),
-          album: stringValue(field(item, 'album')),
-          cover: '',
-          duration: 0,
-          mid,
-          playable: true,
-        }
-      }).filter((s) => s.name && (s.mid || s.id !== ''))
+      return items
+        .map((raw): UnifiedSong => {
+          const item = asRecord(raw)
+          const mid = stringValue(field(item, 'mid'))
+          return {
+            provider: 'qq',
+            type: 'song',
+            id: mid || numberValue(field(item, 'n')) || '',
+            name: stringValue(field(item, 'name')),
+            artist: stringValue(field(item, 'singer')),
+            artists: stringValue(field(item, 'singer'))
+              .split(/[/&,，]+/)
+              .map((name) => ({ name: name.trim() }))
+              .filter((a) => a.name),
+            album: stringValue(field(item, 'album')),
+            cover: '',
+            duration: 0,
+            mid,
+            playable: true,
+          }
+        })
+        .filter((s) => s.name && (s.mid || s.id !== ''))
     }
     return []
   }
@@ -295,7 +325,10 @@ export function chkszErrorToast(error: unknown): { title: string; message: strin
   const upstream = error.upstreamMessage
   switch (error.code) {
     case 'CHKSZ_QUOTA_EXHAUSTED':
-      return { title: 'ChKSz 额度已用尽', message: upstream || 'ChKSz 免费额度已用完，可等待次日刷新或兑换额度' }
+      return {
+        title: 'ChKSz 额度已用尽',
+        message: upstream || 'ChKSz 免费额度已用完，可等待次日刷新或兑换额度',
+      }
     case 'CHKSZ_RATE_LIMITED':
       return { title: 'ChKSz 请求过于频繁', message: upstream || '已触发 ChKSz 限流，请稍后再试' }
     case 'CHKSZ_UNAUTHORIZED':

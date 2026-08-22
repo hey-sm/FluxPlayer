@@ -172,7 +172,9 @@ describe('QQProvider.songUrl', () => {
     vi.spyOn(QQClient.prototype, 'musicuRequest').mockResolvedValue(
       vkeyResponse([{ filename: 'M800MEDIA.mp3', purl: 'M800MEDIA.mp3?vkey=abc' }]),
     )
-    const probe = vi.spyOn(QQProvider.prototype as any, 'probeUrl').mockResolvedValue({ ok: true, status: 206 })
+    const probe = vi
+      .spyOn(QQProvider.prototype as any, 'probeUrl')
+      .mockResolvedValue({ ok: true, status: 206 })
     const out = await makeProvider('uin=123; qm_keyst=KEY').songUrl('SONGMID', 'MEDIA', 'exhigh')
     expect(out.playable).toBe(true)
     expect(out.url).toBe('https://ws.stream.qqmusic.qq.com/M800MEDIA.mp3?vkey=abc')
@@ -202,7 +204,11 @@ describe('QQProvider.songUrl', () => {
       vkeyResponse([{ filename: 'M800MEDIA.mp3', purl: 'M800MEDIA.mp3?vkey=abc' }]),
     )
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.spyOn(QQProvider.prototype as any, 'probeUrl').mockResolvedValue({ ok: false, status: 404, reason: 'status' })
+    vi.spyOn(QQProvider.prototype as any, 'probeUrl').mockResolvedValue({
+      ok: false,
+      status: 404,
+      reason: 'status',
+    })
     const out = await makeProvider('uin=123; qm_keyst=KEY').songUrl('SONGMID', 'MEDIA', 'exhigh')
     expect(out.playable).toBe(false)
     expect(out.url).toBeNull()

@@ -145,10 +145,16 @@ export async function chkszRequest(
     }
     const retryAfter = response.headers.get('retry-after')
     const retryAfterMs = retryAfter ? Math.max(1000, Number(retryAfter) * 1000) : undefined
-    throw new ChkszApiError(classifyStatus(response.status), response.status, `ChKSz HTTP ${response.status}`, {
-      retryAfterMs,
-      upstreamMessage: readUpstreamMessage(parsed) ?? (typeof text === 'string' ? text.slice(0, 200) : undefined),
-    })
+    throw new ChkszApiError(
+      classifyStatus(response.status),
+      response.status,
+      `ChKSz HTTP ${response.status}`,
+      {
+        retryAfterMs,
+        upstreamMessage:
+          readUpstreamMessage(parsed) ?? (typeof text === 'string' ? text.slice(0, 200) : undefined),
+      },
+    )
   }
 
   // chksz 业务层也用 code 字段报错（200 状态但 code != 200 的情况）

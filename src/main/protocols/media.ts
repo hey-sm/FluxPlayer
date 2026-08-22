@@ -204,7 +204,8 @@ function safeHost(rawUrl: string): string {
   }
 }
 
-function validRange(value: string): boolean {  const normalized = value.trim()
+function validRange(value: string): boolean {
+  const normalized = value.trim()
   if (!/^bytes=(?:\d+-\d*|-\d+)(?:,(?:\d+-\d*|-\d+))*$/i.test(normalized)) return false
 
   return normalized
