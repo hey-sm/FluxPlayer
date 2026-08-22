@@ -15,7 +15,9 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   forbidOnly: Boolean(process.env.CI),
-  timeout: 45_000,
+  // CI runner 没有 GPU，Three.js 走软件渲染，画布截图与舞台重绘比本地慢 3～4 倍
+  // （lyrics-visual 本地 15s，在 runner 上 45s 还没跑完）。本地保持 45s 以便快速失败。
+  timeout: process.env.CI ? 120_000 : 45_000,
   expect: { timeout: 10_000 },
   outputDir: path.join(tmpdir(), `fluxplayer-next-playwright-results-${invocationId}`),
   reporter: [['line']],

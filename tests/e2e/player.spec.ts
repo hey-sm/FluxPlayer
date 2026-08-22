@@ -74,7 +74,6 @@ async function imageDelta(before: Buffer, after: Buffer): Promise<number> {
 }
 
 test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({ electronHarness }, testInfo) => {
-  test.setTimeout(90_000)
   const { app, page, rendererCrashes } = electronHarness
   await electronHarness.installMusicFixture({
     query: 'M6 E2E',
@@ -107,6 +106,11 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
     rendererCrashed: false,
   })
 
+  // 下面是桌面档的布局值。窗口默认尺寸由屏幕推导，小屏机器（CI runner 是 1024×768）会落到
+  // MIN_WINDOWED 的 960×540，而 540 低于 HoverEdgeSheet 的 max-height:560px 断点，紧凑档的
+  // bottom 是 88px 不是 104px。先固定到桌面档，别让断言依赖跑测试的那块屏幕。
+  await resizeMainWindow(app, page, 1280, 800)
+  await expect.poll(() => page.evaluate(() => window.innerHeight)).toBeGreaterThan(560)
   const shellLayout = await page.evaluate(() => {
     const topbar = document.querySelector<HTMLElement>('[data-app-chrome="topbar"]')!
     const library = document.querySelector<HTMLElement>('[data-edge-sheet][data-side="left"]')!
