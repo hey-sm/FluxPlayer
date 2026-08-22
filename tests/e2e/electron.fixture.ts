@@ -76,6 +76,7 @@ function environmentWithIsolatedPaths(sandboxPath: string): Record<string, strin
   env.HOME = home
   env.TEMP = path.join(sandboxPath, 'temp')
   env.TMP = env.TEMP
+  env.TMPDIR = env.TEMP
   env.XDG_CONFIG_HOME = path.join(sandboxPath, 'xdg', 'config')
   env.XDG_CACHE_HOME = path.join(sandboxPath, 'xdg', 'cache')
 
