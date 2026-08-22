@@ -13,6 +13,8 @@ export interface HoverEdgeSheetProps {
 
 const edgeSheetVariants = cva(
   [
+    // max-height:560px 是「窗口贴到最小尺寸」档：主进程的 MIN_WINDOWED_HEIGHT 是 540，
+    // 所以紧凑值只在视口 540–560 生效。改断点或改最小高度都要两边一起改，否则一边会失效。
     'fixed top-[var(--flux-topbar-height)] bottom-[104px] z-[78]',
     'h-auto min-h-0 w-[min(340px,32vw)] opacity-100',
     'group-data-[focus-mode=true]/app:hidden',

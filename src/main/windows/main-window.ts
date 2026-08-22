@@ -8,6 +8,9 @@ const WINDOWED_ASPECT = 16 / 9
 const WINDOWED_SCALE = 3 / 4
 const WINDOWED_MARGIN = 32
 const MIN_WINDOWED_WIDTH = 960
+// 960×540 同时是最小尺寸和小屏下的初始尺寸，保持 16:9 与 WINDOWED_ASPECT 一致，改动会让初始窗口比例走样。
+// 540 落在 HoverEdgeSheet 的 [@media(max-height:560px)] 紧凑档内——紧凑布局服务的就是这个最小尺寸。
+// 把这里提到 560 以上会让那套紧凑 CSS 变成死代码，两个数字要一起改。
 const MIN_WINDOWED_HEIGHT = 540
 
 let htmlFullscreenActive = false
