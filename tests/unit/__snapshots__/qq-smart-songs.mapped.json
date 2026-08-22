@@ -17,7 +17,7 @@
     "cover": "",
     "duration": 0,
     "fee": 0,
-    "playable": false
+    "playable": true
   },
   {
     "provider": "qq",
@@ -37,7 +37,7 @@
     "cover": "",
     "duration": 0,
     "fee": 0,
-    "playable": false
+    "playable": true
   },
   {
     "provider": "qq",
@@ -57,7 +57,7 @@
     "cover": "",
     "duration": 0,
     "fee": 0,
-    "playable": false
+    "playable": true
   },
   {
     "provider": "qq",
@@ -77,6 +77,6 @@
     "cover": "",
     "duration": 0,
     "fee": 0,
-    "playable": false
+    "playable": true
   }
 ]

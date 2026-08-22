@@ -35,6 +35,7 @@ describe('mapSongRecord', () => {
       cover: 'https://p1.music.126.net/x.jpg',
       duration: 269920,
       fee: 8,
+      playable: true,
       supportedQualities: ['jymaster', 'lossless', 'exhigh', 'standard'],
     })
   })

@@ -20,6 +20,7 @@
     "cover": "https://p1.music.126.net/rM6PP_YrU0HjFes4jggIOw==/109951172445882513.jpg",
     "duration": 182890,
     "fee": 8,
+    "playable": true,
     "supportedQualities": [
       "jymaster",
       "lossless",
@@ -48,6 +49,7 @@
     "cover": "https://p1.music.126.net/g5lQgcmD4EFPkr6rsoGCnw==/109951172501913537.jpg",
     "duration": 119146,
     "fee": 8,
+    "playable": true,
     "supportedQualities": [
       "jymaster",
       "lossless",
@@ -76,6 +78,7 @@
     "cover": "https://p1.music.126.net/0xNaw4zPr7_IxmvqHJaZzQ==/109951172667158768.jpg",
     "duration": 86423,
     "fee": 8,
+    "playable": true,
     "supportedQualities": [
       "jymaster",
       "lossless",
@@ -104,6 +107,7 @@
     "cover": "https://p1.music.126.net/eImhcnMQz-ZfuhQGiPALdQ==/109951172323546544.jpg",
     "duration": 174706,
     "fee": 8,
+    "playable": true,
     "supportedQualities": [
       "jymaster",
       "lossless",
@@ -132,6 +136,7 @@
     "cover": "https://p1.music.126.net/VGsmmMUgkgVoHwn9D7XU4g==/109951172861932473.jpg",
     "duration": 161773,
     "fee": 8,
+    "playable": true,
     "supportedQualities": [
       "jymaster",
       "lossless",

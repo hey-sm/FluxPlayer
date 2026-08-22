@@ -16,6 +16,7 @@
     "cover": "https://p1.music.126.net/RfguLkQJ8aMVkiIaxdy70Q==/109951170483263672.jpg",
     "duration": 295940,
     "fee": 8,
+    "playable": true,
     "supportedQualities": [
       "hires",
       "lossless",
@@ -40,6 +41,7 @@
     "cover": "https://p1.music.126.net/MSKoQP60up7v3y1P1d3JIQ==/109951173234747322.jpg",
     "duration": 185040,
     "fee": 8,
+    "playable": true,
     "supportedQualities": [
       "hires",
       "lossless",
@@ -68,6 +70,7 @@
     "cover": "https://p1.music.126.net/yN1ke1xYMJ718FiHaDWtYQ==/109951165076380471.jpg",
     "duration": 243754,
     "fee": 8,
+    "playable": true,
     "supportedQualities": [
       "hires",
       "lossless",
@@ -96,6 +99,7 @@
     "cover": "https://p1.music.126.net/dH71ZS7zVSg86oXdO_xBZw==/109951169492314392.jpg",
     "duration": 182000,
     "fee": 8,
+    "playable": true,
     "supportedQualities": [
       "hires",
       "lossless",
@@ -120,6 +124,7 @@
     "cover": "https://p1.music.126.net/0bk3Iqe2OZGBH2Iuyx7RzA==/109951170045577565.jpg",
     "duration": 275912,
     "fee": 1,
+    "playable": true,
     "supportedQualities": [
       "hires",
       "lossless",

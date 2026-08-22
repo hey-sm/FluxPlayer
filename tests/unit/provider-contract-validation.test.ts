@@ -279,6 +279,8 @@ describe('QQ playback contract validation', () => {
         },
       },
     })
+    vi.spyOn(QQProvider.prototype as any, 'probeUrl').mockResolvedValue({ ok: true, status: 206 })
+
     const provider = new QQProvider(credentials)
 
     const result = await provider.songUrl('QQ_MID', 'QQ_MEDIA', 'hires')
