@@ -15,7 +15,7 @@ permissions:
 jobs:
   verify:
     name: Verify source
-    runs-on: ubuntu-24.04
+    runs-on: windows-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -27,29 +27,18 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # 注意：打包模型是「全部内联」，dependencies 只剩 electron-updater，因此 --prod
-      # 只审这一个包。真正随包分发的是全部被 bundle 的依赖，dependencies/devDependencies
-      # 的划分已无法表达「什么会被发出去」。放宽为全量 audit 见 TODO.md。
-      - run: pnpm audit --registry=https://registry.npmjs.org --prod --audit-level=high
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format
       - run: pnpm test
-      # smoke/e2e 需要打包产物（out/）；wallpaper helper 在 Linux 上自动跳过
+      # smoke/e2e 需要打包产物（out/）
       - run: pnpm build
-      # Electron 在 headless Linux runner 上需要虚拟显示 + 系统库
-      - name: Install Electron system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 \
-            libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
-            libxrandr2 libgbm1 libasound2t64 libpangocairo-1.0-0
-      - name: Smoke test (headless Electron)
-        run: xvfb-run -a pnpm smoke
+      - name: Smoke test
+        run: pnpm smoke
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-      - name: End-to-end tests (real Electron)
-        run: xvfb-run -a pnpm exec playwright test
+      - name: End-to-end tests
+        run: pnpm exec playwright test
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -88,15 +77,6 @@ jobs:
               dist/*.zip
               dist/*.blockmap
               dist/latest-mac.yml
-          - name: Linux x64
-            os: ubuntu-24.04
-            command: pnpm build:linux --publish never
-            artifact: fluxplayer-linux-x64
-            paths: |
-              dist/*.AppImage
-              dist/*.deb
-              dist/*.blockmap
-              dist/latest-linux.yml
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

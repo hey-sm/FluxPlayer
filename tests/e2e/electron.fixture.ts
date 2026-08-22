@@ -76,7 +76,6 @@ function environmentWithIsolatedPaths(sandboxPath: string): Record<string, strin
   env.HOME = home
   env.TEMP = path.join(sandboxPath, 'temp')
   env.TMP = env.TEMP
-  env.TMPDIR = env.TEMP
   env.XDG_CONFIG_HOME = path.join(sandboxPath, 'xdg', 'config')
   env.XDG_CACHE_HOME = path.join(sandboxPath, 'xdg', 'cache')
 
@@ -735,12 +734,7 @@ export const test = base.extend<ElectronFixtures>({
       await Promise.all(isolatedDirs.map((directory) => mkdir(directory, { recursive: true })))
 
       app = await electron.launch({
-        args: [
-          `--user-data-dir=${path.join(sandboxPath, 'chromium-user-data')}`,
-          '--no-sandbox',
-          ...(process.platform === 'linux' ? ['--use-gl=angle', '--use-angle=swiftshader'] : []),
-          mainEntry,
-        ],
+        args: [`--user-data-dir=${path.join(sandboxPath, 'chromium-user-data')}`, '--no-sandbox', mainEntry],
         artifactsDir: testInfo.outputPath('electron-artifacts'),
         cwd: projectRoot,
         env: environmentWithIsolatedPaths(sandboxPath),

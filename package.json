@@ -15,7 +15,6 @@
     "url": "https://github.com/hey-sm/FluxPlayer/issues"
   },
   "packageManager": "pnpm@10.33.0",
-  "desktopName": "FluxPlayer.desktop",
   "main": "out/main/index.mjs",
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -50,8 +49,7 @@
     "icons:mac": "node scripts/gen-mac-icon.mjs",
     "build:win": "pnpm build && electron-builder --win",
     "build:win:dir": "pnpm build && electron-builder --win dir",
-    "build:mac": "pnpm icons:mac && pnpm build && electron-builder --mac",
-    "build:linux": "pnpm build && electron-builder --linux"
+    "build:mac": "pnpm icons:mac && pnpm build && electron-builder --mac"
   },
   "dependencies": {
     "electron-updater": "6.8.9"

@@ -71,7 +71,6 @@ async function canvasDelta(before: Buffer, after: Buffer): Promise<number> {
 }
 
 test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }, testInfo) => {
-  test.setTimeout(120_000)
   const { app, page } = electronHarness
   await electronHarness.installMusicFixture({ query: 'LYRICS VISUAL', track: TRACK, lyrics: LYRICS })
 
@@ -107,10 +106,8 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
   await page.locator('[data-search-sensor]').hover()
   await expect(searchInput).toBeVisible()
   await searchInput.fill('LYRICS VISUAL')
-  const trackResult = page.getByText(TRACK.name, { exact: true })
-  await expect(trackResult).toBeVisible()
-  await trackResult.click()
-  await expect(page.getByRole('button', { name: '暂停' })).toBeVisible({ timeout: 20000 })
+  await page.getByText(TRACK.name, { exact: true }).click()
+  await expect(page.getByRole('button', { name: '暂停' })).toBeVisible()
   await page.evaluate(() => {
     const audio = (
       globalThis as typeof globalThis & { __fluxE2EAudioElements?: HTMLAudioElement[] }

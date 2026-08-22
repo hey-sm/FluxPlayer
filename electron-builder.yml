@@ -56,18 +56,3 @@ mac:
       arch: [x64, arm64]
     - target: zip
       arch: [x64, arm64]
-linux:
-  executableName: FluxPlayer
-  icon: resources/icon.png
-  category: AudioVideo
-  maintainer: FluxPlayer maintainers <hey-sm@users.noreply.github.com>
-  synopsis: Immersive desktop music player
-  syncDesktopName: true
-  artifactName: FluxPlayer-${version}-linux-${arch}.${ext}
-  target:
-    - target: AppImage
-      arch: [x64]
-    - target: deb
-      arch: [x64]
-# 图标：resources/icon.svg 为源，scripts/gen-icons.mjs 生成 icon.png（builder 自动转 ico）
-# 更新 provider 固定为 hey-sm/FluxPlayer；签名、公证与发布凭据只从 CI secrets 注入。

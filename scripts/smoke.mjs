@@ -23,12 +23,7 @@ delete env.ELECTRON_RUN_AS_NODE
 
 const child = spawn(
   String(electronPath),
-  [
-    `--user-data-dir=${path.join(sandboxPath, 'user-data')}`,
-    '--no-sandbox',
-    ...(process.platform === 'linux' ? ['--use-gl=angle', '--use-angle=swiftshader'] : []),
-    '.',
-  ],
+  [`--user-data-dir=${path.join(sandboxPath, 'user-data')}`, '--no-sandbox', '.'],
   { env },
 )
 let sawOk = false
