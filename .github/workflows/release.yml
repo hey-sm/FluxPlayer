@@ -47,8 +47,10 @@ jobs:
             libxrandr2 libgbm1 libasound2t64 libpangocairo-1.0-0
       - name: Smoke test (headless Electron)
         run: xvfb-run -a pnpm smoke
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
       - name: End-to-end tests (real Electron)
-        run: xvfb-run -a pnpm test:e2e
+        run: xvfb-run -a pnpm exec playwright test
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
