@@ -89,6 +89,10 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(stageCanvas).toHaveCount(1)
   await captureVisual(page, stageCanvas, testInfo, 'rain-desktop')
   await expect(page.locator('.visual-toggle')).toHaveCount(0)
+  // 固定窗口尺寸，避免 CI headless 默认分辨率过低触发 [@media(max-height:560px)] 改变布局
+  const win = await app.browserWindow(page)
+  await win?.evaluate((browserWindow) => browserWindow.setSize(1440, 900))
+  await page.waitForTimeout(200)
   const mainWindow = await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()
       .map((window) => ({
