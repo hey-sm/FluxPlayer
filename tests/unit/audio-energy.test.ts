@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { detectOnsets, mapOnsetsToWords, type EnergySample } from '../../src/renderer/src/playback/audio-energy'
+import {
+  detectOnsets,
+  mapOnsetsToWords,
+  type EnergySample,
+} from '../../src/renderer/src/playback/audio-energy'
 
 function makeSamples(rmsValues: number[], interval = 0.023): EnergySample[] {
   return rmsValues.map((rms, i) => ({ time: i * interval, rms }))
@@ -19,9 +23,7 @@ describe('detectOnsets', () => {
   })
 
   it('detects two separate onsets', () => {
-    const samples = makeSamples([
-      0.01, 0.01, 0.2, 0.25, 0.2, 0.01, 0.01, 0.01, 0.01, 0.3, 0.35, 0.3,
-    ])
+    const samples = makeSamples([0.01, 0.01, 0.2, 0.25, 0.2, 0.01, 0.01, 0.01, 0.01, 0.3, 0.35, 0.3])
     const onsets = detectOnsets(samples)
     expect(onsets.length).toBe(2)
   })

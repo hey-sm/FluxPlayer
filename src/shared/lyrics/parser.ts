@@ -23,7 +23,10 @@ function parseNeteaseJsonLine(row: string): { time: number; text: string } | nul
   try {
     const obj = JSON.parse(trimmed) as { t?: number; c?: Array<{ tx?: string }> }
     if (typeof obj.t !== 'number' || !Array.isArray(obj.c)) return null
-    const text = obj.c.map((segment) => segment.tx ?? '').join('').trim()
+    const text = obj.c
+      .map((segment) => segment.tx ?? '')
+      .join('')
+      .trim()
     return { time: obj.t / 1000, text }
   } catch {
     return null
@@ -108,11 +111,22 @@ function tokenizeForLyrics(text: string): string[] {
   const tokens: string[] = []
   let latinRun = ''
   let digitRun = ''
-  const flushLatin = () => { if (latinRun) { tokens.push(latinRun); latinRun = '' } }
-  const flushDigit = () => { if (digitRun) { tokens.push(digitRun); digitRun = '' } }
+  const flushLatin = () => {
+    if (latinRun) {
+      tokens.push(latinRun)
+      latinRun = ''
+    }
+  }
+  const flushDigit = () => {
+    if (digitRun) {
+      tokens.push(digitRun)
+      digitRun = ''
+    }
+  }
   for (const ch of chars) {
     if (PUNCT_CHARS.test(ch)) {
-      flushLatin(); flushDigit()
+      flushLatin()
+      flushDigit()
       tokens.push(ch)
     } else if (LATIN_LETTER.test(ch)) {
       flushDigit()
@@ -121,11 +135,13 @@ function tokenizeForLyrics(text: string): string[] {
       flushLatin()
       digitRun += ch
     } else {
-      flushLatin(); flushDigit()
+      flushLatin()
+      flushDigit()
       tokens.push(ch)
     }
   }
-  flushLatin(); flushDigit()
+  flushLatin()
+  flushDigit()
   return tokens
 }
 

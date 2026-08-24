@@ -25,10 +25,7 @@ function needsAnalysis(line: LyricLine): boolean {
   return line.words.every((w) => w.estimated === true)
 }
 
-export function useEnergySync(
-  trackKey: string | null,
-  _lines: readonly LyricLine[],
-): void {
+export function useEnergySync(trackKey: string | null, _lines: readonly LyricLine[]): void {
   const position = usePlaybackProgress((s) => s.rawPosition)
   const status = usePlayer((s) => s.status)
   const clearTrack = useEnergyWords((s) => s.clearTrack)
@@ -74,10 +71,7 @@ export function useEnergySync(
  * Currently a pass-through since no audio source feeds the cache, but the
  * infrastructure is in place for future audio analysis integration.
  */
-export function useMergedEnergyLines(
-  trackKey: string | null,
-  lines: readonly LyricLine[],
-): LyricLine[] {
+export function useMergedEnergyLines(trackKey: string | null, lines: readonly LyricLine[]): LyricLine[] {
   const cache = useEnergyWords((s) => s.cache)
   if (!trackKey) return lines as unknown as LyricLine[]
   let modified = false

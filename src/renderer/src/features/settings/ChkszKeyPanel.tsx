@@ -164,12 +164,7 @@ export function ChkszKeyPanel({ className = '' }: { className?: string }): React
               >
                 更换密钥
               </Button>
-              <Button
-                variant="glassSoft"
-                size="action"
-                disabled={busy}
-                onClick={() => void handleClear()}
-              >
+              <Button variant="glassSoft" size="action" disabled={busy} onClick={() => void handleClear()}>
                 清除密钥
               </Button>
             </footer>

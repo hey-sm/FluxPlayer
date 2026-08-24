@@ -15,15 +15,7 @@ import { buildLyricLines } from '@shared/lyrics'
 import type { CredentialStore, ProviderLikedTracksResult, UpstreamPlaybackResource } from '../../types'
 import { probePlaybackAudioUrl } from '../../util/audio-probe'
 import { normalizeCookieHeader, rawCookieFallback } from '../../util/cookies'
-import {
-  asArray,
-  asRecord,
-  at,
-  errorMessage,
-  field,
-  numberValue,
-  stringValue,
-} from '../../util/unknown'
+import { asArray, asRecord, at, errorMessage, field, numberValue, stringValue } from '../../util/unknown'
 import { QQClient, QQ_SEARCH_URL, QQ_SMARTBOX_URL, qqCommonParams } from './client'
 import { decryptQrc, isHexQrc } from './qrc-decrypt'
 import {
@@ -246,7 +238,7 @@ export class QQProvider {
     let vipIcon = ''
 
     if (!vipType) {
-            // QQ Music profile API returns VIP info in two places inside creator:
+      // QQ Music profile API returns VIP info in two places inside creator:
       // 1. creator.lvinfo[].iconurl contains svip6.png / vip1.png etc.
       //    The number in the filename IS the VIP/green-diamond level.
       // 2. creator.userInfoUI.iconlist[].desc is a JSON string like
@@ -297,11 +289,11 @@ export class QQProvider {
         }
       }
       if (isSvip || isVip) vipType = isSvip ? 2 : 1
-      }
+    }
 
-      if (vipLevel > 0) {
-        isVip = isVip || isSvip || vipType > 0
-      }
+    if (vipLevel > 0) {
+      isVip = isVip || isSvip || vipType > 0
+    }
 
     const uin = session.uin
     return {
@@ -315,7 +307,11 @@ export class QQProvider {
       vipLevel: vipLevel > 0 ? String(vipLevel) : undefined,
       isVip: isVip || vipType > 0,
       isSvip,
-      vipLabel: isSvip ? `SVIP${vipLevel > 0 ? vipLevel : ''}` : isVip ? `VIP${vipLevel > 0 ? vipLevel : ''}` : undefined,
+      vipLabel: isSvip
+        ? `SVIP${vipLevel > 0 ? vipLevel : ''}`
+        : isVip
+          ? `VIP${vipLevel > 0 ? vipLevel : ''}`
+          : undefined,
       vipIcon: vipIcon || undefined,
       hasCookie: Boolean(this.cookie),
       playbackKeyReady: session.playbackReady,

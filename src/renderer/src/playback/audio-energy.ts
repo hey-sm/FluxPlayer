@@ -166,7 +166,8 @@ export function mapOnsetsToWords(
 
   // If we ran out of intervals but still have segments, append at lineEnd.
   while (segIdx < segments.length) {
-    const lastEnd = words.length > 0 ? words[words.length - 1].time + words[words.length - 1].duration : lineEnd
+    const lastEnd =
+      words.length > 0 ? words[words.length - 1].time + words[words.length - 1].duration : lineEnd
     const w = isPunct(segments[segIdx]) ? duration * 0.05 : duration * 0.15
     words.push({ text: segments[segIdx], time: lastEnd, duration: w, estimated: true })
     segIdx++
