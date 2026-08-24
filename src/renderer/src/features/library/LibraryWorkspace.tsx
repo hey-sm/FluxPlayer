@@ -172,10 +172,10 @@ function PlaylistDetailPanel({
           renderExpansion={(song) => (
             <UnplayableSongExpansion
               song={song}
-              onPlay={(replacement) => {
+              onPlay={(replacement, backend) => {
                 setExpandedKey(null)
                 onTrackSelect()
-                void setQueue([replacement], 0)
+                void setQueue([replacement], 0, backend)
               }}
             />
           )}

@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { ticker } from '@/perf/ticker'
+import { DEFAULT_ACCENT_COLOR } from '@/theme/classic'
 import {
   DynamicBackgroundManager,
   type DynamicBackgroundEffect,
@@ -32,7 +33,7 @@ export class VisualStage {
   private stopTick: (() => void) | null = null
   private backgroundEffect: DynamicBackgroundEffect = 'rain'
   private backgroundEnabled = true
-  private accentColor = '#00f5d4'
+  private accentColor = DEFAULT_ACCENT_COLOR
   private reducedMotion = false
   private disposed = false
 

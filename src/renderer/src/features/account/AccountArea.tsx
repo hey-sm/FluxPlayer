@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ProviderId } from '@shared/models'
 import { cva } from 'class-variance-authority'
 import { useAuth } from '../../stores/auth'
@@ -21,6 +22,24 @@ const accountRootClassName = ['mr-1 flex items-center gap-2', '[-webkit-app-regi
 
 const accountActionClassName =
   'h-7 min-h-7 w-auto rounded-[var(--flux-radius-control)] px-3 py-0 text-xs [-webkit-app-region:no-drag]'
+
+/** VIP 徽标：优先渲染原始图标，加载失败回退到文字 */
+function VipBadge({ icon, label }: { icon?: string; label: string }): React.JSX.Element {
+  const [iconOk, setIconOk] = useState(true)
+  const proxied = icon ? coverProxyUrl(icon) : ''
+  if (proxied && iconOk) {
+    return (
+      <img
+        src={proxied}
+        alt={label}
+        className="h-[18px] w-auto object-contain"
+        onError={() => setIconOk(false)}
+        data-account-vip-icon=""
+      />
+    )
+  }
+  return <span className={accountBadgeVariants({ tone: 'vip' })}>{label}</span>
+}
 
 export function AccountArea({
   provider,
@@ -55,7 +74,7 @@ export function AccountArea({
           <span className="max-w-[120px] truncate text-xs" data-account-nickname="">
             {qq.nickname || (qq.preview ? '待接入' : 'QQ 用户')}
           </span>
-          {qq.vipType ? <span className={accountBadgeVariants({ tone: 'vip' })}>VIP</span> : null}
+          {qq.isVip ? <VipBadge icon={qq.vipIcon} label={qq.vipLabel || 'VIP'} /> : null}
           {qq.playbackKeyReady === false ? (
             <span
               className={accountBadgeVariants({ tone: 'warning' })}
@@ -105,9 +124,7 @@ export function AccountArea({
         <span className="max-w-[120px] truncate text-xs" data-account-nickname="">
           {netease.nickname || '网易云用户'}
         </span>
-        {netease.isVip ? (
-          <span className={accountBadgeVariants({ tone: 'vip' })}>{netease.vipLabel || 'VIP'}</span>
-        ) : null}
+        {netease.isVip ? <VipBadge icon={netease.vipIcon} label={netease.vipLabel || 'VIP'} /> : null}
         <Button
           variant="glassSoft"
           size="compact"

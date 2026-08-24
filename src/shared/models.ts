@@ -119,6 +119,7 @@ export interface NeteaseLoginInfo {
   isVip: boolean
   isSvip: boolean
   vipLabel: string
+  vipIcon?: string
   hasCookie?: boolean
   pendingProfile?: boolean
   [key: string]: unknown
@@ -133,6 +134,11 @@ export interface QQLoginInfo {
   nickname?: string
   avatar?: string
   vipType?: number
+  vipLevel?: string
+  isVip?: boolean
+  isSvip?: boolean
+  vipLabel?: string
+  vipIcon?: string
   hasCookie?: boolean
   playbackKeyReady?: boolean
   profileSource?: string

@@ -149,3 +149,55 @@ describe.each<ProviderId>(['netease', 'qq'])('MusicService %s contract', (provid
     })
   })
 })
+
+describe('MusicService lyrics backend priority', () => {
+  it('keeps direct enhanced lyrics instead of replacing them with ChKSZ LRC', async () => {
+    const service = new MusicService(credentials)
+    vi.mocked(credentials.get).mockImplementation((key) => (key === 'chksz' ? 'fixture-key' : ''))
+    const direct = vi.spyOn(service.netease, 'getLyrics').mockResolvedValue({
+      provider: 'netease',
+      lyric: '[00:02]你好',
+      tlyric: '',
+      yrc: '[2000,1000](2000,400,0)你(2400,600,0)好',
+      lines: [
+        {
+          time: 2,
+          text: '你好',
+          words: [
+            { text: '你', time: 2, duration: 0.4 },
+            { text: '好', time: 2.4, duration: 0.6 },
+          ],
+        },
+      ],
+      source: 'netease-direct',
+    })
+    const result = await service.getLyrics({ provider: 'netease', id: 1 })
+    expect(result.source).toBe('netease-direct')
+    expect(result.lines[0].words?.[0].duration).toBe(0.4)
+    expect(direct).toHaveBeenCalledOnce()
+  })
+
+  it('uses ChKSZ only when direct lyrics are empty', async () => {
+    const service = new MusicService(credentials)
+    vi.mocked(credentials.get).mockImplementation((key) => (key === 'chksz' ? 'fixture-key' : ''))
+    vi.spyOn(service.netease, 'getLyrics').mockResolvedValue({
+      provider: 'netease',
+      lyric: '',
+      tlyric: '',
+      yrc: '',
+      lines: [],
+      source: 'netease-empty',
+    })
+    const chksz = await import('@server/providers/chksz')
+    vi.spyOn(chksz.ChkszProvider.prototype, 'getLyrics').mockResolvedValue({
+      provider: 'netease',
+      lyric: '[00:02]普通 LRC',
+      tlyric: '',
+      yrc: '',
+      lines: [{ time: 2, text: '普通 LRC' }],
+      source: 'chksz',
+    })
+    const result = await service.getLyrics({ provider: 'netease', id: 1 })
+    expect(result.source).toBe('chksz')
+  })
+})

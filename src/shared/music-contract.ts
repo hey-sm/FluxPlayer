@@ -51,6 +51,8 @@ export interface MusicSearchResult {
 export interface PlaybackResolveRequest {
   song: UnifiedSong
   quality: QualityLevel
+  /** 指定后端：chksz 强制走聚合 API、direct 强制走直连。省略时直连优先，无音源/试听才自动回退 chksz。 */
+  backend?: 'direct' | 'chksz'
 }
 
 /** The URL is always an opaque flux-media:// URL; upstream URLs and credentials never cross IPC. */
@@ -91,6 +93,8 @@ export interface MusicAuthResult {
   isVip?: boolean
   isSvip?: boolean
   vipLabel?: string
+  /** QQ 音乐原始返回的 VIP 等级图标 URL（如 svip6.png） */
+  vipIcon?: string
   hasCookie?: boolean
   pendingProfile?: boolean
   playbackKeyReady?: boolean

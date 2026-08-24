@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { DEFAULT_ACCENT_COLOR } from '@/theme/classic'
 import { DYNAMIC_BACKGROUND_BY_EFFECT } from './registry'
 import type { DynamicBackgroundEffect } from './dynamic'
 import type {
@@ -15,7 +16,7 @@ export class DynamicBackgroundManager {
   private height = 1
   private pixelRatio = 1
   private pointer = { x: 0.5, y: 0.5, active: false }
-  private accentColor = '#00f5d4'
+  private accentColor = DEFAULT_ACCENT_COLOR
   private disposed = false
 
   constructor(

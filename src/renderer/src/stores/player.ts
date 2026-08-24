@@ -11,8 +11,8 @@ import {
 export type { PlaybackMode, PlayStatus }
 
 interface PlayerActions {
-  play(song: UnifiedSong): Promise<void>
-  setQueue(songs: UnifiedSong[], startIndex?: number): Promise<void>
+  play(song: UnifiedSong, backend?: 'direct' | 'chksz'): Promise<void>
+  setQueue(songs: UnifiedSong[], startIndex?: number, backend?: 'direct' | 'chksz'): Promise<void>
   setMode(mode: PlaybackMode): void
   setQualityPreference(level: QualityLevel): Promise<void>
   next(): Promise<void>
@@ -26,7 +26,11 @@ interface PlayerActions {
 export type PlayerState = PlaybackViewState & PlayerActions
 
 /** High-frequency progress has its own subscription boundary. */
-export const usePlaybackProgress = create<PlaybackProgressState>(() => ({ position: 0, duration: 0 }))
+export const usePlaybackProgress = create<PlaybackProgressState>(() => ({
+  position: 0,
+  duration: 0,
+  rawPosition: 0,
+}))
 
 export const usePlayer = create<PlayerState>((set, get) => {
   playbackEngine.connect({
@@ -49,8 +53,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
     mode: 'sequence',
     qualityPreference: playbackEngine.initialQuality,
     resolvedQuality: null,
-    play: (song) => playbackEngine.play(song),
-    setQueue: (songs, startIndex) => playbackEngine.setQueue(songs, startIndex),
+    play: (song, backend) => playbackEngine.play(song, backend),
+    setQueue: (songs, startIndex, backend) => playbackEngine.setQueue(songs, startIndex, backend),
     setMode: (mode) => playbackEngine.setMode(mode),
     setQualityPreference: (level) => playbackEngine.setQualityPreference(level),
     next: () => playbackEngine.next(),

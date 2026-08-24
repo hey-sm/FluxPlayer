@@ -46,6 +46,7 @@ export const musicSearchRequestSchema = z.object({
 export const playbackResolveRequestSchema = z.object({
   song: unifiedSongSchema,
   quality: qualityLevelSchema,
+  backend: z.optional(z.enum(['direct', 'chksz'])),
 })
 
 export const lyricsRequestSchema = z.object({
@@ -79,10 +80,6 @@ export const discoverRequestSchema = z.object({
 
 export const chkszKeySchema = z.object({
   key: z.string().check(z.maxLength(256)),
-})
-
-export const chkszSetEnabledSchema = z.object({
-  enabled: z.boolean(),
 })
 
 export type MusicRequestSchema =

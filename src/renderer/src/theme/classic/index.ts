@@ -2,11 +2,14 @@ import type { ThemePreset, ThemeVisualParams } from '../types'
 
 export const CLASSIC_GOLD_THEME_ID = 'classic-gold' as const
 
+/** Default accent color — single source of truth for all visual subsystems. */
+export const DEFAULT_ACCENT_COLOR = '#a855f7'
+
 const CLASSIC_GOLD_VISUAL_PARAMS = Object.freeze({
   background: '#000000',
   text: '#ffffff',
   textMuted: '#8a9099',
-  accent: '#00f5d4',
+  accent: DEFAULT_ACCENT_COLOR,
   danger: '#d95b67',
   panelSurface: '#000000',
   panelBorder: '#ffffff',

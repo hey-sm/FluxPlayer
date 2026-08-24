@@ -5,10 +5,11 @@ import { getLyrics } from '../../api'
 import { lyricQueryKey, lyricTrackKey, lyricsRequest, type LyricTrackKey } from './paths'
 import type { LyricsLoadState } from './state'
 
-interface LyricWireDoc extends Omit<Partial<LyricDoc>, 'lyric' | 'tlyric' | 'yrc'> {
+interface LyricWireDoc extends Omit<Partial<LyricDoc>, 'lyric' | 'tlyric' | 'yrc' | 'qrc'> {
   lyric?: unknown
   tlyric?: unknown
   yrc?: unknown
+  qrc?: unknown
 }
 
 function rawString(value: unknown): string {
@@ -57,7 +58,10 @@ export function normalizeLyricDoc(raw: LyricWireDoc, song: UnifiedSong): LyricDo
   const lyric = rawString(raw.lyric)
   const tlyric = rawString(raw.tlyric)
   const yrc = rawString(raw.yrc)
-  const builtLines = buildLyricLines({ lyric, tlyric, yrc })
+  const qrc = rawString(raw.qrc)
+  const builtLines = buildLyricLines({ lyric, tlyric, yrc, qrc })
+  const serverLines = validServerLines(raw.lines)
+  const serverHasExactWords = serverLines.some((line) => line.words?.some((word) => word.estimated !== true))
   return {
     ...raw,
     provider: raw.provider ?? song.provider,
@@ -66,7 +70,8 @@ export function normalizeLyricDoc(raw: LyricWireDoc, song: UnifiedSong): LyricDo
     lyric,
     tlyric,
     yrc,
-    lines: builtLines.length > 0 ? builtLines : validServerLines(raw.lines),
+    qrc,
+    lines: serverHasExactWords ? serverLines : builtLines.length > 0 ? builtLines : serverLines,
     source: rawString(raw.source) || `${song.provider}-empty`,
   }
 }

@@ -114,12 +114,16 @@ function CenterStatus(): React.JSX.Element {
   useEffect(() => {
     const container = containerRef.current
     const textEl = textRef.current
+    const labelEl = labelRef.current
     if (!container || !textEl) return
 
     tweenRef.current?.kill()
     tweenRef.current = null
 
-    const overflow = textEl.scrollWidth - container.clientWidth + 16
+    // label（标题）宽度固定不滚动，滚动距离需排除它的占位
+    const labelWidth = labelEl?.offsetWidth ? labelEl.offsetWidth + 6 /* gap-1.5 */ : 0
+    const availableWidth = container.clientWidth - labelWidth - 20 /* padding */
+    const overflow = textEl.scrollWidth - availableWidth
     if (overflow > 4 && !reducedMotion) {
       const distance = overflow + 24
       tweenRef.current = gsap.to(textEl, {
@@ -158,7 +162,7 @@ function CenterStatus(): React.JSX.Element {
         <div
           ref={containerRef}
           className={cn(
-            'flex h-7 max-w-[340px] min-w-[120px] items-center gap-1.5 overflow-hidden rounded-full px-2.5',
+            'flex h-7 max-w-[460px] min-w-[120px] items-center gap-1.5 overflow-hidden rounded-full px-2.5',
             'border bg-[color-mix(in_srgb,var(--flux-panel-surface)_55%,transparent)]',
             '[backdrop-filter:blur(var(--flux-glass-blur))] [box-shadow:var(--flux-shadow-raised)]',
             'transition-[border-color] duration-200',

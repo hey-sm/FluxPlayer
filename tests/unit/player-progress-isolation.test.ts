@@ -90,7 +90,7 @@ describe('playback progress subscription boundary', () => {
 
     expect(progressUpdates).toBe(3)
     expect(playerUpdates).toBe(0)
-    expect(usePlaybackProgress.getState()).toEqual({ position: 0.9, duration: 180 })
+    expect(usePlaybackProgress.getState()).toEqual({ position: 0.9, duration: 180, rawPosition: 0.9 })
     expect(usePlayer.getState().position).toBe(0)
 
     audio.currentTime = 1.1

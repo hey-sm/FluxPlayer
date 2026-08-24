@@ -10,6 +10,7 @@ export default defineConfig({
       '@shared': resolve(__dirname, 'src/shared'),
       '@server': resolve(__dirname, 'src/server'),
       '@renderer': resolve(__dirname, 'src/renderer/src'),
+      '@': resolve(__dirname, 'src/renderer/src'),
     },
   },
   test: {

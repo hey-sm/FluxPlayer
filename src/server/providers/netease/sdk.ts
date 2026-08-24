@@ -88,6 +88,10 @@ const endpointLoaders = {
     // @ts-expect-error SDK deep modules have no declarations.
     return unwrapCommonJs<NcmEndpoint>(await import('NeteaseCloudMusicApi/module/logout.js'))
   },
+  vip_info: async (): Promise<NcmEndpoint> => {
+    // @ts-expect-error SDK deep modules have no declarations.
+    return unwrapCommonJs<NcmEndpoint>(await import('NeteaseCloudMusicApi/module/vip_info.js'))
+  },
 } as const
 
 export type NcmEndpointName = keyof typeof endpointLoaders
@@ -150,6 +154,7 @@ export interface NcmApi {
   playlist_track_all: NcmCall
   playlist_detail: NcmCall
   logout: NcmCall
+  vip_info: NcmCall
 }
 
 /** Fixed endpoint facade. It never imports the package root and never scans the SDK module directory. */
@@ -167,4 +172,5 @@ export const ncm: NcmApi = {
   playlist_track_all: (params) => invoke('playlist_track_all', params),
   playlist_detail: (params) => invoke('playlist_detail', params),
   logout: (params) => invoke('logout', params),
+  vip_info: (params) => invoke('vip_info', params),
 }

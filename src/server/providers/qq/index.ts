@@ -19,13 +19,13 @@ import {
   asArray,
   asRecord,
   at,
-  booleanValue,
   errorMessage,
   field,
   numberValue,
   stringValue,
 } from '../../util/unknown'
 import { QQClient, QQ_SEARCH_URL, QQ_SMARTBOX_URL, qqCommonParams } from './client'
+import { decryptQrc, isHexQrc } from './qrc-decrypt'
 import {
   decodeQQLyricText,
   isQQFavoritePlaylist,
@@ -37,6 +37,23 @@ import {
   normalizeQQSongId,
 } from './mappers'
 import { QQSession, normalizeQQCookieInput } from './session'
+
+/**
+ * Extract QRC lyric text from the decrypted XML wrapper.
+ * The 3DES-decrypted QRC data is XML like:
+ *   <?xml ...?><QrcInfos>...<Lyric_1 LyricType="1" LyricContent="..." />...</QrcInfos>
+ * LyricContent contains the actual QRC-formatted lyrics with word-level timestamps.
+ */
+function extractQrcContent(xml: string): string {
+  const m = xml.match(/LyricContent="([^"]*)"/)
+  if (!m) return ''
+  return m[1]
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+}
 
 const QQ_LEGACY_VKEY_URL = 'https://c.y.qq.com/base/fcgi-bin/fcg_music_express_mobile3.fcg'
 const QQ_TRIAL_DURATION_SECONDS = 30
@@ -150,6 +167,11 @@ function toAuthResult(info: QQLoginInfo): MusicAuthResult {
     nickname: info.nickname,
     avatar: info.avatar,
     vipType: info.vipType,
+    vipLevel: info.vipLevel,
+    isVip: info.isVip,
+    isSvip: info.isSvip,
+    vipLabel: info.vipLabel,
+    vipIcon: info.vipIcon,
     hasCookie: info.hasCookie,
     playbackKeyReady: info.playbackKeyReady,
     profileSource: info.profileSource,
@@ -204,6 +226,8 @@ export class QQProvider {
     const cookieNickname = session.nickname()
     const nickname = profileNickname || cookieNickname
     const avatar = profileAvatar || session.avatar()
+
+    // Try direct vipType fields first
     let vipType = numberValue(
       session.obj.vip_type ??
         session.obj.viptype ??
@@ -216,19 +240,69 @@ export class QQProvider {
         creator.vipType ??
         creator.vip_type,
     )
+    let vipLevel = 0
+    let isSvip = false
+    let isVip = false
+    let vipIcon = ''
+
     if (!vipType) {
-      const vipFlag =
-        data.isVip ??
-        data.is_vip ??
-        data.vipFlag ??
-        data.vipflag ??
-        creator.isVip ??
-        creator.is_vip ??
-        vipInfo.isVip ??
-        vipInfo.is_vip ??
-        vipInfo.vipFlag
-      if (booleanValue(vipFlag) || numberValue(vipFlag) > 0) vipType = 1
-    }
+            // QQ Music profile API returns VIP info in two places inside creator:
+      // 1. creator.lvinfo[].iconurl contains svip6.png / vip1.png etc.
+      //    The number in the filename IS the VIP/green-diamond level.
+      // 2. creator.userInfoUI.iconlist[].desc is a JSON string like
+      //    {"int10":"3","string10":"svip"} where int10 is an icon variant id, NOT
+      //    the level. Use lvinfo for the actual level; fall back to iconlist
+      //    only for the svip/vip distinction when lvinfo is absent.
+      const lvinfo = asArray(creator.lvinfo)
+      for (const item of lvinfo) {
+        const iconurl = stringValue(asRecord(item).iconurl)
+        const m = iconurl.match(/s?vip(\d+)\.png/i)
+        if (!m) continue
+        const level = Number(m[1])
+        if (/svip/i.test(iconurl)) {
+          isSvip = true
+          if (level > vipLevel) {
+            vipLevel = level
+            vipIcon = iconurl
+          }
+        } else {
+          isVip = true
+          if (level > vipLevel) {
+            vipLevel = level
+            vipIcon = iconurl
+          }
+        }
+      }
+      // Fallback: userInfoUI.iconlist[].desc only tells us svip vs vip (no real level)
+      if (!isSvip && !isVip) {
+        const ui = asRecord(creator.userInfoUI ?? creator.userInfo)
+        const iconlist = asArray(ui.iconlist)
+        for (const icon of iconlist) {
+          const descRaw = stringValue(asRecord(icon).desc)
+          const srcUrl = stringValue(asRecord(icon).srcUrl)
+          if (!descRaw) continue
+          try {
+            const desc = JSON.parse(descRaw) as { string10?: string; string11?: string }
+            const tier = desc.string10 ?? desc.string11 ?? ''
+            if (tier === 'svip' || tier === 'spvip') {
+              isSvip = true
+              if (srcUrl) vipIcon = srcUrl
+            } else if (tier === 'vip') {
+              isVip = true
+              if (srcUrl) vipIcon = srcUrl
+            }
+          } catch {
+            // desc is not valid JSON - skip
+          }
+        }
+      }
+      if (isSvip || isVip) vipType = isSvip ? 2 : 1
+      }
+
+      if (vipLevel > 0) {
+        isVip = isVip || isSvip || vipType > 0
+      }
+
     const uin = session.uin
     return {
       provider: 'qq',
@@ -238,6 +312,11 @@ export class QQProvider {
       nickname: nickname || (uin ? `QQ ${uin}` : 'QQ 音乐'),
       avatar,
       vipType,
+      vipLevel: vipLevel > 0 ? String(vipLevel) : undefined,
+      isVip: isVip || vipType > 0,
+      isSvip,
+      vipLabel: isSvip ? `SVIP${vipLevel > 0 ? vipLevel : ''}` : isVip ? `VIP${vipLevel > 0 ? vipLevel : ''}` : undefined,
+      vipIcon: vipIcon || undefined,
       hasCookie: Boolean(this.cookie),
       playbackKeyReady: session.playbackReady,
       profileSource:
@@ -634,17 +713,41 @@ export class QQProvider {
       const param: Record<string, unknown> = {}
       if (songMID) param.songMID = songMID
       if (songID) param.songID = songID
+      // Request encrypted QRC (word-level lyrics) when logged in.
+      // The lyric field returns hex-encoded 3DES-encrypted data that we decrypt locally.
+      if (this.session.musicKey) param.qrc = 1
+      const comm: Record<string, unknown> = {}
+      if (this.session.musicKey) {
+        comm.uin = this.session.uin
+        comm.ct = 19
+        comm.authst = this.session.musicKey
+        comm.format = 'json'
+      }
       const json = await this.client.callMusicu(
         'lyric',
         'music.musichallSong.PlayLyricInfo',
         'GetPlayLyricInfo',
         param,
-        { cookie: true },
+        { comm, cookie: true },
       )
       const data = at(json, 'lyric', 'data')
-      lyric = decodeQQLyricText(field(data, 'lyric'))
+      const lyricRaw = field(data, 'lyric')
+      // When qrc=1 and logged in, lyric is hex-encoded encrypted QRC data.
+      // Decrypt it to get word-level lyrics (QRC format).
+      if (typeof lyricRaw === 'string' && isHexQrc(lyricRaw)) {
+        const decryptedXml = decryptQrc(lyricRaw)
+        if (decryptedXml) {
+          // The decrypted data is XML wrapping a LyricContent attribute with the QRC text.
+          qrc = extractQrcContent(decryptedXml)
+          // If we got QRC, also use it as the base lyric (it contains line timestamps too).
+          if (qrc) lyric = qrc
+        }
+        // If decryption fails, fall through to use lyric as plain text.
+        if (!qrc) lyric = decodeQQLyricText(lyricRaw)
+      } else {
+        lyric = decodeQQLyricText(lyricRaw)
+      }
       tlyric = decodeQQLyricText(field(data, 'trans'))
-      qrc = decodeQQLyricText(field(data, 'qrc'))
       roma = decodeQQLyricText(field(data, 'roma'))
     } catch (error) {
       console.warn('[QQLyrics] musicu failed:', errorMessage(error))
@@ -677,7 +780,7 @@ export class QQProvider {
       lyric,
       tlyric,
       yrc: '',
-      lines: buildLyricLines({ lyric, tlyric, yrc: '' }),
+      lines: buildLyricLines({ lyric, tlyric, yrc: '', qrc }),
       qrc,
       roma,
       source: lyric ? source : 'qq-empty',

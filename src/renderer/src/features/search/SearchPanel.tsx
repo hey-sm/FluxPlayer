@@ -438,11 +438,11 @@ export function SearchPanel({ provider, onProviderChange }: SearchPanelProps): R
                           {unplayable && isExpanded ? (
                             <UnplayableSongExpansion
                               song={song}
-                              onPlay={(replacement) => {
+                              onPlay={(replacement, backend) => {
                                 setExpandedKey(null)
                                 dismissSearch()
                                 setKeyword('')
-                                void setQueue([replacement], 0)
+                                void setQueue([replacement], 0, backend)
                               }}
                             />
                           ) : null}

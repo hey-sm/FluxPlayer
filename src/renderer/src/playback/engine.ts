@@ -55,6 +55,11 @@ export interface PlaybackViewState {
 export interface PlaybackProgressState {
   position: number
   duration: number
+  /**
+   * 未经 0.1s 量化的原始播放位置（audio.currentTime）。进度条仍用量化的 `position`
+   * 避免抖动，而逐字扫光需要连续时间源才能与听觉同步——句尾短字尤其依赖它。
+   */
+  rawPosition: number
 }
 
 interface StatePort {
@@ -138,6 +143,8 @@ export class PlaybackEngine {
   private mediaSessionBound = false
   private pendingAudioLoadCancel: (() => void) | null = null
   private resolveAbort: AbortController | null = null
+  /** Per-queue backend override: 'chksz' forces ChKSz for every resolve in this queue. */
+  private resolveBackend: 'direct' | 'chksz' | undefined = undefined
 
   constructor(audio: HTMLAudioElement = new Audio()) {
     this.audio = audio
@@ -166,11 +173,12 @@ export class PlaybackEngine {
     })
   }
 
-  async play(song: UnifiedSong): Promise<void> {
-    await this.setQueue([song], 0)
+  async play(song: UnifiedSong, backend?: 'direct' | 'chksz'): Promise<void> {
+    await this.setQueue([song], 0, backend)
   }
 
-  async setQueue(songs: readonly UnifiedSong[], startIndex = 0): Promise<void> {
+  async setQueue(songs: readonly UnifiedSong[], startIndex = 0, backend?: 'direct' | 'chksz'): Promise<void> {
+    this.resolveBackend = backend
     const queue = [...songs]
     if (!queue.length) {
       this.loadGeneration += 1
@@ -191,7 +199,7 @@ export class PlaybackEngine {
         position: 0,
         resolvedQuality: null,
       })
-      this.patchProgress({ position: 0, duration: 0 })
+      this.patchProgress({ position: 0, duration: 0, rawPosition: 0 })
       updateMediaMetadata(null)
       updatePlaybackState('none')
       return
@@ -283,7 +291,10 @@ export class PlaybackEngine {
     const durationOut = duration || 0
     const previous = this.progress()
     if (previous.position !== position || previous.duration !== durationOut) {
-      this.patchProgress({ position, duration: durationOut })
+      this.patchProgress({ position, duration: durationOut, rawPosition })
+    } else if (previous.rawPosition !== rawPosition) {
+      // 量化值未变但原值在推进：进度条无需刷新，逐字扫光仍需连续时间源。
+      this.patchProgress({ rawPosition })
     }
 
     const second = Math.floor(position)
@@ -350,7 +361,7 @@ export class PlaybackEngine {
       duration,
       resolvedQuality: null,
     })
-    this.patchProgress({ position: 0, duration })
+    this.patchProgress({ position: 0, duration, rawPosition: 0 })
     this.audio.pause()
     updateMediaMetadata(song)
     updatePlaybackState('paused')
@@ -359,7 +370,7 @@ export class PlaybackEngine {
 
     try {
       const info: PlaybackResolveResult = await abortableResolve(
-        musicClient.resolvePlayback({ song, quality: requested }),
+        musicClient.resolvePlayback({ song, quality: requested, backend: this.resolveBackend }),
         this.resolveAbort.signal,
       )
       if (this.stale(generation)) return
@@ -470,7 +481,7 @@ export class PlaybackEngine {
     if (this.activeTrialLimitSeconds !== null && this.audio.currentTime >= this.activeTrialLimitSeconds) {
       this.audio.currentTime = 0
       this.patch({ position: 0, duration: this.activeTrialLimitSeconds, message: '当前为试听片段' })
-      this.patchProgress({ position: 0, duration: this.activeTrialLimitSeconds })
+      this.patchProgress({ position: 0, duration: this.activeTrialLimitSeconds, rawPosition: 0 })
     }
     this.audio.play().catch((error: unknown) => {
       if (this.state().status === 'loading') return
@@ -498,7 +509,7 @@ export class PlaybackEngine {
         duration: limit,
         message: `${TRIAL_LIMIT_SECONDS} 秒试听已结束`,
       })
-      this.patchProgress({ position: limit, duration: limit })
+      this.patchProgress({ position: limit, duration: limit, rawPosition: limit })
       updatePlaybackState('paused')
     })
     this.audio.addEventListener('ended', () => {

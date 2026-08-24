@@ -70,28 +70,26 @@ function shouldFallbackToChksz(result: { url: string | null; trial: boolean; pla
 /**
  * Main-process music orchestration for the two product providers + ChKSz aggregation fallback.
  *
- * ChKSz 接入策略（与直连完全独立，密钥存在才启用）：
- * - search：有 chksz key → 走 chksz 搜索；无 → 走直连
+ * ChKSz 接入策略（账号直连优先，chksz 仅在直连不可用时兜底）：
+ * - search：先走直连搜索；直连失败或无结果 → 用 chksz 搜索
  * - resolvePlayback：先走直连，直连判定无音源 / 仅试听 → 用 chksz 同 id 重解析
- * - getLyrics：有 chksz key → 走 chksz（更稳）；无 → 走直连
+ * - getLyrics：先走直连保留 YRC/QRC；直连无歌词或失败 → 用 chksz 的 LRC 兜底
  * - 账号 / 歌单列表 / 我喜欢 / 发现页：永远走直连，不受 chksz 影响
+ * - backend=chksz 时强制走 chksz（用户明确要求），失败不回退直连
  */
 export class MusicService {
   readonly netease: NeteaseProvider
   readonly qq: QQProvider
   private readonly credentials: CredentialStore
-  private readonly chkszPreferences?: { enabled: boolean }
 
-  constructor(credentials: CredentialStore, chkszPreferences?: { enabled: boolean }) {
+  constructor(credentials: CredentialStore) {
     this.netease = new NeteaseProvider(credentials)
     this.qq = new QQProvider(credentials)
     this.credentials = credentials
-    this.chkszPreferences = chkszPreferences
   }
 
-  /** 密钥实时读取 + 启用状态检查：停用时密钥仍在磁盘，但 enabled=false 则不启用 chksz。 */
+  /** 密钥实时读取：配了密钥就可用，无需手动开关。 */
   private get chkszKey(): string {
-    if (this.chkszPreferences && !this.chkszPreferences.enabled) return ''
     return this.credentials.get('chksz')
   }
 
@@ -120,23 +118,41 @@ export class MusicService {
     const provider = this.select(request.provider)
     const limit = Math.max(1, Math.min(200, Math.floor(request.limit ?? 30)))
     const page = Math.max(1, Math.floor(request.page ?? 1))
-    const useChksz = request.backend === 'chksz' || (request.backend !== 'direct' && Boolean(this.chksz))
+    const forceChksz = request.backend === 'chksz'
 
-    // backend=chksz 或未指定但有 key → 走 chksz 搜索
-    if (useChksz) {
+    // backend=chksz 时强制走 chksz（用户明确要求），失败不回退
+    if (forceChksz) {
       const chksz = this.chksz
-      if (chksz) {
-        try {
-          const songs = await chksz.search(request.provider, request.keywords.trim(), limit, page)
-          return { provider: request.provider, songs, page, hasMore: songs.length >= limit }
-        } catch (error) {
-          // backend=chksz 时失败不回退（用户明确要求 chksz），向上抛错让面板提示
-          if (request.backend === 'chksz') throw providerError(request.provider, error)
-          console.warn('[ChKSz] search fallback to direct:', errorMessage(error))
-        }
+      if (!chksz) throw providerError(request.provider, new Error('ChKSz 密钥未配置'))
+      const songs = await chksz.search(request.provider, request.keywords.trim(), limit, page)
+      return { provider: request.provider, songs, page, hasMore: songs.length >= limit }
+    }
+
+    // 直连搜索优先（搜索 API 不需要登录，直连永远可用）
+    try {
+      const songs = await this.execute(request.provider, () =>
+        provider.search(request.keywords.trim(), limit, page),
+      )
+      // 直连有结果 → 直接返回，不消耗 chksz 配额
+      if (songs.length > 0) {
+        return { provider: request.provider, songs, page, hasMore: songs.length >= limit }
+      }
+    } catch (error) {
+      console.warn('[Search] direct search failed, trying ChKSz:', errorMessage(error))
+    }
+
+    // 直连无结果或失败 → 用 chksz 兜底
+    const chksz = this.chksz
+    if (chksz) {
+      try {
+        const songs = await chksz.search(request.provider, request.keywords.trim(), limit, page)
+        return { provider: request.provider, songs, page, hasMore: songs.length >= limit }
+      } catch (error) {
+        console.warn('[ChKSz] search fallback also failed:', errorMessage(error))
       }
     }
 
+    // 两者都失败 → 重试直连以获得正确的错误信息
     const songs = await this.execute(request.provider, () =>
       provider.search(request.keywords.trim(), limit, page),
     )
@@ -145,6 +161,26 @@ export class MusicService {
 
   /** Returns an upstream resource only to Electron main. Main must replace it with a flux-media handle before IPC. */
   async resolvePlayback(request: PlaybackResolveRequest): Promise<MainPlaybackResource> {
+    const forceChksz = request.backend === 'chksz'
+
+    // backend=chksz 时强制走 chksz（用户明确要求），不先试直连
+    if (forceChksz) {
+      const chksz = this.chksz
+      if (!chksz) throw providerError(request.song.provider, new Error('ChKSz 密钥未配置'))
+      try {
+        const chkszResult = await chksz.resolvePlayback(request.song, request.quality)
+        return this.toMainPlaybackResource(chkszResult)
+      } catch (error) {
+        if (error instanceof ChkszApiError) {
+          const toast = chkszErrorToast(error)
+          if (toast) {
+            throw new Error(`ChKSz ${toast.title}：${toast.message}`, { cause: error })
+          }
+        }
+        throw providerError(request.song.provider, error)
+      }
+    }
+
     const provider = this.select(request.song.provider)
     const direct = await this.execute(request.song.provider, () =>
       provider.resolvePlayback(request.song, request.quality),
@@ -221,7 +257,20 @@ export class MusicService {
 
   async getLyrics(request: LyricsRequest): Promise<LyricDocument> {
     const provider = this.select(request.provider)
-    // 有 chksz key 时歌词走 chksz（对无音源歌曲更稳）
+    let directDocument: LyricDocument | null = null
+    let directError: unknown = null
+    try {
+      directDocument = await this.execute(request.provider, () => provider.getLyrics(request.id, request.mid))
+      // 直连优先：网易云 YRC / QQ QRC 的逐字时间不能被 ChKSZ 的普通 LRC 覆盖。
+      if (directDocument.lyric || directDocument.lines.length || directDocument.yrc || directDocument.qrc) {
+        return directDocument
+      }
+    } catch (error) {
+      directError = error
+      console.warn('[Lyrics] direct provider failed, trying ChKSz:', errorMessage(error))
+    }
+
+    // ChKSZ 当前只返回普通 LRC，因此只作为直连无歌词/失败时的兼容兜底。
     const chksz = this.chksz
     if (chksz) {
       try {
@@ -236,7 +285,8 @@ export class MusicService {
         console.warn('[ChKSz] lyrics fallback to direct:', errorMessage(error))
       }
     }
-    return this.execute(request.provider, () => provider.getLyrics(request.id, request.mid))
+    if (directDocument) return directDocument
+    throw directError ?? new Error('歌词暂不可用')
   }
 
   async getAuthStatus(providerId: ProviderId): Promise<MusicAuthResult> {

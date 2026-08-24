@@ -20,7 +20,6 @@ import type {
 } from '@shared/music-contract'
 import {
   chkszKeySchema,
-  chkszSetEnabledSchema,
   discoverRequestSchema,
   likedTracksRequestSchema,
   lyricsRequestSchema,
@@ -46,7 +45,6 @@ import {
   openQQMusicLoginWindow,
 } from './windows/login-windows'
 import type { UpdaterController } from './updater'
-import type { ChkszPreferenceStore } from './chksz-preferences'
 
 const noInputSchema = z.undefined()
 const wallpaperEngineListSchema = z.object({ force: z.optional(z.boolean()) })
@@ -89,8 +87,6 @@ export interface IpcDeps {
   getMusicService: () => MainMusicService
   /** ChKSz 凭据存储：主进程持有，用于聚合 API 的透明解锁层。 */
   getCredentialStore: () => import('../server/types').CredentialStore
-  /** ChKSz 启用状态存储：停用时不清除密钥，只切换 enabled 标记。 */
-  getChkszPreferences: () => ChkszPreferenceStore
   audioHandles: AudioHandleStore
   requestQuit: () => void
   restartApp: () => Promise<void>
@@ -221,25 +217,18 @@ export function registerIpcHandlers(deps: IpcDeps): void {
   )
 
   // ChKSz 聚合 API 密钥管理：密钥在主进程加密存储，renderer 只看到是否存在、不拿到明文。
-  // 启用状态独立存储：停用不清除密钥，只切 enabled 标记。
+  // 配了密钥就自动生效——直连无音源/试听时自动兜底，无需手动开关。
   secureHandle(IPC.chkszGetKey, noInputSchema, deps, () => ({
     configured: Boolean(deps.getCredentialStore().get('chksz')),
-    enabled: deps.getChkszPreferences().enabled,
   }))
   secureHandle(IPC.chkszSetKey, chkszKeySchema, deps, ({ key }) => {
     const trimmed = String(key || '').trim()
     if (!trimmed) throw new Error('INVALID_REQUEST')
     deps.getCredentialStore().set('chksz', trimmed)
-    deps.getChkszPreferences().setEnabled(true)
     return { ok: true as const }
   })
   secureHandle(IPC.chkszClearKey, noInputSchema, deps, () => {
     deps.getCredentialStore().set('chksz', '')
-    deps.getChkszPreferences().setEnabled(true)
-    return { ok: true as const }
-  })
-  secureHandle(IPC.chkszSetEnabled, chkszSetEnabledSchema, deps, ({ enabled }) => {
-    deps.getChkszPreferences().setEnabled(enabled === true)
     return { ok: true as const }
   })
 

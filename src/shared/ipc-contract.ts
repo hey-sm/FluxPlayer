@@ -21,7 +21,6 @@ export const IPC = {
   chkszGetKey: 'flux:chksz:get-key',
   chkszSetKey: 'flux:chksz:set-key',
   chkszClearKey: 'flux:chksz:clear-key',
-  chkszSetEnabled: 'flux:chksz:set-enabled',
   chkszQuotaWarning: 'flux:chksz:quota-warning',
   restartApp: 'flux:app:restart',
   updaterGetState: 'flux:updater:get-state',

@@ -90,13 +90,13 @@ export function createLyricsMaterial(color: THREE.ColorRepresentation): LyricsMa
            0.17,
            abs(uHighlightProgress - vLyricHighlightCoordinate)
          )) * uHighlightActivity;
-         diffuseColor.rgb = mix(diffuseColor.rgb, uHighlightColor, lyricFill * 0.82);
-         diffuseColor.rgb += uHighlightColor * lyricBeam * 0.42;`,
+         diffuseColor.rgb = mix(diffuseColor.rgb, uHighlightColor, lyricFill * 0.95);
+         diffuseColor.rgb += uHighlightColor * lyricBeam * 0.55;`,
       )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
-         totalEmissiveRadiance += uHighlightColor * lyricBeam * 0.32 * vGlyphAppear;`,
+         totalEmissiveRadiance += uHighlightColor * lyricBeam * 0.45 * vGlyphAppear;`,
       )
   }
 

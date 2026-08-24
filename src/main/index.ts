@@ -20,7 +20,6 @@ import {
   registerProtocolHandlers,
 } from './protocols'
 import { createMainMusicService } from './music-service'
-import { ChkszPreferenceStore } from './chksz-preferences'
 
 const APP_NAME = 'FluxPlayer'
 const APP_USER_MODEL_ID = 'com.fluxplayer.app'
@@ -55,8 +54,7 @@ let runtimeCleaned = false
 let shutdownPromise: Promise<void> | null = null
 const perfGovernor = new PerfGovernor()
 const credentialStore = new SafeCredentialStore()
-const chkszPreferences = new ChkszPreferenceStore(app.getPath('userData'))
-const musicService = createMainMusicService(credentialStore, chkszPreferences)
+const musicService = createMainMusicService(credentialStore)
 const audioHandles = new AudioHandleStore()
 
 function isTrustedDisplayMediaRequest(request: Electron.DisplayMediaRequestHandlerHandlerRequest): boolean {
@@ -394,7 +392,6 @@ if (!gotSingleInstanceLock) {
         getUpdaterFallbackState: () => initialUpdaterState,
         getMusicService: () => musicService,
         getCredentialStore: () => credentialStore,
-        getChkszPreferences: () => chkszPreferences,
         audioHandles,
         requestQuit,
         restartApp,

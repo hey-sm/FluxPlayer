@@ -1,14 +1,10 @@
 import type { MainMusicService, MainPlaybackResolution } from './ipc'
 import type { CredentialStore } from '@server/types'
 import { MusicService } from '@server/music'
-import type { ChkszPreferenceStore } from './chksz-preferences'
 
 /** Adapts the provider service to the Electron-only playback source boundary. */
-export function createMainMusicService(
-  credentials: CredentialStore,
-  chkszPreferences?: ChkszPreferenceStore,
-): MainMusicService {
-  const service = new MusicService(credentials, chkszPreferences)
+export function createMainMusicService(credentials: CredentialStore): MainMusicService {
+  const service = new MusicService(credentials)
   return {
     search: (request) => service.search(request),
     resolvePlayback: (request): Promise<MainPlaybackResolution> => service.resolvePlayback(request),

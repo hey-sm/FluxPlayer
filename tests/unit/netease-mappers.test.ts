@@ -66,14 +66,14 @@ describe('classifyNeteasePlaybackRestriction', () => {
 })
 
 describe('normalizeLoginInfo', () => {
-  it('vipType>=10 判定 SVIP', () => {
+  it('vipType>0 判定 VIP（SVIP 需 vip_info API 判断，不再从 vipType 推断）', () => {
     const info = normalizeLoginInfo({ userId: 1, nickname: 'N', vipType: 11 }, null)
     expect(info).toMatchObject({
       loggedIn: true,
       isVip: true,
-      isSvip: true,
-      vipLevel: 'svip',
-      vipLabel: 'SVIP',
+      isSvip: false,
+      vipLevel: 'vip',
+      vipLabel: 'VIP',
     })
   })
   it('无 userId → 未登录', () => {

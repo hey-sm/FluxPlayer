@@ -4,6 +4,7 @@ import {
   estimateWordTimings,
   mergeLyricLines,
   parseLrc,
+  parseQrc,
   parseYrc,
   type BuildLyricLinesOptions,
   type LegacyLyrics,
@@ -20,7 +21,9 @@ export function buildLyricLines(
 ): LyricLine[] {
   const regular = parseLrc(lyricString(legacy.lyric), options)
   const enhanced = parseYrc(lyricString(legacy.yrc), options)
-  const original = options.preferYrc === false || enhanced.length === 0 ? regular : enhanced
+  const qrc = parseQrc(lyricString(legacy.qrc), options)
+  const original =
+    qrc.length > 0 ? qrc : options.preferYrc === false || enhanced.length === 0 ? regular : enhanced
   const translated = parseLrc(lyricString(legacy.tlyric), options)
   const hasOriginalText = original.some((line) => line.text.trim())
 

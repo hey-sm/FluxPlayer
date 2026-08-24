@@ -19,6 +19,7 @@ const expectedEndpoints = [
   'playlist_track_all',
   'playlist_detail',
   'logout',
+  'vip_info',
 ] as const
 
 describe('Netease SDK endpoint allowlist', () => {

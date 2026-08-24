@@ -38,7 +38,7 @@ const EMPTY_LOGIN: NeteaseLoginInfo = {
   isVip: false,
   isSvip: false,
   vipLabel: '无VIP',
-}
+} as const
 
 function playbackRestriction(
   category: PlaybackRestriction['category'],
@@ -196,14 +196,38 @@ function normalizeVip(profileValue: unknown, accountValue: unknown, extraValue: 
   const account = asRecord(accountValue)
   const extra = asRecord(extraValue)
   const vipType = numberValue(profile.vipType ?? account.vipType ?? extra.vipType)
-  const isSvip = vipType >= 10
   const isVip = vipType > 0
+  // vipType=11 is 黑胶VIP, not SVIP. SVIP is determined separately via vip_info API.
   return {
     vipType,
-    vipLevel: isSvip ? 'svip' : isVip ? 'vip' : 'none',
+    vipLevel: isVip ? 'vip' : 'none',
     isVip,
+    isSvip: false,
+    vipLabel: isVip ? 'VIP' : '无VIP',
+  }
+}
+
+/** Merge vip_info API response into login info for accurate VIP/SVIP classification. */
+function mergeVipInfo(base: NeteaseLoginInfo, vipData: unknown): NeteaseLoginInfo {
+  const data = asRecord(vipData)
+  const associator = asRecord(data.associator)
+  const musicPackage = asRecord(data.musicPackage)
+  const assocExpire = numberValue(associator.expireTime)
+  const now = Date.now()
+  const hasActiveVip = assocExpire > now
+  const iconUrl = stringValue(associator.iconUrl || data.redVipLevelIcon)
+
+  // musicPackage.vipCode >= 300 indicates SVIP (associator alone is 黑胶VIP=100)
+  const musicVipCode = numberValue(musicPackage.vipCode)
+  const isSvip = hasActiveVip && musicVipCode >= 300
+
+  return {
+    ...base,
+    isVip: hasActiveVip || base.isVip,
     isSvip,
-    vipLabel: isSvip ? 'SVIP' : isVip ? 'VIP' : '无VIP',
+    vipLevel: isSvip ? 'svip' : hasActiveVip ? 'vip' : base.vipLevel,
+    vipLabel: isSvip ? 'SVIP' : hasActiveVip ? 'VIP' : '无VIP',
+    vipIcon: iconUrl || undefined,
   }
 }
 
@@ -263,6 +287,7 @@ function toAuthResult(info: NeteaseLoginInfo): MusicAuthResult {
     isVip: info.isVip,
     isSvip: info.isSvip,
     vipLabel: info.vipLabel,
+    vipIcon: info.vipIcon,
     hasCookie: info.hasCookie,
     pendingProfile: info.pendingProfile,
   }
@@ -289,21 +314,30 @@ export class NeteaseProvider {
   }
 
   hasSvip(info: NeteaseLoginInfo): boolean {
-    return Boolean(
-      info.loggedIn && (info.vipLevel === 'svip' || info.isSvip || Number(info.vipType || 0) >= 10),
-    )
+    return Boolean(info.loggedIn && (info.isSvip || info.vipLevel === 'svip'))
   }
 
   async loginInfo(): Promise<NeteaseLoginInfo> {
     const cookie = this.cookie
     if (!cookie) return { ...EMPTY_LOGIN }
 
+    let info: NeteaseLoginInfo | null = null
+
     try {
       const status = await ncm.login_status({ cookie, timestamp: Date.now() })
       const body = asRecord(status.body)
       const data = asRecord(body.data ?? body)
-      const info = normalizeLoginInfo(data.profile ?? body.profile, data.account ?? body.account, data)
-      if (info.loggedIn) return info
+      info = normalizeLoginInfo(data.profile ?? body.profile, data.account ?? body.account, data)
+      if (info.loggedIn) {
+        // Fetch accurate VIP info (iconUrl, expireTime, SVIP vs VIP)
+        try {
+          const vipRes = await ncm.vip_info({ cookie, timestamp: Date.now() })
+          info = mergeVipInfo(info, at(vipRes, 'body', 'data'))
+        } catch (error) {
+          console.warn('[NeteaseAuth] vip_info failed:', errorMessage(error))
+        }
+        return info
+      }
       if (isAuthInvalidPayload(status)) {
         this.saveCookie('')
         return { ...EMPTY_LOGIN, hasCookie: false, credentialInvalidated: true }
@@ -315,8 +349,16 @@ export class NeteaseProvider {
     try {
       const account = await ncm.user_account({ cookie, timestamp: Date.now() })
       const body = asRecord(account.body)
-      const info = normalizeLoginInfo(body.profile, body.account, body)
-      if (info.loggedIn) return info
+      info = normalizeLoginInfo(body.profile, body.account, body)
+      if (info.loggedIn) {
+        try {
+          const vipRes = await ncm.vip_info({ cookie, timestamp: Date.now() })
+          info = mergeVipInfo(info, at(vipRes, 'body', 'data'))
+        } catch (error) {
+          console.warn('[NeteaseAuth] vip_info failed:', errorMessage(error))
+        }
+        return info
+      }
       if (isAuthInvalidPayload(account)) {
         this.saveCookie('')
         return { ...EMPTY_LOGIN, hasCookie: false, credentialInvalidated: true }

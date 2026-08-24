@@ -1,17 +1,23 @@
 import { useEffect, useMemo } from 'react'
 import { usePlaybackProgress, usePlayer } from '../../stores/player'
-import { useThemeStore } from '../../theme'
+import { DEFAULT_ACCENT_COLOR, useThemeStore } from '../../theme'
 import { stageLyricsChannel } from '../../visual/scene'
+import { useEnergySync, useMergedEnergyLines } from './energy-sync'
 import { useLyrics } from './query'
 
 export function StageLyricsSynchronizer(): null {
   const current = usePlayer((state) => state.current)
-  const position = usePlaybackProgress((state) => state.position)
+  const position = usePlaybackProgress((state) => state.rawPosition)
   const accentColor = useThemeStore((state) =>
     state.lyricsColorLinked ? state.visualParams.accent : state.lyricsColor,
   )
   const lyrics = useLyrics(current)
-  const lines = useMemo(() => lyrics.data?.lines ?? [], [lyrics.data?.lines])
+  const trackKey = lyrics.trackKey
+  const baseLines = useMemo(() => lyrics.data?.lines ?? [], [lyrics.data?.lines])
+
+  // Streaming audio energy analysis: refine estimated word timings.
+  useEnergySync(trackKey, baseLines)
+  const lines = useMergedEnergyLines(trackKey, baseLines)
 
   useEffect(() => {
     stageLyricsChannel.set({
@@ -29,7 +35,7 @@ export function StageLyricsSynchronizer(): null {
         trackKey: null,
         lines: [],
         position: 0,
-        accentColor: '#7c8cff',
+        accentColor: DEFAULT_ACCENT_COLOR,
         visible: false,
       }),
     [],

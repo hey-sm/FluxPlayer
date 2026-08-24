@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { Text } from 'three-text'
 import type { LyricLine, LyricWord } from '@shared/models'
+import { DEFAULT_ACCENT_COLOR } from '@/theme/classic'
 import { gsap } from '../../motion'
 import {
   EMPTY_LYRICS_3D_STATE,
@@ -29,7 +30,7 @@ const INACTIVE_SCALE = 0.34
 const MIN_INACTIVE_SCALE = 0.26
 const MAX_LINE_WIDTH = 7.2
 const EXTRUDE_DEPTH = 0.095
-const ACTIVE_COLOR = '#8fffe0'
+const ACTIVE_COLOR = DEFAULT_ACCENT_COLOR
 const INACTIVE_COLOR = '#c4ced2'
 const PENDING_COLOR = '#7f8d91'
 const GEOMETRY_CACHE_LIMIT = 48
@@ -230,10 +231,10 @@ export class Lyrics3DMeshLayer {
       const active = distance === 0 && !line.exiting
 
       const material = line.handle.material
-      this.activeColor.copy(this.accentColor).lerp(this.whiteColor, 0.28)
+      this.activeColor.copy(this.accentColor).lerp(this.whiteColor, 0.12)
       material.color.copy(this.inactiveColor).lerp(this.pendingColor, line.activity)
       material.emissive.copy(this.accentColor)
-      material.emissiveIntensity = 0.025 + line.activity * 0.055
+      material.emissiveIntensity = 0.04 + line.activity * 0.08
       material.opacity = line.opacity
       // 只有完全不透明的当前句写深度：正在淡入/淡出的行一旦写深度，就会把与它
       // 空间重叠的另一行挖掉，切句瞬间看到的"残影"就是这么来的。
@@ -472,7 +473,7 @@ export class Lyrics3DMeshLayer {
 
   private addLine(entry: Readonly<DesiredLine>, cached: CachedGeometry): void {
     const active = entry.relativeIndex === 0
-    const color = active ? this.activeColor.copy(this.accentColor).lerp(this.whiteColor, 0.28) : this.inactiveColor
+    const color = active ? this.activeColor.copy(this.accentColor).lerp(this.whiteColor, 0.12) : this.inactiveColor
     const handle = createLyricsMaterial(color)
     handle.material.opacity = 0
     handle.setWeight(LYRICS_FONT_WEIGHT)

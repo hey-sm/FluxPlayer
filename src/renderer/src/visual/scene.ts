@@ -1,3 +1,4 @@
+import { DEFAULT_ACCENT_COLOR } from '@/theme/classic'
 import type { StageLyricsFrame } from './lyrics3d-mesh/state'
 
 export type VisualSceneListener<T> = (snapshot: Readonly<T>) => void
@@ -32,6 +33,6 @@ export const stageLyricsChannel = new VisualSceneChannel<StageLyricsFrame>({
   trackKey: null,
   lines: [],
   position: 0,
-  accentColor: '#7c8cff',
+  accentColor: DEFAULT_ACCENT_COLOR,
   visible: false,
 })

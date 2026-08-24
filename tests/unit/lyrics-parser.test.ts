@@ -5,6 +5,7 @@ import {
   mergeLyricLines,
   parseLrc,
   parseLyricText,
+  parseQrc,
   parseYrc,
   withLyricLines,
 } from '@shared/lyrics'
@@ -70,6 +71,83 @@ describe('LRC parsing', () => {
       },
     ])
     expect(parseLyricText(yrc)).toEqual(parseYrc(yrc))
+  })
+
+  it('parses NetEase JSON metadata lines mixed with YRC format', () => {
+    const yrc = [
+      '{"t":0,"c":[{"tx":"作词: "},{"tx":"周杰伦"}]}',
+      '{"t":1000,"c":[{"tx":"作曲: "},{"tx":"周杰伦"}]}',
+      '[2000,1800](2000,400,0)你(2400,500,0)好',
+      '[500,1000](500,500,0)开场',
+    ].join('\n')
+    const result = parseYrc(yrc)
+    // Lines are sorted by time: 0s, 0.5s, 1s, 2s
+    expect(result.length).toBe(4)
+    expect(result[0]).toEqual({ time: 0, text: '作词: 周杰伦' })
+    expect(result[1].time).toBe(0.5)
+    expect(result[1].text).toBe('开场')
+    expect(result[1].words?.length).toBe(2)
+    expect(result[2]).toEqual({ time: 1, text: '作曲: 周杰伦' })
+    expect(result[3].time).toBe(2)
+    expect(result[3].words?.length).toBe(2)
+  })
+
+  it('parses NetEase JSON metadata lines in LRC format', () => {
+    const lrc = [
+      '{"t":0,"c":[{"tx":"作词: "},{"tx":"周杰伦"}]}',
+      '{"t":1000,"c":[{"tx":"作曲: "},{"tx":"周杰伦"}]}',
+      '[00:02]你好',
+      '[00:05]世界',
+    ].join('\n')
+    const result = parseLrc(lrc)
+    expect(result.length).toBe(4)
+    expect(result[0]).toEqual({ time: 0, text: '作词: 周杰伦' })
+    expect(result[1]).toEqual({ time: 1, text: '作曲: 周杰伦' })
+    expect(result[2]).toEqual({ time: 2, text: '你好' })
+    expect(result[3]).toEqual({ time: 5, text: '世界' })
+  })
+
+  it('parses QQ QRC XML and preserves absolute per-word timing', () => {
+    const qrc =
+      '<?xml version="1.0"?><QrcInfos><LyricInfo><Lyric_1 LyricContent="[2000,1000]你(2000,400)好(2400,600)&#13;&#10;" /></LyricInfo></QrcInfos>'
+    expect(parseQrc(qrc)).toEqual([
+      {
+        time: 2,
+        text: '你好',
+        words: [
+          { text: '你', time: 2, duration: 0.4 },
+          { text: '好', time: 2.4, duration: 0.6 },
+        ],
+      },
+    ])
+  })
+
+  it('accepts QQ QRC embedded payload without the XML wrapper', () => {
+    const input = '[500,800]开(500,300)场(800,500)'
+    expect(parseQrc(input)).toMatchObject([
+      {
+        time: 0.5,
+        text: '开场',
+        words: [
+          { text: '开', time: 0.5, duration: 0.3 },
+          { text: '场', time: 0.8, duration: 0.5 },
+        ],
+      },
+    ])
+    expect(parseLyricText(input)).toEqual(parseQrc(input))
+  })
+
+  it('prefers QRC over YRC and estimated LRC timings', () => {
+    const lines = buildLyricLines({
+      lyric: '[00:02]你好',
+      yrc: '[2000,1000](2000,1000,0)你好',
+      qrc: '[2000,1000]你(2000,200)好(2200,800)',
+      tlyric: '',
+    })
+    expect(lines[0].words).toEqual([
+      { text: '你', time: 2, duration: 0.2 },
+      { text: '好', time: 2.2, duration: 0.8 },
+    ])
   })
 })
 

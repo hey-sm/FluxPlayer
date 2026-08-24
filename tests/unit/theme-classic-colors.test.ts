@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLASSIC_GOLD_THEME } from '@renderer/theme/classic'
+import { CLASSIC_GOLD_THEME, DEFAULT_ACCENT_COLOR } from '@renderer/theme/classic'
 
 describe('classic gold theme', () => {
   it('owns colors and typography without duplicating global glass state', () => {
@@ -7,7 +7,7 @@ describe('classic gold theme', () => {
       background: '#000000',
       text: '#ffffff',
       textMuted: '#8a9099',
-      accent: '#00f5d4',
+      accent: DEFAULT_ACCENT_COLOR,
       danger: '#d95b67',
       panelSurface: '#000000',
       panelBorder: '#ffffff',

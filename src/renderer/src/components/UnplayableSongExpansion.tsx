@@ -82,7 +82,8 @@ function songMatchScore(original: { name: string; artist: string }, candidate: U
 
 interface UnplayableSongExpansionProps {
   song: UnifiedSong
-  onPlay(song: UnifiedSong): void
+  /** 播放回调，第二个参数指定解析后端：chksz tab 的结果强制走 chksz，其余走直连。 */
+  onPlay(song: UnifiedSong, backend?: 'direct' | 'chksz'): void
 }
 
 /**
@@ -100,14 +101,13 @@ export function UnplayableSongExpansion({ song, onPlay }: UnplayableSongExpansio
   const sources = useMemo(() => availableSources(song.provider, chkszActive), [song.provider, chkszActive])
   const [selectedSource, setSelectedSource] = useState<SearchSource>(sources[0])
 
-  // 检查 chksz 是否已配置且已启用
+  // 检查 chksz 是否已配置
   useEffect(() => {
     let active = true
-    void window.fluxDesktop?.chksz?.getStatus().then(({ configured, enabled }) => {
+    void window.fluxDesktop?.chksz?.getStatus().then(({ configured }) => {
       if (!active) return
-      const isActive = configured && enabled
-      setChkszActive(isActive)
-      if (isActive) setSelectedSource('chksz')
+      setChkszActive(configured)
+      if (configured) setSelectedSource('chksz')
     })
     return () => {
       active = false
@@ -214,7 +214,7 @@ export function UnplayableSongExpansion({ song, onPlay }: UnplayableSongExpansio
               key={`${candidate.provider}:${candidate.id}`}
               type="button"
               className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--flux-accent-soft)]"
-              onClick={() => onPlay(candidate)}
+              onClick={() => onPlay(candidate, selectedSource === 'chksz' ? 'chksz' : 'direct')}
             >
               {candidate.cover ? (
                 <img

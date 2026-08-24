@@ -9,18 +9,17 @@ export interface ColorSwatch {
   value: string
 }
 
-/** Tailwind CSS default palette, shade 500. */
+/** Tailwind CSS palette, shade 500. */
 export const TAILWIND_COLOR_SWATCHES: readonly ColorSwatch[] = Object.freeze([
-  { name: 'red-500', label: '红色', value: '#ef4444' },
-  { name: 'orange-500', label: '橙色', value: '#f97316' },
-  { name: 'amber-500', label: '琥珀', value: '#f59e0b' },
-  { name: 'green-500', label: '绿色', value: '#22c55e' },
-  { name: 'cyan-500', label: '青色', value: '#06b6d4' },
-  { name: 'blue-500', label: '蓝色', value: '#3b82f6' },
-  { name: 'indigo-500', label: '靛蓝', value: '#6366f1' },
-  { name: 'violet-500', label: '紫罗兰', value: '#8b5cf6' },
-  { name: 'fuchsia-500', label: '品红', value: '#d946ef' },
-  { name: 'rose-500', label: '玫红', value: '#f43f5e' },
+  { name: 'bg-red-500', label: '红色', value: '#ef4444' },
+  { name: 'bg-amber-500', label: '琥珀', value: '#f59e0b' },
+  { name: 'bg-green-500', label: '绿色', value: '#22c55e' },
+  { name: 'bg-blue-500', label: '蓝色', value: '#3b82f6' },
+  { name: 'bg-indigo-500', label: '靛蓝', value: '#6366f1' },
+  { name: 'bg-violet-500', label: '紫罗兰', value: '#8b5cf6' },
+  { name: 'bg-purple-500', label: '紫色', value: '#a855f7' },
+  { name: 'bg-pink-500', label: '粉色', value: '#ec4899' },
+  { name: 'bg-slate-500', label: '石板', value: '#64748b' },
 ])
 
 const colorInputClass = [
@@ -91,7 +90,7 @@ export function ColorPicker({
         />
       </div>
       {swatches.length ? (
-        <div className="grid grid-cols-10 gap-1.5" aria-label="Tailwind 默认色" data-color-swatches="">
+        <div className="flex flex-wrap gap-1" aria-label="Tailwind 色板" data-color-swatches="">
           {swatches.map((swatch) => {
             const selected = swatch.value.toLowerCase() === value.toLowerCase()
             return (
@@ -99,8 +98,8 @@ export function ColorPicker({
                 key={swatch.name}
                 type="button"
                 className={cn(
-                  'grid min-w-0 cursor-pointer place-items-center rounded-[7px] border p-0 text-white',
-                  'aspect-square border-[color-mix(in_srgb,var(--swatch-color)_70%,white_30%)] bg-[var(--swatch-color)]',
+                  'grid size-6 cursor-pointer place-items-center rounded-[5px] border p-0 text-white',
+                  'border-[color-mix(in_srgb,var(--swatch-color)_70%,white_30%)] bg-[var(--swatch-color)]',
                   'shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-[border-color,filter] duration-[var(--motion-duration-fast)]',
                   'hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2',
                   'focus-visible:outline-[color-mix(in_srgb,var(--flux-accent)_72%,white_8%)] motion-reduce:transition-none',
@@ -114,7 +113,7 @@ export function ColorPicker({
                 onClick={() => onChange(swatch.value)}
               >
                 {selected ? (
-                  <Check className="size-3.5 drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]" aria-hidden="true" />
+                  <Check className="size-3 drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]" aria-hidden="true" />
                 ) : null}
               </button>
             )
