@@ -13,7 +13,7 @@ pnpm dev              # electron-vite 开发（Renderer CSS/TSX HMR）
 pnpm start            # pnpm dev 的便捷别名
 pnpm build            # 三进程构建到 out/
 pnpm preview          # electron-vite preview（读取 out/，无源码热更新）
-pnpm typecheck        # 两套 tsconfig 都要过：tsconfig.node.json + tsconfig.web.json
+pnpm typecheck        # 三套 tsconfig 都要过：tsconfig.node.json + tsconfig.web.json + tsconfig.test.json
 pnpm lint             # oxlint
 pnpm format           # oxfmt --check（校验）
 pnpm format:write     # oxfmt（写入）
@@ -31,7 +31,7 @@ pnpm vitest run -t "部分用例名"                          # 按名字过滤
 pnpm exec playwright test tests/e2e/player.spec.ts     # 单个 e2e（需先 pnpm build）
 ```
 
-注意：改动主进程/preload/server/shared 后必须 `pnpm typecheck` —— 它跑 node 和 web 两套配置，两个 tsconfig 只覆盖各自的 src 子树。`.npmrc` 已指向 npmmirror 镜像。
+注意：改动主进程/preload/server/shared 后必须跑 typecheck —— 它串行跑 node / web / test 三套配置，各 tsconfig 只覆盖各自的 src 子树，只跑一套会漏掉另一侧的类型错误。按影响面只跑受影响的那套即可（见下文验证序列）。`.npmrc` 已指向 npmmirror 镜像。
 
 ## Architecture
 
@@ -88,7 +88,7 @@ chksz 的 `id` 是 `'chksz' as const` 但它**不进 `ProviderId`**，别在 `se
 
 ### 改动后的验证序列
 
-改完一类文件后**先跑对应的边界/单元测试**，确认没破坏不变量，再跑全量 `pnpm test` + `pnpm typecheck` + `pnpm lint`。测试按改动区域分组（区域 → 必跑的单测文件，路径相对 `tests/unit/`）：
+改完一类文件后**先跑对应的边界/单元测试**，确认没破坏不变量。测试按改动区域分组（区域 → 必跑的单测文件，路径相对 `tests/unit/`）：
 
 | 改动区域                                                | 先跑这些测试                                                                                                                                                                    | 理由                                                            |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
@@ -114,7 +114,7 @@ chksz 的 `id` 是 `'chksz' as const` 但它**不进 `ProviderId`**，别在 `se
 
 跑单个文件：`pnpm vitest run tests/unit/<file>.test.ts`。快照需更新时先确认改动是有意的，再 `pnpm vitest run tests/unit/<file>.test.ts -u`。
 
-**全量验证**（提交前最低要求）：`pnpm typecheck`（必跑两套 tsconfig）→ `pnpm lint` → `pnpm test`。改了渲染层交互的还要本地跑 `pnpm test:e2e`（约 50s，CI 不跑 e2e）。
+**按影响面验证**（别无脑跑全量）：lint + format 全量（快）；typecheck 只跑改动触及的那套 tsconfig（改 renderer 跑 `tsconfig.web.json`，改 main/server/preload 跑 `tsconfig.node.json`，改 shared 才跑两套）；test 只跑上面的区域测试，只有跨区域改动才跑 `pnpm test` 全量。改了渲染层交互才跑 `pnpm test:e2e`（约 50s，CI 不跑 e2e）。完整判断见 [docs/development-workflow.md](docs/development-workflow.md)。
 
 ### 约束
 
@@ -126,4 +126,4 @@ chksz 的 `id` 是 `'chksz' as const` 但它**不进 `ProviderId`**，别在 `se
 
 ### 开发工作流
 
-改动提交前的验证序列、提交规范、文档持续更新对照表、AI 多 agent 协作约定见 [docs/development-workflow.md](docs/development-workflow.md)。改完代码先按上面的"改动后的验证序列"跑区域测试，再 `pnpm typecheck` → `pnpm lint` → `pnpm test`。改了架构不变量或新增 IPC / provider / 测试守卫，同步更新本文件和对应文档。
+改动提交前的验证序列、提交规范、文档持续更新对照表、AI 多 agent 协作约定见 [docs/development-workflow.md](docs/development-workflow.md)。改完代码先按上面的"改动后的验证序列"跑区域测试，再按影响面跑 typecheck（只跑受影响的 tsconfig）+ lint + format，跨区域改动才跑全量 test。改了架构不变量或新增 IPC / provider / 测试守卫，同步更新本文件和对应文档。

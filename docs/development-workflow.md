@@ -4,13 +4,15 @@
 
 ## 提交前的验证序列
 
-**任何改动提交前都必须跑完这条链**，顺序不能反：
+**按改动的影响面跑，不跑不会受影响的那部分**。顺序：区域测试 → 受影响的 typecheck → lint →（按需）全量 test。
 
 ```
-① 区域边界测试  →  ② typecheck（两套 tsconfig）  →  ③ lint  →  ④ 全量 test  →  ⑤（可选）e2e
+① 区域测试  →  ② typecheck（只跑受影响的那套）  →  ③ lint + format  →  ④ 全量 test（仅跨区域改动时）
 ```
 
-### ① 区域边界测试（先跑，快速定位）
+核心判断：改动的文件属于哪个 tsconfig 子树，就只跑那套 typecheck；改动的区域有对应测试，就只跑那些测试。**不要每次都无脑跑全量 typecheck + 全量 test**——那是在跑不会受影响的代码。
+
+### ① 区域测试（先跑，快速定位）
 
 改动落到哪一类文件，就先跑对应的边界/单元测试。完整对照表见 [CLAUDE.md → 改动后的验证序列](../CLAUDE.md)。这里列出最高频的几条：
 
@@ -22,36 +24,49 @@
 | `src/renderer/src/playback/engine.ts`          | `pnpm vitest run tests/unit/player-failure.test.ts tests/unit/player-modes.test.ts tests/unit/player-progress-isolation.test.ts`         |
 | `src/renderer/src/visual/` 或 `perf/ticker.ts` | `pnpm vitest run tests/unit/visual-scene.test.ts tests/unit/perf-ticker.test.ts`                                                         |
 
-### ② typecheck（强制，每次）
+### ② typecheck（只跑受影响的那套）
+
+三套 tsconfig 各管不同的 src 子树，只跑改动触及的那套（或两套）：
+
+| 改了什么                                  | 跑哪套                               |
+| ----------------------------------------- | ------------------------------------ |
+| `src/main` / `src/preload` / `src/server` | `tsc --noEmit -p tsconfig.node.json` |
+| `src/renderer/**`                         | `tsc --noEmit -p tsconfig.web.json`  |
+| `tests/**`                                | `tsc --noEmit -p tsconfig.test.json` |
+| `src/shared`（双方都 import）             | 跑 `node` + `web` 两套               |
 
 ```bash
-pnpm typecheck
+# 单套（大多数情况）
+pnpm exec tsc --noEmit -p tsconfig.web.json
+
+# 改了 shared 或想一次跑完
+pnpm typecheck   # 串行跑三套
 ```
 
-它跑 `tsconfig.node.json` + `tsconfig.web.json` + `tsconfig.test.json` 三套。只跑一套会漏掉另一侧的类型错误。改了 main / preload / server / shared / tests 任一处都必须跑。
+### ③ lint + format（全量，快）
 
-### ③ lint
+oxlint + oxfmt 跑全仓库约 0.1s，无脑全量即可：
 
 ```bash
 pnpm lint
-pnpm format            # 校验格式
-# 格式不对时：
-pnpm format:write
+pnpm format            # 校验格式，不过时跑 pnpm format:write
 ```
 
-### ④ 全量单测
+### ④ 全量单测（仅跨区域改动时）
+
+**只在改动跨越多个区域、或改动 `src/shared` 这种被多处依赖的代码时**才跑 `pnpm test`。单区域改动跑完 ① 的区域测试就够了。
 
 ```bash
-pnpm test
+pnpm test   # 仅当改动跨越多个区域时
 ```
 
-### ⑤ e2e（改了渲染层交互时）
+### ⑤ e2e（仅改了渲染层交互时）
 
 ```bash
 pnpm test:e2e   # 先 build 再跑 playwright，约 50s，CI 不跑
 ```
 
-e2e 起真实 Electron 做像素与动画断言，CI runner 没有 GPU 所以不在 CI 跑——这步只能本地做。
+e2e 起真实 Electron 做像素与动画断言，CI runner 没有 GPU 所以不在 CI 跑——这步只能本地做。改了纯逻辑（server / shared / 类型）不需要跑。
 
 ## 提交规范
 
