@@ -31,6 +31,22 @@ import {
 import { QQSession, normalizeQQCookieInput } from './session'
 
 /**
+ * QQ provider 段落地图（行号随改动漂移，按方法名定位更稳）：
+ *   1. 常量与工具（~50-150）  trial 时长 / playlist 分页 / audio probe 超时 / 货架 id / restriction 工厂
+ *   2. 限制分类（~94-150）     classifyQQPlaybackRestriction：把上游 fee/code/freeTrial 映射成 PlaybackRestriction
+ *   3. QQProvider 类（~174-1100）会话管理 + 所有业务方法
+ *      - 会话与凭据（~184-238） cookie / session / saveCookie / acceptCookie* / profileFromBody
+ *      - 登录与身份（~323-367） loginInfo / authStatus（60s 缓存）
+ *      - 搜索（~368-518）     smartboxSearch / songDetail / search（limit+page 分页）
+ *      - 播放地址（~519-679）  songUrl（quality 候选链 + probe 兜底）
+ *      - 播放解析（~680-687）  resolvePlayback（songUrl 的上层封装）
+ *      - 歌词（~688-785）     lyric / getLyrics（QRC 3DES 解密 + XML 抽取）
+ *      - 歌单（~786-988）     userPlaylists / likedTracks / playlistTracks / discover
+ *      - 登出（~1097）        logout
+ * 映射逻辑在 ./mappers，QRC 解密在 ./qrc-decrypt，HTTP 在 ./client，会话在 ./session。
+ */
+
+/**
  * Extract QRC lyric text from the decrypted XML wrapper.
  * The 3DES-decrypted QRC data is XML like:
  *   <?xml ...?><QrcInfos>...<Lyric_1 LyricType="1" LyricContent="..." />...</QrcInfos>

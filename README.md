@@ -12,29 +12,6 @@
 
 ---
 
-## 目录
-
-- [简介](#简介)
-- [核心特性](#核心特性)
-- [技术栈](#技术栈)
-- [快速开始](#快速开始)
-- [可用脚本](#可用脚本)
-- [项目结构](#项目结构)
-- [架构总览](#架构总览)
-  - [进程分层](#进程分层)
-  - [数据流：一次播放请求的完整路径](#数据流一次播放请求的完整路径)
-  - [安全边界](#安全边界)
-  - [播放引擎](#播放引擎)
-  - [视觉系统](#视觉系统)
-  - [性能治理](#性能治理)
-- [Provider 抽象](#provider-抽象)
-- [测试策略](#测试策略)
-- [构建与发布](#构建与发布)
-- [开发约定](#开发约定)
-- [许可证](#许可证)
-
----
-
 ## 简介
 
 FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云音乐和 QQ 音乐两个 provider 聚合到统一的搜索、歌单、播放体验里，并使用 Three.js 呈现动态背景与同步 3D 歌词。
@@ -46,7 +23,7 @@ FluxPlayer 是一款基于 Electron 的桌面音乐播放器。它把网易云�
 - **双 provider 聚合**：网易云 / QQ 音乐统一搜索、歌单、我喜欢、逐字歌词。
 - **多档音质**：超清母带 / 高清臻音 / 无损 / 极高 / 标准，跨 provider 归一化。
 - **明确的失败反馈**：播放地址不可用时保留当前队列并展示原因，由用户手动重试或切歌；试听片段在 30 秒处截断。
-- **动态背景与 3D 歌词**：内置 HTML Light 吊灯、水纹焦散与雨窗背景，歌词继续使用 Three.js 网格渲染并支持旋转、拖拽和缩放。
+- **动态背景与 3D 歌词**：内置 HTML Light 吊灯、水纹焦散与雨窗背景，歌词使用 Three.js 网格渲染并支持旋转、拖拽和缩放。
 - **全局液态玻璃**：左右栏、PlayerBar、搜索、设置与浮层统一使用可实时调节和持久化的 react-glass-ui 配置。
 - **自定义背景**：支持导入本地图片/视频，以及 Wallpaper Engine 视频项目。
 - **系统媒体集成**：Media Session（系统媒体控制中心 / 键盘媒体键）。
@@ -79,35 +56,31 @@ pnpm dev              # 启动开发（Electron + HMR）
 
 首次登录：在设置面板里分别登录网易云 / QQ 账号（弹出各自的官方登录窗口，凭据由主进程加密保存）。
 
-## 可用脚本
+> **Agent skills**：项目用的 AI 编码 skill 声明在 [`skills-lock.json`](skills-lock.json)（4 个：electron-development / gsap-core / ui-ux-pro-max / vercel-react-best-practices）。`.agents/skills/` 是安装产物，已从仓库排除——clone 后由各自的 agent 工具按锁文件重建，如同 `pnpm install` 按 lockfile 重建 `node_modules`。
 
-| 命令                                | 说明                                                               |
-| ----------------------------------- | ------------------------------------------------------------------ |
-| `pnpm dev` / `pnpm start`           | electron-vite 开发模式，渲染层 CSS/TSX HMR                         |
-| `pnpm build`                        | 构建 main / preload / renderer 三进程产物到 `out/`                 |
-| `pnpm preview`                      | 启动时执行一次构建后预览静态 `out/` 产物，不提供运行时源码热更新   |
-| `pnpm typecheck`                    | 类型检查（**同时**跑 `tsconfig.node.json` 与 `tsconfig.web.json`） |
-| `pnpm lint`                         | oxlint 静态检查                                                    |
-| `pnpm format` / `pnpm format:write` | oxfmt 校验 / 写入                                                  |
-| `pnpm test`                         | Vitest 全量单测                                                    |
-| `pnpm test:e2e`                     | 先 build 再跑 Playwright（真实 Electron）                          |
-| `pnpm smoke`                        | 无头启动冒烟测试（验证窗口加载、无本地 TCP 监听）                  |
-| `pnpm record:fixtures`              | 重新录制 provider 测试夹具                                         |
-| `pnpm build:win`                    | 打 Windows NSIS 安装包到 `dist/`                                   |
-| `pnpm build:mac`                    | 在 macOS 打 x64/arm64 DMG 与 ZIP 到 `dist/`                        |
-| `pnpm build:win:dir`                | 打 Windows 免安装目录版本到 `dist/`                                |
+## 常用脚本
 
-> 开发界面时请使用 `pnpm dev` 或 `pnpm start`。`pnpm preview` 默认只在启动时构建一次，运行期间修改源码不会热更新；需要重启 `preview`，或先执行 `pnpm build` 再使用 `electron-vite preview --skipBuild` 查看新的静态产物。
+```bash
+pnpm dev                # 开发模式（HMR）
+pnpm build             # 三进程构建到 out/
+pnpm typecheck         # 类型检查（同时跑 node + web + test 三套 tsconfig）
+pnpm lint              # oxlint
+pnpm format:write      # oxfmt 格式化
+pnpm test              # Vitest 全量单测
+pnpm test:e2e          # 先 build 再跑 Playwright（真实 Electron，约 50s）
+pnpm smoke             # 无头冒烟：校验窗口加载、无本地 TCP
+pnpm build:win         # Windows NSIS 安装包
+pnpm build:mac         # macOS DMG/ZIP（x64 + arm64）
+```
 
-**跑单个测试：**
+跑单个测试：
 
 ```bash
 pnpm vitest run tests/unit/player-failure.test.ts    # 指定文件
 pnpm vitest run -t "用例名片段"                          # 按名字过滤
-pnpm exec playwright test tests/e2e/player.spec.ts    # 单个 e2e（需先 pnpm build）
 ```
 
-> 改动 `src/main`、`src/preload`、`src/server`、`src/shared` 后务必跑 `pnpm typecheck`——两套 tsconfig 各覆盖不同 src 子树，只跑一套会漏掉另一侧的类型错误。
+> 改动 `src/main`、`src/preload`、`src/server`、`src/shared` 后务必跑 `pnpm typecheck`——三套 tsconfig 各覆盖不同 src 子树。改动后的完整验证序列见 [CLAUDE.md](CLAUDE.md)。
 
 ## 项目结构
 
@@ -116,55 +89,38 @@ src/
 ├── main/                  # Electron 主进程（唯一能接触网络/凭据的层）
 │   ├── index.ts           # 应用入口：生命周期、单例锁、协议/IPC/更新器注册
 │   ├── ipc.ts             # 所有 IPC handler + secureHandle 安全包裹
-│   ├── music-service.ts   # server 层到主进程播放边界的适配器
 │   ├── credentials.ts     # SafeCredentialStore（DPAPI 加密 + 崩溃恢复）
 │   ├── perf-governor.ts   # 性能状态唯一事实源（Chromium 节流 + 广播）
 │   ├── protocols/         # flux:// 与 flux-media:// 自定义协议、音频句柄仓库
-│   ├── background/         # 自定义背景 / Wallpaper Engine 导入
+│   ├── background/        # 自定义背景 / Wallpaper Engine 导入
 │   ├── updater/           # electron-updater 适配 + controller
 │   └── windows/           # 主窗口、provider 登录窗口
 ├── preload/main.ts        # 唯一 contextBridge 出口（编译为 CJS）
-├── server/                # provider 实现（进程无关纯逻辑）
+├── server/                # provider 实现（进程无关纯逻辑，可脱离 Electron 单测）
 │   ├── music/             # MusicService：provider 分发编排
-│   ├── providers/
-│   │   ├── netease/       # 网易云：SDK allowlist 门面 + 映射
-│   │   └── qq/            # QQ：client / session / mappers
-│   └── util/              # cookies / http / unknown 解析
-├── shared/                # 跨进程契约（无运行时副作用）
-│   ├── ipc-contract.ts    # IPC 通道常量 + 类型
-│   ├── music-contract.ts  # 音乐 API 契约 + 错误码
-│   ├── music-schema.ts    # Zod 入参校验 schema
-│   ├── models.ts          # UnifiedSong / QualityLevel 等领域模型
-│   └── lyrics/            # 歌词解析（lrc/yrc/qrc）
-└── renderer/src/          # React UI（无网络/凭据能力）
-    ├── App.tsx            # 根组件：布局 + 生命周期 hooks
-    ├── api.ts             # window.fluxDesktop 桥接 + 错误码映射
-    ├── stores/            # Zustand：player / auth
+│   └── providers/
+│       ├── netease/       # 网易云：SDK allowlist 门面 + 映射
+│       ├── qq/            # QQ：client / session / mappers
+│       └── chksz/         # 聚合/解锁后端（直连兜底，非第三 provider）
+├── shared/                # 跨进程契约（IPC 通道、zod schema、领域模型，无运行时副作用）
+└── renderer/src/          # React UI（无网络/凭据能力，只经 window.fluxDesktop 走 IPC）
     ├── playback/          # PlaybackEngine（播放状态机核心）
-    ├── visual/            # Three.js 动态背景与 3D 歌词（stage/backgrounds/lyrics3d-mesh）
+    ├── visual/            # Three.js 动态背景与 3D 歌词
     ├── perf/ticker.ts     # 全局唯一 RAF 注册表
+    ├── stores/            # Zustand：player / auth
     ├── features/          # 业务模块：search / library / playlist / lyrics / settings
-    ├── components/        # 通用组件（glass 全局配置与唯一适配层 / ui / shell / player）
+    ├── components/        # 通用组件（glass / ui / shell / player）
     └── theme/             # 主题系统
 
 tests/
 ├── unit/                  # Vitest 单测（含 __snapshots__ 快照）
 ├── e2e/                   # Playwright（真实 Electron）
-├── fixtures/              # provider 录制夹具
-└── helpers/               # 测试工具
+└── fixtures/              # provider 录制夹具
 ```
 
 ## 架构总览
 
 ### 进程分层
-
-FluxPlayer 严格遵循 Electron 三进程模型，并额外抽出「共享契约层」与「provider 纯逻辑层」，路径别名固定：
-
-| 别名              | 指向               | 角色                                     |
-| ----------------- | ------------------ | ---------------------------------------- |
-| `@shared`         | `src/shared`       | 跨进程契约（renderer 与 main 都 import） |
-| `@server`         | `src/server`       | provider 实现（被 main 适配调用）        |
-| `@` / `@renderer` | `src/renderer/src` | 渲染层                                   |
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -177,139 +133,79 @@ FluxPlayer 严格遵循 Electron 三进程模型，并额外抽出「共享契�
 ┌──────────────┼────────────────────────────────────────────┐
 │  Main (Electron)                                          │
 │    ipc.ts ── secureHandle（origin 校验 + zod 解析）        │
-│      │                                                    │
 │      ├─ MusicService (server) ── netease / qq providers   │
 │      ├─ AudioHandleStore ── flux-media:// 句柄             │
 │      ├─ SafeCredentialStore ── DPAPI 加密落盘             │
-│      ├─ PerfGovernor ── 性能状态广播                       │
-│      └─ UpdaterController / CustomBackgroundService       │
+│      └─ PerfGovernor ── 性能状态广播                       │
 └────────────────────────────────────────────────────────────┘
 ```
 
-关键点：`src/server` 是**进程无关**的纯逻辑，通过 `createMainMusicService`（[src/main/music-service.ts](src/main/music-service.ts)）被主进程适配后调用，这让 provider 逻辑可以脱离 Electron 单测。
+`src/server` 是**进程无关**的纯逻辑，通过 `createMainMusicService` 被主进程适配后调用，provider 逻辑可脱离 Electron 单测。路径别名：`@shared` → `src/shared`，`@server` → `src/server`，`@`/`@renderer` → `src/renderer/src`。
 
-### 数据流：一次播放请求的完整路径
-
-以「点击一首歌播放」为例，展示各层如何协作、上游地址如何被隔离：
+### 数据流：一次播放请求
 
 ```
-1. UI 点击
-   → usePlayer.play(song)  [renderer/stores/player.ts]
-       委托给 →
-
-2. PlaybackEngine.loadIndex()  [renderer/playback/engine.ts]
-   → musicClient.resolvePlayback({ song, quality })
-       经 window.fluxDesktop.music → IPC 'flux:music:resolve-playback'
-
-3. secureHandle 校验  [main/ipc.ts]
-   → isPrimaryRenderer(event)  拒绝非主窗口/非法 origin
-   → zod schema 解析入参
-   → MusicService.resolvePlayback()
-
-4. Provider 解析  [server/providers/netease|qq]
-   → 用主进程持有的 cookie 请求上游
-   → 返回 MainPlaybackResource { upstreamUrl, upstreamHeaders, ... }
-
-5. 主进程句柄替换  [main/ipc.ts]  ★ 核心隔离点
-   → audioHandles.create({ url: upstreamUrl, headers })  → 生成随机句柄
-   → 返回给 renderer 的 url = 'flux-media://audio/<handle>'
-       （上游 URL 和 cookie 到此为止，绝不过 IPC）
-
-6. 播放  [renderer/playback/engine.ts]
-   → audio.src = 'flux-media://audio/<handle>'
-   → 浏览器请求该 URL
-
-7. 协议处理  [main/protocols/media.ts]
-   → 按句柄取回真实 upstream，用主进程 net.fetch 代理
-   → 透传 Range、重写响应头、限制 CORS 到 flux://app
+1. UI 点击 → usePlayer.play(song)
+2. PlaybackEngine → window.fluxDesktop.music.resolvePlayback → IPC
+3. secureHandle 校验 sender + zod 解析 → MusicService.resolvePlayback
+4. Provider 用主进程 cookie 请求上游 → 返回 { upstreamUrl, ... }
+5. 主进程句柄替换 ★核心隔离点
+   → audioHandles.create() 生成随机句柄
+   → renderer 只拿到 flux-media://audio/<handle>（上游 URL 绝不过 IPC）
+6. audio.src = 'flux-media://audio/<handle>'
+7. 协议处理器按句柄取回真实上游，代理请求、重写响应头、限制 CORS
 ```
 
-失败时（受限/需登录/无版权），引擎保留当前队列和歌曲上下文，展示具体原因，并等待用户手动重试或切歌。
+失败时引擎保留当前队列和歌曲上下文，展示具体原因，等待用户手动重试或切歌。
 
 ### 安全边界
 
-以下是改动 IPC / 媒体 / provider 路径时**必须保持的不变量**：
+改动 IPC / 媒体 / provider 路径时必须保持的不变量（完整 5 条见 [CLAUDE.md](CLAUDE.md)）：
 
-1. **上游 URL 与 cookie 绝不过 IPC。** provider 返回的 `upstreamUrl` 在主进程用 `AudioHandleStore`（LRU + 30 分钟 TTL）换成不透明句柄，渲染层永远只见 `flux-media://` URL。
-2. **每个 IPC handler 经 `secureHandle` 包裹**：先校验 sender 是主窗口的主 frame 且 origin 匹配（否则抛 `UNAUTHORIZED_RENDERER`），再用 Zod schema 解析入参（否则抛 `INVALID_REQUEST`）。新增 IPC 通道必须走这条路径，schema 定义在 [src/shared/music-schema.ts](src/shared/music-schema.ts)。
-3. **自定义协议 + 主机 allowlist。** `flux://app` 加载渲染层，`flux-media://` 代理音频/封面。封面主机走 `COVER_HOST_SUFFIXES` allowlist，响应头被过滤重写，`Access-Control-Allow-Origin` 固定为 `flux://app`。
-4. **网易云 SDK 走固定门面。** [src/server/providers/netease/sdk.ts](src/server/providers/netease/sdk.ts) 只 deep-import `NCM_ENDPOINT_ALLOWLIST` 里明确列出的模块，绝不 import 包根、不扫描模块目录——缩小 SDK 攻击面。新增端点需显式加进 loader map（有 `netease-sdk-allowlist.test.ts` 守护）。
-5. **凭据加密落盘。** `SafeCredentialStore` 使用 Electron `safeStorage`（Windows DPAPI / macOS Keychain / Linux secret store）加密，带读回校验、replacement journal 崩溃恢复，只接受密文、不降级明文写入。
-6. **e2e 网络防护。** `FLUX_E2E=1` 时 [src/main/e2e-network-guard.ts](src/main/e2e-network-guard.ts) monkey-patch http/https/fetch，阻断一切非 loopback 请求；测试数据靠 fixture 注入。
-7. **禁用 webview**、单实例锁、`will-attach-webview` 拦截等在 [src/main/index.ts](src/main/index.ts) 中固定。
-
-### 播放引擎
-
-`PlaybackEngine`（[src/renderer/src/playback/engine.ts](src/renderer/src/playback/engine.ts)）是单例，**独占唯一 `HTMLAudioElement` 与所有异步播放状态转换**。设计要点：
-
-- **Zustand 只是投影。** player store 通过 `connect(port)` 给引擎注入 state 读写口，store 本身不含播放逻辑——它只是引擎状态的可观察 UI 投影 + 用户动作门面。别把播放逻辑写进 store。
-- **进度隔离。** 高频进度更新走独立的 `usePlaybackProgress` store，避免每秒触发整棵组件树重渲染。
-- **竞态防护。** `loadGeneration` 计数器保证过期的异步解析结果不会覆盖新播放。
-- **单源失败语义。** 每次播放只解析当前歌曲所属 provider；失败后保持当前队列和索引，不自动换源或跳歌。
-- **播放模式。** sequence / repeat-one / shuffle，shuffle 用环形游标 + 洗牌轮次，支持双向。
-- **试听截断。** 试听资源在 30s 处强制暂停。
-- **系统集成。** 绑定 Media Session（系统媒体控制、键盘媒体键）。
+1. **上游 URL / cookie 绝不过 IPC**——主进程换成不透明 `flux-media://` 句柄再回传。
+2. **每个 IPC handler 经 `secureHandle`**——origin 校验 + zod 解析。
+3. **自定义协议 + 主机 allowlist**——`flux-media://` 代理音频/封面，响应头重写。
+4. **网易云 SDK 走固定 allowlist 门面**——只 deep-import 明确列出的模块。
+5. **凭据加密落盘**——`safeStorage`（DPAPI / Keychain），只接受密文。
 
 ### 视觉系统
 
-Three.js 动态背景遵循「单一实例」原则，避免资源泄漏与多时钟竞争：
-
-- **单一 Stage** —— `VisualStage`（[src/renderer/src/visual/stage.ts](src/renderer/src/visual/stage.ts)）持有唯一的 renderer / scene / camera，所有子层（歌词层、背景管理器）共用它。
-- **单一 RAF** —— 全局 `ticker`（[src/renderer/src/perf/ticker.ts](src/renderer/src/perf/ticker.ts)）是唯一的 `requestAnimationFrame` 注册表，所有视觉循环都注册到它，受主进程 `PerfState` 约束降频。视觉代码不应自建动画时钟。
-- **三种动态背景** —— HTML Light 使用可拖拽物理吊灯、暖色聚光灯和程序化承光平面；水纹焦散使用可平铺的水面焦散 shader（青蓝水底 + 白色焦散脊，配色固定）；雨窗移植自 Shadertoy "Heartfelt"（雨打玻璃 + 心形故事，自动循环、无鼠标交互，背景为真实照片纹理）。三者由 `DynamicBackgroundManager` 懒加载并在切换时释放旧 GPU 资源。
-- **独立歌词数据流** —— `stageLyricsChannel` 只向 3D 歌词层发布当前歌词窗口和播放位置；动态背景不接入音频频谱。
-- **自定义背景优先** —— 本地图片、视频或 Wallpaper Engine 背景启用时释放动态 shader，3D 歌词仍由同一个 Stage 渲染。
-- **单层液态玻璃** —— `components/glass` 是配置、持久化、CSS 变量和 `react-glass-ui` 的唯一入口；设置面板“玻璃”Tab 实时控制所有真实表面。实现和动画禁令见 [docs/liquid-glass-system.md](docs/liquid-glass-system.md)。
-
-> `src/renderer/src/visual/**` 被 oxfmt 忽略以保留 shader 排版，改动视觉代码仍需通过 typecheck 与 lint。
+- **单一 Stage**：`VisualStage` 持有唯一 renderer/scene/camera，所有子层共用。
+- **单一 RAF**：全局 `ticker` 是唯一的 `requestAnimationFrame` 注册表，受 `PerfState` 约束降频。
+- **三种动态背景**：HTML Light 吊灯 / 水纹焦散 / 雨窗（Shadertoy 移植），三选一，切换时释放旧 GPU 资源。
+- **3D 歌词**：独立数据流，不接入音频频谱；自定义背景启用时释放动态 shader，歌词仍由同一 Stage 渲染。
 
 ### 性能治理
 
-- 主进程 `PerfGovernor`（[src/main/perf-governor.ts](src/main/perf-governor.ts)）是性能状态的**唯一事实源**：监听窗口 minimize/restore/show/hide/focus/blur，去重后动态开关 Chromium 后台节流，并把 `PerfState`（active / background / suspended）经 IPC 广播给渲染层。
-- 渲染层 `Ticker` 据此决定哪些回调继续跑：`suspended` 全停，`background` 仅 `runInBackground` 回调运行，`active` 全跑。可见性变化仅用于重新 evaluate，最终状态以主进程广播为准（不自行把失焦降级）。
+主进程 `PerfGovernor` 是性能状态唯一事实源：监听窗口 minimize/hide/focus，广播 `PerfState`（active / background / suspended）。渲染层 `Ticker` 据此决定哪些回调继续跑。
 
-## Provider 抽象
+## 深度文档
 
-- [src/server/music/index.ts](src/server/music/index.ts) 的 `MusicService.select()` 是 provider 分发的**唯一 switch**——新增第三个 provider 从这里入手。
-- 每个 provider 把上游响应映射为统一模型 `UnifiedSong` / `UnifiedPlaylist`（[src/shared/models.ts](src/shared/models.ts)）。
-- **音质等级**统一为 `QualityLevel` 五档（`jymaster` / `hires` / `lossless` / `exhigh` / `standard`），`normalizeQualityPreference` 负责把各家别名（flac/sq/320k/master…）归一。QQ 与网易云各有音质候选表和自动降级顺序。
-- **错误码**统一为 `MusicErrorCode` 枚举（[src/shared/music-contract.ts](src/shared/music-contract.ts)），渲染层 [api.ts](src/renderer/src/api.ts) 把它映射成中文产品文案，不泄漏 provider 诊断细节。
+| 文档                                                         | 内容                                                                  |
+| ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| [CLAUDE.md](CLAUDE.md)                                       | AI agent 主上下文：架构不变量、改动后的验证序列、安全边界、chksz 编排 |
+| [docs/development-workflow.md](docs/development-workflow.md) | 提交前验证流程、commit 规范、文档持续更新对照表、多 agent 协作约定    |
+| [docs/releasing.md](docs/releasing.md)                       | 发版两步、CI 流水线、签名配置、标签回退                               |
+| [docs/liquid-glass-system.md](docs/liquid-glass-system.md)   | 液态玻璃系统：配置源、默认值、CSS 变量、动画禁令                      |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)             | 第三方代码与素材许可                                                  |
 
-## 测试策略
+## 测试
 
-| 类型 | 环境                       | 说明                                                                                         |
-| ---- | -------------------------- | -------------------------------------------------------------------------------------------- |
-| 单测 | Vitest（node 环境）        | provider 映射、播放逻辑、协议、安全边界；`tests/unit/__snapshots__` 存映射快照               |
-| 夹具 | —                          | `tests/fixtures` 录制真实上游响应，`pnpm record:fixtures` 重录                               |
-| e2e  | Playwright + 真实 Electron | `tests/e2e/electron.fixture.ts` 起真实应用，音乐请求靠 fixture 注入；**只在本地跑，不进 CI** |
-| 冒烟 | `pnpm smoke`               | 无头启动，校验窗口能加载、无本地 TCP                                                         |
+| 类型 | 环境                       | 说明                                                           |
+| ---- | -------------------------- | -------------------------------------------------------------- |
+| 单测 | Vitest（node）             | provider 映射、播放逻辑、协议、安全边界；`__snapshots__` 快照  |
+| 夹具 | —                          | `tests/fixtures` 录制真实上游响应，`pnpm record:fixtures` 重录 |
+| e2e  | Playwright + 真实 Electron | 只在本地跑（依赖 GPU），发版前 `pnpm test:e2e` 一次            |
+| 冒烟 | `pnpm smoke`               | 无头启动，校验窗口加载、无本地 TCP                             |
 
-重点边界测试（改相关代码前先读）：
-
-- `server-boundary.test.ts` —— server 层不得泄漏上游细节到跨进程契约
-- `electron-ipc-security.test.ts` —— `secureHandle` / origin 校验
-- `netease-sdk-allowlist.test.ts` —— SDK 门面 allowlist 完整性
-- `player-*.test.ts` —— 播放失败反馈 / 音质 / 模式 / 进度隔离
-
-e2e 下 `FLUX_E2E=1` 触发网络防护（阻断非 loopback），Playwright 配置 `workers: 1` 非并行。e2e 做像素与动画断言，依赖真实 GPU，因此不在 CI 跑——发版前本地 `pnpm test:e2e` 一次即可（约 50 秒）。
+重点边界测试：`server-boundary` / `electron-ipc-security` / `netease-sdk-allowlist` —— 动 IPC/协议/SDK 门面时先看它们。
 
 ## 构建与发布
 
-- 产物结构：`out/main`（ESM）、`out/preload`（**CJS `.cjs`**，ESM preload 会导致页面加载静默悬死）、`out/renderer`（oxc 压缩）。
-- 本地打包：Windows 使用 `pnpm build:win`，macOS 使用 `pnpm build:mac`。不发 Linux 目标。
-- 推送 `main` **不触发 CI**；推送与 `package.json` 版本一致的 `v*` 标签才会跑校验、打包并创建 GitHub Release。想在打标签前演练，用 Actions 页面手动 `Run workflow`。
-- 标签发布优先签名：CI 检测到 Windows Authenticode / macOS Developer ID 凭据时签名并验签，缺凭据时跳过签名，仍产出未签名安装包并创建 Release。所需 Secrets 与发版步骤见 [docs/releasing.md](docs/releasing.md)。
-- 更新通道固定 GitHub `hey-sm/FluxPlayer`。Windows NSIS 与 macOS ZIP 会同时发布对应的更新元数据（`latest.yml` / `latest-mac.yml`）。
-- 图标：源文件 `resources/icon.svg`；Windows 使用 `icon.png`，macOS 构建时生成 `icon.icns`。
-
-## 开发约定
-
-- **格式化/校验用 oxfmt + oxlint**，不是 Prettier/ESLint。提交前 `pnpm format:write && pnpm lint`。
-- **玻璃组件必须经 `@/components/glass` 的 `GlassSurface` 使用**；业务代码不得直接 import `react-glass-ui`、嵌套真实玻璃或动态 transform 玻璃祖先。完整约定见 [docs/liquid-glass-system.md](docs/liquid-glass-system.md)。
-- shadcn 组件遵循 components.json（new-york 风格，CSS 变量），UI 图标用 lucide-react。
-- **改动多进程共享代码后跑 `pnpm typecheck`**（两套 tsconfig 都要过）。
-- UI 文案使用简体中文。
-- 提交前建议本地跑一遍 `pnpm test`；动到主进程/协议时再补 `pnpm smoke`。
+- 本地打包：`pnpm build:win`（Windows NSIS）/ `pnpm build:mac`（macOS DMG/ZIP）。不发 Linux。
+- 推送 `main` 不触发 CI；推送与 `package.json` 版本一致的 `v*` 标签才跑校验、打包并创建 GitHub Release。
+- 标签发布优先签名：有凭据时签名验签，无凭据时跳过签名仍产出安装包。
+- 完整发版步骤见 [docs/releasing.md](docs/releasing.md)。
 
 ## 许可证
 

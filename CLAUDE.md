@@ -57,6 +57,15 @@ pnpm exec playwright test tests/e2e/player.spec.ts     # 单个 e2e（需先 pnp
 
 [src/server/music/index.ts](src/server/music/index.ts) 的 `MusicService.select()` 是 provider 分发的唯一 switch —— 加第三个 provider 要改这里。provider 各自把上游响应映射成 `UnifiedSong` / `UnifiedPlaylist`（[src/shared/models.ts](src/shared/models.ts)），音质等级统一为 `QualityLevel` 五档，`normalizeQualityPreference` 做别名归一。
 
+**chksz 不是第三个 provider，是聚合/解锁后端。** `ProviderId` 联合类型只有 `'netease' | 'qq'`，`select()` 也只在这两者间二选一。chksz（[src/server/providers/chksz/](src/server/providers/chksz/)）是 `MusicService` 内部的 fallback 层，经 search / resolvePlayback / getLyrics 请求里的 `backend?: 'direct' | 'chksz'` 字段切换：
+
+- 账号 / 歌单列表 / 我喜欢 / 发现页**永远走直连**，不经过 chksz
+- search / resolvePlayback / getLyrics：直连优先，直连无音源 / 仅试听 / 无歌词时用 chksz 同 id 兜底
+- `backend=chksz` 强制走 chksz 且**不回退直连**（用户明确要求时）
+- chksz 配额 / 限流 / Key 错误会向上传（播放器看得到原因），其它 chksz 错误静默回退直连结果
+
+chksz 的 `id` 是 `'chksz' as const` 但它**不进 `ProviderId`**，别在 `select()` 或 `UnifiedSong.provider` 里看到 chksz。
+
 ### 播放引擎
 
 [src/renderer/src/playback/engine.ts](src/renderer/src/playback/engine.ts) 的 `PlaybackEngine` 是单例，**独占唯一 `HTMLAudioElement` 和所有异步播放状态机**。Zustand store（[src/renderer/src/stores/player.ts](src/renderer/src/stores/player.ts)）只是它的可观察 UI 投影和用户动作门面 —— 通过 `connect(port)` 注入 state 读写口，别在 store 里塞播放逻辑。高频进度用独立 `usePlaybackProgress` store 隔离，避免整树重渲染。引擎内建：`loadGeneration` 防竞态、20s 媒体加载超时（`MEDIA_LOAD_TIMEOUT_MS`）、试听 30s 截断、shuffle 环形游标。
@@ -66,7 +75,7 @@ pnpm exec playwright test tests/e2e/player.spec.ts     # 单个 e2e（需先 pnp
 ### 视觉系统（Three.js）
 
 - **单一 Stage**：`VisualStage`（[src/renderer/src/visual/stage.ts](src/renderer/src/visual/stage.ts)）持有唯一 renderer/scene/camera，所有子层共用它，绝不自建动画时钟。
-- **单一 RAF**：全局 `ticker`（[src/renderer/src/perf/ticker.ts](src/renderer/src/perf/ticker.ts)）是**视觉循环**唯一的 `requestAnimationFrame` 注册表，受主进程 `PerfGovernor` 广播的 `PerfState` 约束（minimize/hide → background/suspended 降频）。视觉循环别自己开 RAF。例外只有两类：GSAP 自带 ticker（`@gsap/react` 是动画主干，刻意如此），以及一次性的非循环 RAF（如 dialog/sheet 的焦点还原）。已知有两处自建 RAF 节流绕过了 `PerfState`（`components/glass/store.ts`、`features/settings/WallpaperEngineLayer.tsx`），是待收敛的债，不是可效仿的先例。
+- **单一 RAF**：全局 `ticker`（[src/renderer/src/perf/ticker.ts](src/renderer/src/perf/ticker.ts)）是**视觉循环**唯一的 `requestAnimationFrame` 注册表，受主进程 `PerfGovernor` 广播的 `PerfState` 约束（minimize/hide → background/suspended 降频）。视觉循环别自己开 RAF。例外只有两类：GSAP 自带 ticker（`@gsap/react` 是动画主干，刻意如此），以及一次性的非循环 RAF（如 dialog/sheet 的焦点还原）。已知有两处自建 RAF 节流绕过了 `PerfState`（`components/glass/store.ts`、`features/settings/WallpaperEngineLayer.tsx`），**是待收敛的债**：改造时把它们换成 `ticker` 的注册口，让 minimize/hide 时 glass 刷新与壁纸层节流跟随 `PerfState` 一起降频。不是可效仿的先例。
 - **动态背景**：`DynamicBackgroundManager` 只实例化 HTML Light / Caustic / Rain 中当前选中的一个，默认 Rain。三者共享 renderer/ticker；不再存在音频分析器、封面粒子或 legacy preset。Caustic 是 Shadertoy "Tileable Water Caustic" 的移植（青蓝水底 + 白色焦散脊，配色固定、`setAccentColor` 刻意空实现）；Rain 是 Shadertoy "Heartfelt" 的移植（CC BY-NC-SA 3.0，雨打玻璃 + 心形故事自动循环、移除了全部鼠标交互、iChannel0 使用随项目分发的 Pexels 照片）。构图参考与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 - **React 边界**：`StageCanvas` 只传入 `backgroundEffect`、启用状态和歌词交互参数；自定义图片/视频背景启用时释放动态背景，但保留歌词场景。
 - **上游许可**：React Bits 适配代码保留来源注释，许可证全文与依赖说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
@@ -77,6 +86,36 @@ pnpm exec playwright test tests/e2e/player.spec.ts     # 单个 e2e（需先 pnp
 - e2e 起真实 Electron（`tests/e2e/electron.fixture.ts`），`FLUX_E2E=1` 时 [src/main/e2e-network-guard.ts](src/main/e2e-network-guard.ts) 会 monkey-patch http/https/fetch 阻断一切非 loopback 请求；音乐请求靠 fixture 注入。`workers: 1`，非并行。
 - 有专门的边界测试：`server-boundary.test.ts`、`electron-ipc-security.test.ts`、`netease-sdk-allowlist.test.ts` —— 动 IPC/协议/SDK 门面时先看它们。
 
+### 改动后的验证序列
+
+改完一类文件后**先跑对应的边界/单元测试**，确认没破坏不变量，再跑全量 `pnpm test` + `pnpm typecheck` + `pnpm lint`。测试按改动区域分组（区域 → 必跑的单测文件，路径相对 `tests/unit/`）：
+
+| 改动区域                                                | 先跑这些测试                                                                                                                                                                    | 理由                                                            |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `src/main/ipc.ts`、`src/main/protocols/`                | `electron-ipc-security.test.ts`、`electron-media-protocol.test.ts`、`electron-static-protocol.test.ts`、`server-boundary.test.ts`                                               | secureHandle / isPrimaryRenderer / flux-media 句柄 / CSP 不变量 |
+| `src/server/providers/netease/sdk.ts`                   | `netease-sdk-allowlist.test.ts`、`netease-sdk.test.ts`                                                                                                                          | NCM_ENDPOINT_ALLOWLIST 门面                                     |
+| `src/server/providers/netease/`                         | `netease-mappers.test.ts`、`netease-fixture.test.ts`                                                                                                                            | 映射快照，改映射要核对 `__snapshots__/` 是否需更新              |
+| `src/server/providers/qq/`                              | `qq-mappers.test.ts`、`qq-fixture.test.ts`、`qq-search.test.ts`、`qq-songurl.test.ts`、`qq-restriction.test.ts`、`qq-session.test.ts`                                           | 映射 + 搜索 + 播放地址 + 限制 + 会话                            |
+| `src/server/providers/chksz/`                           | `music-service.test.ts`、`provider-contract-validation.test.ts`                                                                                                                 | chksz 回退逻辑走 MusicService 编排                              |
+| `src/server/music/index.ts`                             | `music-service.test.ts`、`provider-contract-validation.test.ts`、`provider-auth-validation.test.ts`                                                                             | select / backend 切换 / 回退编排                                |
+| `src/main/credentials.ts`                               | `credentials.test.ts`                                                                                                                                                           | SafeCredentialStore DPAPI 不变量                                |
+| `src/renderer/src/playback/engine.ts`、`quality.ts`     | `player-failure.test.ts`、`player-modes.test.ts`、`player-progress-isolation.test.ts`、`playback-quality.test.ts`                                                               | 播放状态机 + 防竞态 + 试听截断 + 质量降级提示                   |
+| `src/renderer/src/visual/`、`perf/ticker.ts`            | `visual-scene.test.ts`、`visual-backgrounds.test.ts`、`visual-lyrics3d-mesh.test.ts`、`visual-lyrics-animation.test.ts`、`visual-lyrics3d-fonts.test.ts`、`perf-ticker.test.ts` | 单一 Stage / 单一 RAF / 3D 歌词                                 |
+| `src/renderer/src/components/glass/`                    | `glass-system.test.ts`、`renderer-style-boundary.test.ts`                                                                                                                       | 玻璃包装层 + no-restricted-imports                              |
+| `src/renderer/src/features/search/`                     | `search-query-cancellation.test.ts`、`search-hover-interaction.test.ts`                                                                                                         | 搜索取消 + 悬停                                                 |
+| `src/renderer/src/theme/`                               | `theme-foundation.test.ts`、`theme-classic-colors.test.ts`                                                                                                                      | 主题 token                                                      |
+| `src/main/windows/`                                     | `shell-window-state.test.ts`、`main-window-load.test.ts`、`login-window-navigation.test.ts`                                                                                     | 窗口状态 + 登录窗                                               |
+| `src/main/updater/`                                     | `updater-adapter.test.ts`、`updater-controller.test.ts`                                                                                                                         | 更新器                                                          |
+| `src/main/perf-governor.ts`                             | `perf-governor.test.ts`、`perf-state.test.ts`                                                                                                                                   | PerfState 广播                                                  |
+| `src/shared/lyrics/`                                    | `lyrics-parser.test.ts`                                                                                                                                                         | lrc/yrc/qrc 解析                                                |
+| `src/preload/main.ts`                                   | `electron-ipc-security.test.ts`                                                                                                                                                 | 唯一 contextBridge 出口                                         |
+| 任何 IPC 通道增删                                       | `electron-ipc-security.test.ts` + `server-boundary.test.ts`                                                                                                                     | 两个边界测试是 IPC/协议门面的守卫                               |
+| `.github/workflows/release.yml`、`electron-builder.yml` | `release-configuration.test.ts`                                                                                                                                                 | 发布配置一致性                                                  |
+
+跑单个文件：`pnpm vitest run tests/unit/<file>.test.ts`。快照需更新时先确认改动是有意的，再 `pnpm vitest run tests/unit/<file>.test.ts -u`。
+
+**全量验证**（提交前最低要求）：`pnpm typecheck`（必跑两套 tsconfig）→ `pnpm lint` → `pnpm test`。改了渲染层交互的还要本地跑 `pnpm test:e2e`（约 50s，CI 不跑 e2e）。
+
 ### 约束
 
 - **玻璃组件必须经 `@/components/glass` 包装层**，业务代码 oxlint 禁止直接 import `react-glass-ui`（.oxlintrc.json `no-restricted-imports`，glass 目录自身豁免）。
@@ -84,3 +123,7 @@ pnpm exec playwright test tests/e2e/player.spec.ts     # 单个 e2e（需先 pnp
 - shadcn 组件配置在 components.json（new-york 风格，CSS 变量在 `src/renderer/src/styles/shadcn.css`）。
 - 更新发布固定 GitHub `hey-sm/FluxPlayer`。**tag 发布优先签名**：CI 在有 Windows Authenticode / macOS Developer ID 凭据时签名并验签；缺少凭据时自动跳过签名，仍产出未签名安装包并创建 Release（`.github/workflows/release.yml`），发版步骤见 [docs/releasing.md](docs/releasing.md)。图标源是 `resources/icon.svg`，`scripts/gen-icons.mjs` 生成 png（未接入 npm script，手动调用），macOS 的 icns 走 `pnpm icons:mac`。
 - UI 文案用简体中文。
+
+### 开发工作流
+
+改动提交前的验证序列、提交规范、文档持续更新对照表、AI 多 agent 协作约定见 [docs/development-workflow.md](docs/development-workflow.md)。改完代码先按上面的"改动后的验证序列"跑区域测试，再 `pnpm typecheck` → `pnpm lint` → `pnpm test`。改了架构不变量或新增 IPC / provider / 测试守卫，同步更新本文件和对应文档。

@@ -46,6 +46,28 @@ import {
 } from './windows/login-windows'
 import type { UpdaterController } from './updater'
 
+/**
+ * IPC handler 注册器段落地图（行号随改动漂移，按符号定位更稳）：
+ *   1. zod schema（~49-60）         本地 schema（壁纸引擎等），音乐 schema 来自 @shared/music-schema
+ *   2. 安全工具（~62-173）          isWallpaperRuntimeSelectionActive / normalizeRendererOrigin /
+ *                                  isPrimaryRenderer（拒绝非主窗口 / 非 main frame / origin 不符）/
+ *                                  secureHandle（每个 handler 都经它：先校验 sender，再 zod 解析入参）
+ *   3. 类型（~66-110）              MainPlaybackResolution / MainMusicService / IpcDeps
+ *   4. registerIpcHandlers（~175-393）所有 ipcMain.handle 的集中注册，按能力分组：
+ *      - 窗口（~176-183）           minimize / toggleMaximize / toggleFullscreen / exitFullscreenWindowed / getState / close
+ *      - 音乐（~185-219）           search / resolvePlayback（唯一换 flux-media 句柄处）/ getLyrics /
+ *                                  getAuthStatus / login / logout / getPlaylists / getPlaylistTracks /
+ *                                  getLikedTracks / getDiscover
+ *      - chksz 密钥（~221-234）     getKey / setKey / clearKey
+ *      - 应用（~235-242）           restartApp
+ *      - 更新器（~244-273）          getState / check / download / install
+ *      - 自定义背景（~275-303）     get / chooseFile / clear（改完广播 customBackgroundChanged）
+ *      - 壁纸引擎（~305-392）       list / chooseDirectory / chooseProjectFile / removeDirectory /
+ *                                  projectDetails / getState / setState / runtimeStatus / glassSamplerPrepare / dwmActivate
+ *   5. 类型锚点（~396-403）          MainMusicServiceMethodResults
+ * 新增 IPC 必须经 secureHandle，schema 加在 @shared/music-schema.ts，通道常量加在 @shared/ipc-contract.ts。
+ */
+
 const noInputSchema = z.undefined()
 const wallpaperEngineListSchema = z.object({ force: z.optional(z.boolean()) })
 const wallpaperEngineIdSchema = z.object({ id: z.string().check(z.minLength(1), z.maxLength(64)) })
