@@ -19,6 +19,16 @@ export interface DynamicBackground {
   pointerUp?(input: DynamicBackgroundPointerInput): void
   update(deltaTime: number): void
   dispose(): void
+  /**
+   * Optional DOM lifecycle. Backgrounds that render outside the shared WebGL
+   * Stage (for example an embedded iframe scene) implement these to attach
+   * their host element behind the Stage canvas. The manager calls `mount`
+   * after constructing the background (if a container has been registered via
+   * {@link DynamicBackgroundManager.mount}) and `unmount` before disposing it.
+   * Pure-WebGL backgrounds leave these undefined.
+   */
+  mount?(container: HTMLElement): void
+  unmount?(): void
 }
 
 export interface DynamicBackgroundDefinition {

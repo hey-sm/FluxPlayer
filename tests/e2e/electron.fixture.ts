@@ -281,6 +281,7 @@ function isAllowedAppRequest(route: Route): boolean {
   }
   if (requestUrl.protocol === 'flux-font:') return requestUrl.hostname === 'face'
   if (requestUrl.protocol === 'flux-background:') return true
+  if (requestUrl.protocol === 'flux-sylva:') return requestUrl.hostname === 'scene'
   return requestUrl.protocol === 'flux-wallpaper:'
 }
 

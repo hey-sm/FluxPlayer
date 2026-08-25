@@ -6,6 +6,9 @@
     "dist/**",
     "node_modules/**",
     "scripts/**",
+    "docs/**",
+    "src/main/protocols/sylva/scene-source.html",
+    "src/main/protocols/sylva/three-r149.min.js",
     "Mineradio/**",
     "cineshader-mirror/**"
   ],

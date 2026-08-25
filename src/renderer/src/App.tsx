@@ -63,9 +63,9 @@ function initialLyricsOffset(): LyricsOffset {
 function initialDynamicBackground(): DynamicBackgroundEffect {
   try {
     const raw = localStorage.getItem(DYNAMIC_BACKGROUND_KEY)
-    return isDynamicBackgroundEffect(raw) ? raw : 'rain'
+    return isDynamicBackgroundEffect(raw) ? raw : 'sylva'
   } catch {
-    return 'rain'
+    return 'sylva'
   }
 }
 

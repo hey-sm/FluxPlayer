@@ -8,10 +8,13 @@
   "ignorePatterns": [
     "src/renderer/src/visual/**",
     "src/renderer/src/theme/classic/**",
+    "src/main/protocols/sylva/scene-source.html",
+    "src/main/protocols/sylva/three-r149.min.js",
     "tests/fixtures/**",
     "tests/unit/__snapshots__/**",
     ".agents/**",
     ".claude/**",
+    "docs/**",
     "out/**",
     "dist/**",
     "coverage/**"

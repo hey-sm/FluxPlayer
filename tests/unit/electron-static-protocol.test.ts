@@ -90,7 +90,7 @@ describe('flux://app static protocol', () => {
       "default-src 'self'",
       "base-uri 'none'",
       "object-src 'none'",
-      "frame-src 'none'",
+      'frame-src flux-sylva:',
       "frame-ancestors 'none'",
       "form-action 'none'",
       "script-src 'self' 'wasm-unsafe-eval'",

@@ -28,7 +28,7 @@ function isProtectedUiTarget(target: EventTarget | null): boolean {
 }
 
 export function StageCanvas({
-  backgroundEffect = 'rain',
+  backgroundEffect = 'sylva',
   backgroundEnabled = true,
   lyricsAnimationMode = 'compact',
   lyricsFocusOnly = false,

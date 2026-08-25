@@ -15,3 +15,6 @@ cineshader-mirror/
 
 # Local Mineradio reference tree (never package or commit)
 Mineradio/
+
+# Local harness scratch / build artifacts (never commit)
+.dsh-tmp/

@@ -77,6 +77,15 @@ test('3D 歌词在桌面与紧凑窗口保持可见', async ({ electronHarness }
   const window = await app.browserWindow(page)
   await window.evaluate((browserWindow) => browserWindow.setSize(1440, 900))
 
+  // Pin a fixed dynamic background so the luminance-signal thresholds below
+  // stay stable regardless of the app default (now Sylva, a uniform green
+  // behind the transparent stage canvas, which shifts the deviation band).
+  await page.evaluate(() => {
+    localStorage.setItem('fluxplayer-dynamic-background-v1', 'rain')
+  })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await expect(page).toHaveURL(/^flux:\/\/app\//)
+
   await page.getByRole('button', { name: '设置' }).click()
   await page.getByRole('tab', { name: '歌词', exact: true }).click()
   const lyricsAnimation = page.getByRole('combobox', { name: '歌词动画' })

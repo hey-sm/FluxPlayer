@@ -86,7 +86,7 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(page.locator('[data-stage-background]')).toBeVisible()
   const stageCanvas = page.locator('[data-stage-background] canvas')
   await expect(stageCanvas).toHaveCount(1)
-  await captureVisual(page, stageCanvas, testInfo, 'rain-desktop')
+  await captureVisual(page, stageCanvas, testInfo, 'sylva-desktop')
   await expect(page.locator('.visual-toggle')).toHaveCount(0)
   const mainWindow = await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()
@@ -260,7 +260,7 @@ test('窗口可见，搜索点歌后真实音频播放并正常退出', async ({
   await expect(lyricsColorSwitch).toHaveAttribute('aria-checked', 'true')
   await page.getByRole('tab', { name: '背景', exact: true }).click()
   const backgroundSelect = page.getByRole('combobox', { name: '动态背景' })
-  await expect(backgroundSelect).toContainText('雨窗')
+  await expect(backgroundSelect).toContainText('苔境')
   await backgroundSelect.click()
   await expect(page.locator('[data-glass-select-surface]')).toBeVisible()
   await expect(page.getByRole('option', { name: '星河' })).toHaveCount(0)

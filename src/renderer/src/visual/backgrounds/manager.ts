@@ -17,6 +17,7 @@ export class DynamicBackgroundManager {
   private pixelRatio = 1
   private pointer = { x: 0.5, y: 0.5, active: false }
   private accentColor = DEFAULT_ACCENT_COLOR
+  private container: HTMLElement | null = null
   private disposed = false
 
   constructor(
@@ -28,6 +29,23 @@ export class DynamicBackgroundManager {
 
   get activeEffectId(): DynamicBackgroundEffect | null {
     return this.activeEffect
+  }
+
+  /**
+   * Register the DOM element backgrounds may attach non-WebGL content behind
+   * (the Stage canvas). Stored once on mount and forwarded to every active
+   * background that implements {@link DynamicBackground.mount}.
+   */
+  mount(container: HTMLElement): void {
+    if (this.disposed) return
+    this.container = container
+    this.active?.mount?.(container)
+  }
+
+  unmount(): void {
+    if (this.disposed) return
+    this.active?.unmount?.()
+    this.container = null
   }
 
   setEffect(effect: DynamicBackgroundEffect | null): void {
@@ -44,6 +62,9 @@ export class DynamicBackgroundManager {
     background.setAccentColor(this.accentColor)
     background.setViewport(this.width, this.height, this.pixelRatio)
     background.setPointer(this.pointer.x, this.pointer.y, this.pointer.active)
+    // Attach any non-WebGL host element behind the Stage canvas before the
+    // background starts producing frames, so the first paint is not blank.
+    if (this.container) background.mount?.(this.container)
   }
 
   setAccentColor(color: string): void {
@@ -101,6 +122,8 @@ export class DynamicBackgroundManager {
       this.activeEffect = null
       return
     }
+    // Detach any non-WebGL host element before tearing down the background.
+    this.active.unmount?.()
     this.group.remove(this.active.group)
     this.active.dispose()
     this.active = null

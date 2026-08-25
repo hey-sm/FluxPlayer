@@ -70,6 +70,22 @@ FluxPlayer 保留了原作的算法与配色（迭代相位扰动累加 + 反距
 
 FluxPlayer 保留了原作的雨滴/玻璃雾化算法与心形故事动画，做了三处适配：① 移除了全部 iMouse 交互（鼠标 scrub 时间/控制雨量），改为时间自动循环、雨量由慢正弦驱动，符合无点击交互的要求；② 上游 iChannel0 的外链背景照片替换为一张随项目分发的 Pexels 摄影图片（scene.jpg，摄影师 Tom Zhou，Pexels 许可允许免费商用与修改），纹理 colorSpace 设为 LinearSRGBColorSpace 以匹配 Shadertoy 不做 sRGB 解码/编码的行为；③ 舍弃了上游两条音乐流输入。仍按共享全屏 quad 背景契约封装。注意：CC BY-NC-SA 的非商业（NC）与相同共享（SA）条款仅约束本文件中的 shader 代码，不影响 FluxPlayer 其余 MIT 授权代码，也不约束 scene.jpg（后者受 Pexels 许可）。
 
+### ThreeUI — Cloud Field — MIT License
+
+- 上游：ThreeUI "Strata — Cloud Migration Platform" 落地页背景，出自 Portal Field 合集（`cloud-field` 变体），<https://threeui.com/backgrounds/portal-field/cloud-field>；仓库 <https://github.com/MengTo/threeui>。
+- 许可：MIT License。ThreeUI 的应用代码、社区组件代码及 ThreeUI 创作的素材均为 MIT 许可。全文见第五节 MIT License。
+- 本项目中的位置：`src/renderer/src/visual/backgrounds/cloud/index.ts`（fragment shader 部分）
+
+FluxPlayer 保留了原作的夜空配色与五层视差山峦算法（fbm 轮廓 + 山脊辉光 + 星空密度采样 + 偶发流星），做了四处适配：① 舍弃了上游落地页全部内容（导航、文案、卡片、图片、GSAP/ScrollTrigger/Tailwind/Iconify 等 CDN 依赖）—— ThreeUI 的隔离器在渲染背景时本就只保留 `<canvas id="c">`，移植后 FluxPlayer 不因此多依赖任何上述库；② 将原作不透明黑底改为带 alpha 衰减，以便叠在半透明 UI 之后而非盖住玻璃层，山峦/流星/星空的亮区保持近不透明以保留剪影可读性；③ 将上游 `u_mouse` 鼠标视差接入背景指针契约，非激活指针停在画面中心、释放后平滑回中；④ 按 Three.js ShaderMaterial 重新封装为共享全屏 quad 背景契约（共用 renderer/ticker、单一 owned group、一次性释放）。ThreeUI 的 MIT 许可与 Commons Clause、GSAP "no charge" 两条约束均不冲突。
+
+### ThreeUI — Sylva Living World (Living Green) — MIT License
+
+- 上游：ThreeUI "Sylva Living World" 组件的 "Living Green" 变体，<https://threeui.com/three-js/sylva-living-world>；源仓库 <https://github.com/MengTo/sylva>。
+- 许可：MIT License。ThreeUI 的应用代码、社区组件代码及 ThreeUI 创作的素材均为 MIT 许可。全文见第五节 MIT License。
+- 本项目中的位置：`src/main/protocols/sylva/`（`scene-source.html` 为上游 `inner-green-3d.html` 原文、`three-r149.min.js` 为上游自带 Three.js r149 运行时、`scene-handler.ts` 组装场景文档并通过 `flux-sylva://` 协议下发）；`src/renderer/src/visual/backgrounds/sylva/index.ts` 实现背景契约（挂载 iframe、转发指针）。
+
+为逐像素复刻官网效果，FluxPlayer 不再重写场景，沿用上游组件自身的渲染方式：将上游完整场景（含其自带的 Three.js r149 运行时、ACES 色调映射、像素空间构图与约 4000 行程序化几何/shader）原样注入一个 iframe，挂在透明 Stage 画布之后。仅移植 "Living Green" 单一变体（舍弃樱、枫、红杉三套季节循环），并做了四处适配：① **走自定义协议而非 srcdoc**——主进程注册 `flux-sylva://` 协议，启动时按上游 `SylvaLivingWorldScene.buildSceneDocument` 的同一隔离逻辑构建 scene-only 文档（舍弃落地页全部内容只保留 `<canvas id="scene">` + `<div id="stage">`，把外链 `three.min.js` 改为内联 bundle），并在响应头带**自己的 scoped CSP**（`script-src 'unsafe-inline'`、其余收紧）。因为 srcdoc iframe 会继承父文档 CSP，场景的 inline Three.js bundle 会被主 app 的 `script-src 'self'` 拦死；改走协议后主 app CSP 只需把 `frame-src` 从 `'none'` 放宽到 `flux-sylva:`。② iframe 置于透明 Stage 画布之后并设 `pointer-events:none` 以让上层 UI 继续收事件，Stage canvas 被设为 `position:relative;z-index:1` 以盖在 iframe（`z-index:0`）之上；③ 因两 origin 不同（`flux://app` 与 `flux-sylva://scene`），`contentWindow` 不可直接访问，宿主把指针视差经 `postMessage` 转发进 iframe，场景文档里注入一段 bridge 监听消息再 dispatch 合成 `PointerEvent`，命中上游场景自身绑定的 `pointermove`/`pointerleave` 处理器；④ 按共享背景契约封装——背景只提供一个空 group（由 Stage 的 backgroundCamera 渲染，确保切到其它背景时 iframe 被移除、Stage 透明区回落到正常背景），iframe 随背景 mount/unmount 一次性插入/移除。ThreeUI 的 MIT 许可与 Commons Clause、GSAP "no charge" 两条约束均不冲突。
+
 ---
 
 ## 二、随安装包分发的依赖

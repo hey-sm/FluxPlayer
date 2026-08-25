@@ -2,10 +2,11 @@ import { net, protocol } from 'electron'
 import type { CustomBackgroundService } from '../background/custom-background'
 import type { WallpaperEngineLibrary } from '../background/wallpaper-engine-library'
 import { CUSTOM_BACKGROUND_SCHEME } from '@shared/custom-background-contract'
-import { APP_SCHEME, FONT_SCHEME, MEDIA_SCHEME, WALLPAPER_ENGINE_SCHEME } from './constants'
+import { APP_SCHEME, FONT_SCHEME, MEDIA_SCHEME, SYLVA_SCHEME, WALLPAPER_ENGINE_SCHEME } from './constants'
 import { handleAppAssetRequest } from './static-assets'
 import { AudioHandleStore, handleMediaRequest } from './media'
 import { handleFontRequest } from './fonts'
+import { handleSylvaRequest } from './sylva/scene-handler'
 
 export function registerPrivilegedSchemes(): void {
   protocol.registerSchemesAsPrivileged([
@@ -35,6 +36,13 @@ export function registerPrivilegedSchemes(): void {
       scheme: WALLPAPER_ENGINE_SCHEME,
       privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
     },
+    {
+      // The Sylva scene iframe loads from this scheme. It must be standard +
+      // secure so the browser treats it as a normal origin (CSP, same-origin
+      // policy) rather than a blob-like context.
+      scheme: SYLVA_SCHEME,
+      privileges: { standard: true, secure: true, supportFetchAPI: true },
+    },
   ])
 }
 
@@ -56,6 +64,7 @@ export function registerProtocolHandlers(options: ProtocolRegistrationOptions): 
   })
   protocol.handle(WALLPAPER_ENGINE_SCHEME, (request) => options.wallpaperEngineLibrary.mediaResponse(request))
   protocol.handle(FONT_SCHEME, (request) => handleFontRequest(request))
+  protocol.handle(SYLVA_SCHEME, (request) => handleSylvaRequest(request))
 }
 
 export { APP_ENTRY_URL, APP_ORIGIN } from './constants'

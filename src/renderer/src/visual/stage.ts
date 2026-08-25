@@ -31,7 +31,7 @@ export class VisualStage {
   private readonly cameraTarget: CameraOrbit = { radius: 10.8, phi: 0.02, theta: 0 }
   private container: HTMLElement | null = null
   private stopTick: (() => void) | null = null
-  private backgroundEffect: DynamicBackgroundEffect = 'rain'
+  private backgroundEffect: DynamicBackgroundEffect = 'sylva'
   private backgroundEnabled = true
   private accentColor = DEFAULT_ACCENT_COLOR
   private reducedMotion = false
@@ -64,6 +64,12 @@ export class VisualStage {
     canvas.style.display = 'block'
     canvas.style.width = '100%'
     canvas.style.height = '100%'
+    // Position above non-WebGL background layers the manager mounts behind the
+    // canvas (the Sylva scene iframe). The iframe pins itself to z-index:0; a
+    // positioned canvas at z-index:1 renders on top, and its transparent regions
+    // let the iframe show through while the lyrics draw above the moss world.
+    canvas.style.position = 'relative'
+    canvas.style.zIndex = '1'
     this.backgroundCamera.position.set(0, 0.2, 13.6)
     this.backgroundCamera.lookAt(0, 0, 0)
     this.backgroundCamera.updateMatrixWorld()
@@ -79,6 +85,10 @@ export class VisualStage {
       if (this.renderer.domElement.parentElement === container) container.removeChild(this.renderer.domElement)
       this.container = null
     })
+    // Hand the container to the background manager so backgrounds that render
+    // outside WebGL (e.g. the Sylva iframe scene) can attach behind the canvas.
+    this.backgrounds.mount(container)
+    this.resources.add(() => this.backgrounds.unmount())
     this.applySize()
 
     if (typeof ResizeObserver !== 'undefined') {

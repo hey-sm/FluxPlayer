@@ -8,8 +8,10 @@ import {
   type DynamicBackgroundEffect,
 } from '@renderer/visual/backgrounds'
 import { CausticBackground } from '@renderer/visual/backgrounds/caustic'
+import { CloudBackground } from '@renderer/visual/backgrounds/cloud'
 import { HtmlLightBackground } from '@renderer/visual/backgrounds/html-light'
 import { RainBackground } from '@renderer/visual/backgrounds/rain'
+import { SylvaIframeBackground } from '@renderer/visual/backgrounds/sylva'
 import type { DynamicBackground, DynamicBackgroundDefinition } from '@renderer/visual/backgrounds/types'
 import { readFileSync } from 'node:fs'
 
@@ -43,15 +45,19 @@ describe('dynamic background registry', () => {
     expect(stageCanvasSource).not.toContain("import('./stage')")
   })
 
-  it('exposes HTML Light, Caustic and Rain and rejects removed persisted values', () => {
+  it('exposes HTML Light, Caustic, Rain, Cloud and Sylva and rejects removed persisted values', () => {
     expect(DYNAMIC_BACKGROUND_DEFINITIONS.map(({ effect }) => effect)).toEqual([
       'html-light',
       'caustic',
       'rain',
+      'cloud',
+      'sylva',
     ])
     expect(isDynamicBackgroundEffect('html-light')).toBe(true)
     expect(isDynamicBackgroundEffect('caustic')).toBe(true)
     expect(isDynamicBackgroundEffect('rain')).toBe(true)
+    expect(isDynamicBackgroundEffect('cloud')).toBe(true)
+    expect(isDynamicBackgroundEffect('sylva')).toBe(true)
     expect(isDynamicBackgroundEffect('light-rays')).toBe(false)
     expect(isDynamicBackgroundEffect('galaxy')).toBe(false)
     expect(isDynamicBackgroundEffect('cinematic-vista')).toBe(false)
@@ -192,6 +198,66 @@ describe('Rain background', () => {
     expect(textureDispose).toHaveBeenCalledOnce()
     expect(background.group.children).toHaveLength(0)
     loadStub.mockRestore()
+  })
+})
+
+describe('Cloud background', () => {
+  it('owns one fullscreen material, drives the mouse parallax uniform and disposes it idempotently', () => {
+    const background = new CloudBackground()
+    const mesh = background.group.children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>
+    expect(mesh.name).toBe('cloud-fullscreen-quad')
+    expect(mesh.material.uniforms.iMouse.value).toBeInstanceOf(THREE.Vector2)
+    const geometryDispose = vi.spyOn(mesh.geometry, 'dispose')
+    const materialDispose = vi.spyOn(mesh.material, 'dispose')
+    // The cloud palette is fixed to the upstream night sky, so setAccentColor is inert.
+    background.setAccentColor('#ff3d5a')
+    background.setViewport(1280, 720, 1.25)
+    const resolution = mesh.material.uniforms.iResolution.value as THREE.Vector2
+    expect(resolution.x).toBeGreaterThan(0)
+    expect(resolution.y).toBeGreaterThan(0)
+    // An active pointer sets the target; the eased current value lags behind in update().
+    background.setPointer(0.25, 0.75, true)
+    background.update(1 / 60)
+    const mouse = mesh.material.uniforms.iMouse.value as THREE.Vector2
+    // Eased from centre (0.5,0.5) toward (0.25,0.75): x drops, y rises, neither reaches target in one step.
+    expect(mouse.x).toBeLessThan(0.5)
+    expect(mouse.y).toBeGreaterThan(0.5)
+    expect(mouse.x).toBeGreaterThan(0.25)
+    expect(mouse.y).toBeLessThan(0.75)
+    expect(mesh.material.uniforms.iTime.value).toBeCloseTo(1 / 60)
+    // An inactive pointer parks the target at centre and eases back toward it.
+    background.setPointer(0.25, 0.75, false)
+    background.update(1 / 60)
+    background.dispose()
+    background.dispose()
+    expect(geometryDispose).toHaveBeenCalledOnce()
+    expect(materialDispose).toHaveBeenCalledOnce()
+    expect(background.group.children).toHaveLength(0)
+  })
+})
+
+describe('Sylva background', () => {
+  it('renders the faithful upstream scene behind the Stage canvas via an empty group', () => {
+    const background = new SylvaIframeBackground()
+    // The visible scene lives in the iframe (served by flux-sylva://scene); the
+    // WebGL group is an empty tag so the transparent Stage canvas lets the iframe
+    // show through.
+    expect(background.group.userData.backgroundEffect).toBe('sylva')
+    expect(background.group.children).toHaveLength(0)
+
+    // The Living Green palette is fixed, so setAccentColor is inert.
+    background.setAccentColor('#ff3d5a')
+    // setViewport/setPointer/update are all safe to call before mount (the
+    // iframe is created lazily in mount()).
+    background.setViewport(1280, 720, 1.25)
+    background.setPointer(0.25, 0.75, true)
+    background.update(1 / 60)
+    // update() is a no-op (the scene runs its own RAF inside the iframe).
+    expect(background.group.children).toHaveLength(0)
+
+    background.dispose()
+    background.dispose()
+    expect(background.group.children).toHaveLength(0)
   })
 })
 
