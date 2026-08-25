@@ -7,6 +7,9 @@ resources/icon.icns
 *.local
 .eslintcache
 
+# Agent skill 安装产物（由 skills-lock.json 重建，如同 node_modules 由 lockfile 重建）
+.agents/
+
 # Local third-party visual research mirror (never package or commit)
 cineshader-mirror/
 
