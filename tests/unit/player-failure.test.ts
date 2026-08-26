@@ -111,7 +111,7 @@ describe('PlaybackEngine failure behavior', () => {
     await usePlayer.getState().setQueue([current], 0)
 
     expect(resolvePlayback).toHaveBeenCalledOnce()
-    expect(resolvePlayback).toHaveBeenCalledWith({ song: current, quality: 'hires' })
+    expect(resolvePlayback).toHaveBeenCalledWith(expect.objectContaining({ song: current, quality: 'hires' }))
     expect(mocks.showToast).not.toHaveBeenCalled()
     expect(usePlayer.getState()).toMatchObject({
       current,
@@ -142,7 +142,7 @@ describe('PlaybackEngine failure behavior', () => {
     await usePlayer.getState().setQueue(queue, 0)
 
     expect(resolvePlayback).toHaveBeenCalledOnce()
-    expect(resolvePlayback).toHaveBeenCalledWith({ song: current, quality: 'hires' })
+    expect(resolvePlayback).toHaveBeenCalledWith(expect.objectContaining({ song: current, quality: 'hires' }))
     expect(usePlayer.getState().queue).toEqual(queue)
     expect(usePlayer.getState()).toMatchObject({
       index: 0,

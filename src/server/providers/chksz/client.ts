@@ -9,6 +9,18 @@ import { parseJSONText } from '../../util/http'
 
 export const CHKSZ_BASE_URL = 'https://api.chksz.com'
 
+/** 构造与浏览器 fetch abort 行为一致的 AbortError，供节流等待取消时抛出。 */
+function abortError(): DOMException {
+  return new DOMException('The operation was aborted', 'AbortError')
+}
+
+/** 把调用方取消信号与超时信号合并：任一触发即取消请求。 */
+function combineSignals(a: AbortSignal | undefined, b: AbortSignal): AbortSignal {
+  if (!a) return b
+  if (a.aborted) return a
+  return AbortSignal.any([a, b])
+}
+
 /** ChKSz 业务错误分类。上层据此决定是否提示用户 / 是否回退到直连。 */
 export type ChkszErrorCode =
   | 'CHKSZ_QUOTA_EXHAUSTED' // 402：免费 + 付费额度用尽
@@ -80,20 +92,43 @@ export interface ChkszRequestOptions {
   timeoutMs?: number
   /** 请求方式，默认 GET。163 系列支持 POST，QQ / kugou 仅 GET。 */
   method?: 'GET' | 'POST'
+  /**
+   * 取消信号：在节流等待或 fetch 进行中 abort 时，立刻 reject（AbortError），
+   * 不再继续发起或等待上游请求。用于快速切歌时丢弃旧歌的 chksz 在途请求。
+   */
+  signal?: AbortSignal
 }
 
 /** ChKSz 限流最小间隔：20 次/分钟，留余量取 1.5s 间隔防突发。 */
 const CHKSZ_MIN_INTERVAL_MS = 1500
 let lastRequestAt = 0
 
-/** 简单的全局节流：遵守平均速率，429 时再叠加 Retry-After。不保证精确，只防突发。 */
-async function respectRateLimit(): Promise<void> {
+/**
+ * 简单的全局节流：遵守平均速率，429 时再叠加 Retry-After。不保证精确，只防突发。
+ * 传入 signal 后，等待期间被 abort 会立刻 reject，避免旧请求拖慢新请求。
+ */
+function respectRateLimit(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(abortError())
   const now = Date.now()
   const elapsed = now - lastRequestAt
-  if (elapsed < CHKSZ_MIN_INTERVAL_MS) {
-    await new Promise((resolve) => setTimeout(resolve, CHKSZ_MIN_INTERVAL_MS - elapsed))
+  if (elapsed >= CHKSZ_MIN_INTERVAL_MS) {
+    lastRequestAt = now
+    return Promise.resolve()
   }
-  lastRequestAt = Date.now()
+  const wait = CHKSZ_MIN_INTERVAL_MS - elapsed
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      lastRequestAt = Date.now()
+      resolve()
+    }, wait)
+    if (signal) {
+      const onAbort = (): void => {
+        clearTimeout(timer)
+        reject(abortError())
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
+  })
 }
 
 /**
@@ -107,7 +142,8 @@ export async function chkszRequest(
   options: ChkszRequestOptions = {},
 ): Promise<unknown> {
   if (!apikey) throw new ChkszApiError('CHKSZ_UNAUTHORIZED', 401, 'ChKSz API Key 未配置')
-  await respectRateLimit()
+  const callerSignal = options.signal
+  await respectRateLimit(callerSignal)
 
   const query = new URLSearchParams()
   query.set('apikey', apikey)
@@ -117,17 +153,19 @@ export async function chkszRequest(
 
   const method = options.method ?? 'GET'
   const timeoutMs = options.timeoutMs ?? 15_000
+  // 超时与调用方取消任一触发即中止请求；调用方 abort 用于快速切歌时丢弃旧在途 chksz 请求
+  const requestSignal = combineSignals(callerSignal, AbortSignal.timeout(timeoutMs))
   let target: string
   let init: RequestInit
 
   if (method === 'GET') {
     target = `${CHKSZ_BASE_URL}${path}?${query.toString()}`
-    init = { method: 'GET', signal: AbortSignal.timeout(timeoutMs), redirect: 'follow' }
+    init = { method: 'GET', signal: requestSignal, redirect: 'follow' }
   } else {
     target = `${CHKSZ_BASE_URL}${path}`
     init = {
       method: 'POST',
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: requestSignal,
       redirect: 'follow',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: query.toString(),

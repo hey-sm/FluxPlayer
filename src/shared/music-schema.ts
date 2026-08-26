@@ -47,6 +47,7 @@ export const playbackResolveRequestSchema = z.object({
   song: unifiedSongSchema,
   quality: qualityLevelSchema,
   backend: z.optional(z.enum(['direct', 'chksz'])),
+  resolveGeneration: z.optional(z.number()),
 })
 
 export const lyricsRequestSchema = z.object({

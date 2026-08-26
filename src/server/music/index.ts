@@ -81,6 +81,13 @@ export class MusicService {
   readonly netease: NeteaseProvider
   readonly qq: QQProvider
   private readonly credentials: CredentialStore
+  /**
+   * 最新一次 resolvePlayback 请求的代次。收到更早代次的请求时，
+   * 旧代次的 chksz 在途取链会被 abort，避免快速切歌时旧结果覆盖新歌。
+   */
+  private latestResolveGeneration = Number.NEGATIVE_INFINITY
+  /** 每个 resolveGeneration 对应的取消信号，新代次到来时 abort 旧代次。 */
+  private readonly resolveAbortControllers = new Map<number, AbortController>()
 
   constructor(credentials: CredentialStore) {
     this.netease = new NeteaseProvider(credentials)
@@ -162,60 +169,105 @@ export class MusicService {
   /** Returns an upstream resource only to Electron main. Main must replace it with a flux-media handle before IPC. */
   async resolvePlayback(request: PlaybackResolveRequest): Promise<MainPlaybackResource> {
     const forceChksz = request.backend === 'chksz'
-
-    // backend=chksz 时强制走 chksz（用户明确要求），不先试直连
-    if (forceChksz) {
-      const chksz = this.chksz
-      if (!chksz) throw providerError(request.song.provider, new Error('ChKSz 密钥未配置'))
-      try {
-        const chkszResult = await chksz.resolvePlayback(request.song, request.quality)
-        return this.toMainPlaybackResource(chkszResult)
-      } catch (error) {
-        if (error instanceof ChkszApiError) {
-          const toast = chkszErrorToast(error)
-          if (toast) {
-            throw new Error(`ChKSz ${toast.title}：${toast.message}`, { cause: error })
-          }
+    // 解析代次：调用方（renderer loadGeneration）单调递增。收到更早代次的请求时，
+    // 本方法早被新代次抢占；这里登记代次并 abort 旧代次的 chksz 在途取链，
+    // 让旧歌的 chksz 节流等待/fetch 立即取消，不拖慢新歌、不消耗上游配额。
+    const generation = request.resolveGeneration
+    if (typeof generation === 'number' && Number.isFinite(generation)) {
+      if (generation < this.latestResolveGeneration) {
+        // 已被更晚的代次抢占，直接放弃本次解析（renderer 也会丢弃结果）
+        throw providerError(request.song.provider, new Error('superseded'))
+      }
+      this.latestResolveGeneration = generation
+      // abort 所有更早代次的 AbortController
+      for (const [gen, controller] of this.resolveAbortControllers) {
+        if (gen < generation) {
+          controller.abort()
+          this.resolveAbortControllers.delete(gen)
         }
-        throw providerError(request.song.provider, error)
       }
     }
+    const abort =
+      typeof generation === 'number' && Number.isFinite(generation)
+        ? this.registerResolveAbort(generation)
+        : undefined
+    const signal = abort?.signal
 
-    const provider = this.select(request.song.provider)
-    const direct = await this.execute(request.song.provider, () =>
-      provider.resolvePlayback(request.song, request.quality),
-    )
-
-    // 直连能正常播放 → 直接返回，不消耗 chksz 配额
-    if (!shouldFallbackToChksz(direct)) {
-      return this.toMainPlaybackResource(direct)
-    }
-
-    // 直连无音源 / 仅试听 → 尝试 chksz 同 id 解析
-    const chksz = this.chksz
-    if (chksz) {
-      try {
-        const chkszResult = await chksz.resolvePlayback(request.song, request.quality)
-        if (chkszResult.url && chkszResult.playable && !chkszResult.trial) {
+    try {
+      // backend=chksz 时强制走 chksz（用户明确要求），不先试直连
+      if (forceChksz) {
+        const chksz = this.chksz
+        if (!chksz) throw providerError(request.song.provider, new Error('ChKSz 密钥未配置'))
+        try {
+          const chkszResult = await chksz.resolvePlayback(request.song, request.quality, { signal })
+          if (abort?.isStale()) throw providerError(request.song.provider, new Error('superseded'))
           return this.toMainPlaybackResource(chkszResult)
-        }
-        // chksz 也没拿到完整地址，返回直连结果（带原始 restriction 信息）
-      } catch (error) {
-        // chksz 错误：用户可见的（配额/限流/Key）需向上传，否则播放器看不到原因。
-        // 用 ChKSz 前缀文案抛 Error（非 MusicServiceError），跨 IPC 后 renderer 侧
-        // musicErrorMessage 识别 ChKSz 前缀并直接显示文案，不走 provider 错误码翻译。
-        if (error instanceof ChkszApiError) {
-          const toast = chkszErrorToast(error)
-          if (toast) {
-            throw new Error(`ChKSz ${toast.title}：${toast.message}`, { cause: error })
+        } catch (error) {
+          if (this.isAborted(error) || abort?.isStale())
+            throw providerError(request.song.provider, new Error('superseded'))
+          if (error instanceof ChkszApiError) {
+            const toast = chkszErrorToast(error)
+            if (toast) {
+              throw new Error(`ChKSz ${toast.title}：${toast.message}`, { cause: error })
+            }
           }
+          throw providerError(request.song.provider, error)
         }
-        // 其它 chksz 错误静默，回退到直连结果
-        console.warn('[ChKSz] resolvePlayback failed, using direct result:', errorMessage(error))
       }
-    }
 
-    return this.toMainPlaybackResource(direct)
+      const provider = this.select(request.song.provider)
+      const direct = await this.execute(request.song.provider, () =>
+        provider.resolvePlayback(request.song, request.quality),
+      )
+
+      // 直连能正常播放 → 直接返回，不消耗 chksz 配额
+      if (!shouldFallbackToChksz(direct)) {
+        return this.toMainPlaybackResource(direct)
+      }
+
+      // 直连无音源 / 仅试听 → 尝试 chksz 同 id 解析
+      const chksz = this.chksz
+      if (chksz) {
+        try {
+          const chkszResult = await chksz.resolvePlayback(request.song, request.quality, { signal })
+          if (abort?.isStale()) throw providerError(request.song.provider, new Error('superseded'))
+          if (chkszResult.url && chkszResult.playable && !chkszResult.trial) {
+            return this.toMainPlaybackResource(chkszResult)
+          }
+          // chksz 也没拿到完整地址，返回直连结果（带原始 restriction 信息）
+        } catch (error) {
+          if (this.isAborted(error) || abort?.isStale())
+            throw providerError(request.song.provider, new Error('superseded'))
+          // chksz 错误：用户可见的（配额/限流/Key）需向上传，否则播放器看不到原因。
+          // 用 ChKSz 前缀文案抛 Error（非 MusicServiceError），跨 IPC 后 renderer 侧
+          // musicErrorMessage 识别 ChKSz 前缀并直接显示文案，不走 provider 错误码翻译。
+          if (error instanceof ChkszApiError) {
+            const toast = chkszErrorToast(error)
+            if (toast) {
+              throw new Error(`ChKSz ${toast.title}：${toast.message}`, { cause: error })
+            }
+          }
+          // 其它 chksz 错误静默，回退到直连结果
+          console.warn('[ChKSz] resolvePlayback failed, using direct result:', errorMessage(error))
+        }
+      }
+
+      return this.toMainPlaybackResource(direct)
+    } finally {
+      if (abort) this.resolveAbortControllers.delete(generation as number)
+    }
+  }
+
+  /** 为给定代次登记一个 AbortController，返回其 signal 传给 chksz 取链。 */
+  private registerResolveAbort(generation: number): { signal: AbortSignal; isStale: () => boolean } {
+    const controller = new AbortController()
+    this.resolveAbortControllers.set(generation, controller)
+    return { signal: controller.signal, isStale: () => controller.signal.aborted }
+  }
+
+  /** 判断错误是否由代次抢占产生的 abort 引起。 */
+  private isAborted(error: unknown): boolean {
+    return error instanceof Error && error.name === 'AbortError'
   }
 
   private toMainPlaybackResource(resolved: {

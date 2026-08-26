@@ -53,6 +53,12 @@ export interface PlaybackResolveRequest {
   quality: QualityLevel
   /** 指定后端：chksz 强制走聚合 API、direct 强制走直连。省略时直连优先，无音源/试听才自动回退 chksz。 */
   backend?: 'direct' | 'chksz'
+  /**
+   * 调用方单调递增的解析代次。主进程只保留最新代次的在途 chksz 请求，
+   * 收到更早代次的结果会丢弃，避免快速切歌时旧歌的 chksz 取链结果覆盖新歌。
+   * 省略时不参与去重（保持原行为）。
+   */
+  resolveGeneration?: number
 }
 
 /** The URL is always an opaque flux-media:// URL; upstream URLs and credentials never cross IPC. */

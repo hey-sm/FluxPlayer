@@ -69,13 +69,18 @@ export class ChkszProvider {
    * 用网易云歌曲 id 解析播放地址。
    * 返回 chksz 163_music 的直链，或抛 ChkszApiError。
    */
-  async resolveNetease(id: string, quality: QualityLevel): Promise<UpstreamPlaybackResource> {
+  async resolveNetease(
+    id: string,
+    quality: QualityLevel,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<UpstreamPlaybackResource> {
     const level = this.neteaseLevel(quality)
-    const json = await chkszRequest('/api/163_music', this.apikey, {
-      id: String(id),
-      level,
-      type: 'json',
-    })
+    const json = await chkszRequest(
+      '/api/163_music',
+      this.apikey,
+      { id: String(id), level, type: 'json' },
+      { signal: options.signal },
+    )
     const data = asRecord(at(json, 'data') ?? field(json, 'data'))
     const url = optionalString(field(data, 'url'))
     if (!url) {
@@ -109,13 +114,18 @@ export class ChkszProvider {
    * 用 QQ 歌曲 mid 解析播放地址。
    * chksz qq_music 是两段式：先按 mid 直接解析（无需先搜索）。
    */
-  async resolveQQ(mid: string, quality: QualityLevel): Promise<UpstreamPlaybackResource> {
+  async resolveQQ(
+    mid: string,
+    quality: QualityLevel,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<UpstreamPlaybackResource> {
     const size = this.qqSize(quality)
-    const json = await chkszRequest('/api/qq_music', this.apikey, {
-      mid: String(mid),
-      size,
-      type: 'json',
-    })
+    const json = await chkszRequest(
+      '/api/qq_music',
+      this.apikey,
+      { mid: String(mid), size, type: 'json' },
+      { signal: options.signal },
+    )
     const url = optionalString(field(json, 'url'))
     if (!url) {
       return {
@@ -144,8 +154,12 @@ export class ChkszProvider {
   }
 
   /** 统一入口：按 song 的 provider 和 id/mid 分发到对应解析路径。 */
-  async resolvePlayback(song: UnifiedSong, quality: QualityLevel): Promise<UpstreamPlaybackResource> {
-    if (song.provider === 'netease') return this.resolveNetease(String(song.id), quality)
+  async resolvePlayback(
+    song: UnifiedSong,
+    quality: QualityLevel,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<UpstreamPlaybackResource> {
+    if (song.provider === 'netease') return this.resolveNetease(String(song.id), quality, options)
     if (song.provider === 'qq') {
       const mid = song.mid || song.songmid || String(song.id)
       if (!mid) {

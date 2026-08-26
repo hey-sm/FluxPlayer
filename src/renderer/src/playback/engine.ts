@@ -370,7 +370,14 @@ export class PlaybackEngine {
 
     try {
       const info: PlaybackResolveResult = await abortableResolve(
-        musicClient.resolvePlayback({ song, quality: requested, backend: this.resolveBackend }),
+        musicClient.resolvePlayback({
+          song,
+          quality: requested,
+          backend: this.resolveBackend,
+          // 透传本代解析代次：主进程据此丢弃快速切歌时旧歌的 chksz 在途结果，
+          // 避免旧歌取链慢、新歌取链快时旧结果覆盖新歌。
+          resolveGeneration: generation,
+        }),
         this.resolveAbort.signal,
       )
       if (this.stale(generation)) return
@@ -414,6 +421,8 @@ export class PlaybackEngine {
       if (this.stale(generation)) return
       // AbortError: resolvePlayback 被新切歌取消，静默返回，新 loadIndex 已在管理状态
       if (error instanceof Error && error.name === 'AbortError') return
+      // 主进程代次抢占（快速切歌时旧 chksz 在途被 abort）也静默返回
+      if (error instanceof Error && /superseded/i.test(error.message)) return
       if (error instanceof Error && error.name === 'NotAllowedError') {
         this.patch({ status: 'paused', message: '歌曲已载入，点击播放按钮继续播放' })
         updatePlaybackState('paused')
