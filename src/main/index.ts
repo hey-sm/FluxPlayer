@@ -119,22 +119,53 @@ async function cleanupForExit(): Promise<void> {
   await cleanupRuntime(true)
 }
 
+/**
+ * 关闭清理的最长容忍时间。点 X 走的是异步 cleanupForExit（停 Wallpaper Engine 运行时、
+ * helper 进程、更新器等），close 事件 preventDefault 后窗口不会真正关，得等清理完才
+ * app.quit()。但这套流程**没有超时兜底**：Wallpaper Engine helper / DWM 交互一旦卡住，
+ * allowQuit 永不变 true，进程就永久残留 —— 且应用没有系统托盘图标，残留时用户完全看
+ * 不到，只会累积一堆持有单实例锁的僵尸进程，下次 dev 直接抢不到锁静默退出。
+ * 超时后强制 app.exit(0) 兜住这个边界。
+ */
+const SHUTDOWN_TIMEOUT_MS = 4000
+
 function requestQuit(): void {
   if (allowQuit || shutdownPromise) return
-  shutdownPromise = cleanupForExit().finally(() => {
-    allowQuit = true
-    app.quit()
-  })
+  const forceExit = setTimeout(() => {
+    console.error('[FluxPlayer] shutdown timed out, forcing exit')
+    app.exit(0)
+  }, SHUTDOWN_TIMEOUT_MS)
+  forceExit.unref()
+  shutdownPromise = cleanupForExit()
+    .catch((error) => {
+      console.error('[FluxPlayer] shutdown cleanup failed:', error)
+    })
+    .finally(() => {
+      clearTimeout(forceExit)
+      allowQuit = true
+      app.quit()
+    })
 }
 
 async function restartApp(): Promise<void> {
   if (allowQuit) return
   if (!shutdownPromise) {
-    shutdownPromise = cleanupForExit().then(() => {
+    const forceRelaunch = setTimeout(() => {
+      console.error('[FluxPlayer] restart cleanup timed out, forcing relaunch')
       app.relaunch()
-      allowQuit = true
-      app.quit()
-    })
+      app.exit(0)
+    }, SHUTDOWN_TIMEOUT_MS)
+    forceRelaunch.unref()
+    shutdownPromise = cleanupForExit()
+      .catch((error) => {
+        console.error('[FluxPlayer] restart cleanup failed:', error)
+      })
+      .finally(() => {
+        clearTimeout(forceRelaunch)
+        app.relaunch()
+        allowQuit = true
+        app.quit()
+      })
   }
   await shutdownPromise
 }
@@ -275,6 +306,14 @@ async function resumeWallpaperEngineSelection(): Promise<void> {
 
 const gotSingleInstanceLock = isSmokeTest || process.env.FLUX_E2E === '1' || app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) {
+  // 已有实例持有单实例锁（常是打包版没真正退出、进程残留）。静默退出会让 dev 模式
+  // 的用户误以为应用起来了，实际看到的是残留的旧进程。打印一行提示。
+  if (isDevelopment) {
+    console.error(
+      '[FluxPlayer] 另一个 FluxPlayer 实例已在运行（可能打包版进程未正常退出），开发实例退出。\n' +
+        '请先关闭所有 FluxPlayer 进程（任务管理器搜 FluxPlayer.exe，或 taskkill /F /IM FluxPlayer.exe）再重新 pnpm dev。',
+    )
+  }
   app.quit()
 } else {
   app.on('web-contents-created', (_event, contents) => {

@@ -90,7 +90,16 @@ function projectLabel(project: WallpaperEngineProject, nativeRuntimeAvailable: b
 }
 
 function reportWallpaperError(reason: unknown, fallback: string): void {
-  showToast(reason instanceof Error ? reason.message : fallback, {
+  // electron 的 ipcRenderer.invoke 会把 main 进程抛出的 Error.message 透传过来；
+  // 但 secureHandle 的 UNAUTHORIZED_RENDERER / INVALID_REQUEST 在某些 electron 版本
+  // 下会以字符串形式 reject（不是 Error 实例），此时尽量提取原始信息，别只显示 fallback。
+  const detail =
+    reason instanceof Error
+      ? reason.message
+      : typeof reason === 'string'
+        ? reason
+        : ((reason as { message?: string })?.message ?? fallback)
+  showToast(detail || fallback, {
     title: 'Wallpaper Engine 操作失败',
     tone: 'error',
     duration: 8000,

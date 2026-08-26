@@ -133,6 +133,14 @@ html.classic-control-glass-svg-ok .playerbar.classic-control-glass {
   backdrop-filter: url(#mineradio-control-glass-filter) saturate(1);
 }
 
+/* 苔境(Sylva)在跨 origin iframe 里独立 RAF 重绘，SVG feDisplacementMap 采样它的动态
+   合成层像素会让播放栏里的枝条"飘移"（内外因位移折射而走向不一致）。苔境启用时把
+   播放栏降级为纯 blur：苔境仍透过模糊玻璃可见，但不会被位移折射。 */
+html[data-sylva-glass-conflict].classic-control-glass-svg-ok .playerbar.classic-control-glass {
+  -webkit-backdrop-filter: var(--saved-panel-glass-filter);
+  backdrop-filter: var(--saved-panel-glass-filter);
+}
+
 ::view-transition-group(root),
 ::view-transition-image-pair(root),
 ::view-transition-old(root),

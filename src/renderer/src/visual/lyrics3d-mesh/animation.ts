@@ -35,79 +35,85 @@ export const LYRICS_ANIMATION_OPTIONS: ReadonlyArray<{
   {
     value: 'compact',
     label: '紧凑滚动',
-    description: '显示前后歌词，以更紧凑的行距平滑滚动。',
+    description: '更宽的上下文窗口，行距紧凑，平滑滚动铺满视野。',
   },
   {
     value: 'cascade',
     label: '逐字浮现',
-    description: '当前句的每个字依次向上浮起点亮，逐字歌词观感最强。',
+    description: '当前句的每个字依次大幅向上浮起并点亮，逐字歌词观感最强。',
   },
   {
     value: 'cinematic',
     label: '景深推进',
-    description: '新歌词自远景推近，旧歌词越过镜头淡出，纵深感更强。',
+    description: '新歌词自更远处的远景推近，旧歌词大幅越过镜头掠出，纵深感最强。',
   },
 ]
 
 export const LYRICS_ANIMATION_PROFILES: Readonly<Record<LyricsAnimationMode, LyricsAnimationProfile>> = {
   compact: {
+    // 行距加宽到 0.56，多行歌词间距舒展；radius 降回 2（5 行）避免超视野
     radius: 2,
-    lineGap: 0.46,
-    contextOpacity: 0.28,
-    contextOpacityStep: 0.07,
-    activeZ: 0.18,
-    inactiveZ: -0.08,
-    depthStep: 0.11,
-    rotationStep: 0.04,
-    enterOffsetY: -0.08,
-    enterOffsetZ: -0.12,
-    enterScale: 0.94,
-    exitOffsetY: 0.08,
-    exitOffsetZ: -0.12,
-    exitScale: 0.96,
-    duration: 0.3,
+    lineGap: 0.56,
+    contextOpacity: 0.3,
+    contextOpacityStep: 0.05,
+    activeZ: 0.16,
+    inactiveZ: -0.06,
+    depthStep: 0.09,
+    rotationStep: 0.03,
+    // 行位移维持温和：紧凑滚动的核心是平滑，不要让位移喧宾夺主
+    enterOffsetY: -0.06,
+    enterOffsetZ: -0.1,
+    enterScale: 0.96,
+    exitOffsetY: 0.06,
+    exitOffsetZ: -0.1,
+    exitScale: 0.98,
+    duration: 0.32,
     enterEase: 'power2.out',
     exitEase: 'power1.in',
     glyphCascade: 0,
   },
   cascade: {
     radius: 2,
-    lineGap: 0.46,
-    contextOpacity: 0.24,
-    contextOpacityStep: 0.07,
-    activeZ: 0.2,
+    // 行距 0.46→0.56：与紧凑滚动一致，逐字浮现时多行间距舒展
+    lineGap: 0.56,
+    contextOpacity: 0.26,
+    contextOpacityStep: 0.06,
+    activeZ: 0.22,
     inactiveZ: -0.08,
     depthStep: 0.11,
-    rotationStep: 0.03,
-    // 行整体几乎不位移，位移交给逐字动画，否则两层运动会互相打架
-    enterOffsetY: -0.03,
-    enterOffsetZ: -0.06,
-    enterScale: 0.98,
+    rotationStep: 0.025,
+    // 行整体几乎不位移，位移交给逐字动画
+    enterOffsetY: -0.02,
+    enterOffsetZ: -0.05,
+    enterScale: 0.99,
     exitOffsetY: 0.1,
-    exitOffsetZ: -0.14,
-    exitScale: 0.96,
-    duration: 0.42,
+    exitOffsetZ: -0.16,
+    exitScale: 1.06,
+    duration: 0.5,
     enterEase: 'power2.out',
     exitEase: 'power1.in',
-    glyphCascade: 0.5,
+    // 逐字位移幅度 0.5→0.85：每个字向上浮起的高度更明显，逐字感更强
+    glyphCascade: 0.85,
   },
   cinematic: {
+    // 景深推进上下文多了会互相遮挡，保持 radius 2
     radius: 2,
-    lineGap: 0.52,
-    contextOpacity: 0.18,
-    contextOpacityStep: 0.06,
-    activeZ: 0.34,
-    inactiveZ: -0.34,
-    depthStep: 0.2,
+    lineGap: 0.54,
+    contextOpacity: 0.16,
+    contextOpacityStep: 0.05,
+    activeZ: 0.4,
+    inactiveZ: -0.4,
+    depthStep: 0.28,
     rotationStep: 0.07,
     enterOffsetY: -0.1,
-    enterOffsetZ: -0.75,
-    enterScale: 0.72,
-    // 退出往镜头方向推并放大，像从镜头旁掠过
-    exitOffsetY: 0.12,
-    exitOffsetZ: 0.5,
-    exitScale: 1.18,
-    duration: 0.46,
+    // 从更远处推近，纵深感拉满
+    enterOffsetZ: -0.95,
+    enterScale: 0.64,
+    // 退出更大幅度朝镜头推并放大，掠过镜头感更强
+    exitOffsetY: 0.14,
+    exitOffsetZ: 0.7,
+    exitScale: 1.28,
+    duration: 0.5,
     enterEase: 'power3.out',
     exitEase: 'power2.in',
     glyphCascade: 0,
@@ -118,8 +124,8 @@ export const LYRICS_ANIMATION_PROFILES: Readonly<Record<LyricsAnimationMode, Lyr
  * 「只显示当前歌词」下的切句编排。
  *
  * 窗口模式里当前句从不真正退出 —— 它滚到 -1 槽位，只有窗口最外沿那句（opacity 已经掉到
- * contextOpacity 的底部）才走 exit 补间，所以 profile 的 exitOffsetY（compact 0.08，约行距的
- * 17%）完全够用。焦点模式没有邻居接手：退出的就是屏幕正中那句满不透明的行，而新句也停在
+ * contextOpacity 的底部）才走 exit 补间，所以 profile 的 exitOffsetY（compact 0.06，约行距的
+ * 16%）完全够用。焦点模式没有邻居接手：退出的就是屏幕正中那句满不透明的行，而新句也停在
  * relativeIndex 0，同一套参数等于"原地淡出"—— 补间中段两句都还有 ~0.7 alpha 精确叠在一起，
  * 这就是切句残影。
  *

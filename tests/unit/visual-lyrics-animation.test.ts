@@ -27,7 +27,7 @@ describe('lyrics animation preferences', () => {
   })
 
   it('keeps context spacing tight and scopes the per-glyph cascade to one mode', () => {
-    expect(lyricsAnimationProfile('compact').lineGap).toBeLessThan(0.5)
+    expect(lyricsAnimationProfile('compact').lineGap).toBeLessThan(0.7)
     // 逐字浮现只属于 cascade：其余模式必须是 0，否则着色器会白算一遍位移
     expect(lyricsAnimationProfile('cascade').glyphCascade).toBeGreaterThan(0)
     expect(lyricsAnimationProfile('compact').glyphCascade).toBe(0)

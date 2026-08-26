@@ -357,12 +357,54 @@ export default function App(): React.JSX.Element {
     }
   }, [lyricsOffset])
 
+  // ── 背景切换协调 ──────────────────────────────────────────────────
+  // 三套背景（预设动态 / 本地文件 / Wallpaper Engine）各自有独立的状态和开销载体。
+  // 切换前必须先释放"上一个"的开销，否则只是隐藏，进程/视频流/WebGL 上下文/文件会累积。
+  // teardownOtherBackgrounds 无条件释放指定背景之外的所有背景，不需要知道当前是哪种，
+  // 因为任何一次切换都会把另外两种各调一遍释放，重复释放是幂等的（clear/stop 都有兜底）。
+
+  /**
+   * 释放指定背景之外的所有背景开销。各 IPC 各自的释放逻辑已正确，这里只保证"每次切换
+   * 都把上一个调一遍"。fire-and-forget：释放失败不应阻塞新背景激活。
+   */
+  const teardownOtherBackgrounds = useCallback((except: 'dynamic' | 'file' | 'wallpaper-engine') => {
+    const desktop = window.fluxDesktop
+    if (!desktop) return
+    if (except !== 'wallpaper-engine') {
+      // 停 WE 运行时（helper 子进程 / DWM 场景 / 屏幕捕获流）
+      setWallpaperEngineReady(false)
+      void desktop
+        .setWallpaperEngineState({ action: 'clear' })
+        .then((next) => {
+          setWallpaperEngineState(next)
+        })
+        .catch(() => undefined)
+    }
+    if (except !== 'file') {
+      // 删本地背景文件 + 清状态（主进程 removeManagedFile + 删 current.json）
+      void desktop
+        .clearCustomBackground()
+        .then((result) => {
+          if (result.ok || result.background === null) setCustomBackground(null)
+        })
+        .catch(() => undefined)
+    }
+    if (except !== 'dynamic') {
+      // 让 StageCanvas 停 WebGL 渲染 + 释放 Sylva iframe
+      // 通过把 backgroundMode 推到非 dynamic 实现（见 effectiveBackgroundMode 派生）
+      setBackgroundMediaFailed(false)
+    }
+  }, [])
+
   const runBackgroundCommand = useCallback(
     async (
       command: () => Promise<import('@shared/custom-background-contract').CustomBackgroundResult> | undefined,
     ) => {
       setBackgroundBusy(true)
       try {
+        // 切到本地文件前先释放 WE 的开销（helper 进程 / DWM / 屏幕捕获流）。
+        // 主进程 importFile 自己会删旧的本地背景文件，这里只需停 WE。
+        teardownOtherBackgrounds('file')
         const result = await command()
         if (!result || result.canceled) return
         if (!result.ok) throw new Error(result.error || '背景导入失败')
@@ -379,7 +421,7 @@ export default function App(): React.JSX.Element {
         setBackgroundBusy(false)
       }
     },
-    [],
+    [teardownOtherBackgrounds],
   )
 
   const effectiveBackgroundMode: BackgroundMode =
@@ -400,9 +442,42 @@ export default function App(): React.JSX.Element {
     return () => document.documentElement.removeAttribute('data-wallpaper-dwm-active')
   }, [dwmActive])
 
+  // 苔境(Sylva)跑在跨 origin iframe 里，有独立 RAF 不断重绘枝条生长。播放栏的
+  // classic-control-glass 用 SVG feDisplacementMap 做 backdrop-filter 折射，采样到
+  // iframe 的动态合成层像素就会"飘移"——内外枝条因位移折射而走向不一致。其它背景
+  //（WebGL / 本地文件 / WE）都在同文档里，backdrop 采样稳定，不受影响。
+  // 苔境启用时把播放栏的 SVG displacement 降级为纯 blur：苔境仍透过模糊玻璃可见，
+  // 但不会被位移折射，内外一致。用 CSS class 控制，不碰 useClassicControlGlass 逻辑。
+  const sylvaGlassConflict =
+    effectiveBackgroundMode === 'dynamic' && dynamicBackground === 'sylva' && !wallpaperEngineReady
+  useEffect(() => {
+    const root = document.documentElement
+    root.toggleAttribute('data-sylva-glass-conflict', sylvaGlassConflict)
+    return () => root.removeAttribute('data-sylva-glass-conflict')
+  }, [sylvaGlassConflict])
+
   const handleWallpaperEngineStateChange = useCallback((next: WallpaperEngineState): void => {
     setWallpaperEngineState(next)
   }, [])
+
+  // 当用户从壁纸库选了一个新 WE 项目（selection 从非 active 变 active 且 id 变化）时，
+  // 先释放本地文件和动态背景的开销，让 WE 独占。预设 effect 状态保留但 backgroundMode
+  // 推到 dynamic 之外，让 StageCanvas 的 backgroundEnabled 在 WE ready 后自动停掉 WebGL。
+  const lastWeSelectionIdRef = useRef<string>('')
+  useEffect(() => {
+    const sel = wallpaperEngineState.selection
+    if (!sel.active || !sel.id) {
+      lastWeSelectionIdRef.current = ''
+      return
+    }
+    if (lastWeSelectionIdRef.current === sel.id) return
+    lastWeSelectionIdRef.current = sel.id
+    // 只在"用户主动选了新项目"时清理，不在每次 state 同步时重复。
+    teardownOtherBackgrounds('wallpaper-engine')
+    // 把模式推离 dynamic，让 StageCanvas 在 WE ready 后停止 WebGL 渲染；
+    // WE 失败回退时 effectiveBackgroundMode 会因 !wallpaperEngineReady 回落 dynamic。
+    setBackgroundMode('wallpaper')
+  }, [wallpaperEngineState.selection, teardownOtherBackgrounds])
 
   const handleWallpaperEngineSnapshotChange = useCallback((next: WallpaperEngineLibrarySnapshot): void => {
     setWallpaperEngineSnapshot(next)
@@ -585,13 +660,20 @@ export default function App(): React.JSX.Element {
               onClose={() => setSettingsOpen(false)}
               dynamicBackground={dynamicBackground}
               onDynamicBackgroundChange={(effect) => {
+                // 切到预设动态背景：先停 WE + 清本地文件，再设 effect + mode。
+                teardownOtherBackgrounds('dynamic')
                 setDynamicBackground(effect)
                 setBackgroundMode('dynamic')
               }}
               backgroundMode={effectiveBackgroundMode}
               onBackgroundModeChange={(mode) => {
+                // 在本地背景与动态背景间切换。切到本地背景前先停 WE；
+                // 切到动态背景前停 WE + 让预设接管（本地文件状态保留，仅不显示）。
                 if (mode === 'wallpaper') {
+                  teardownOtherBackgrounds('file')
                   setBackgroundMediaFailed(false)
+                } else {
+                  teardownOtherBackgrounds('dynamic')
                 }
                 setBackgroundMode(mode)
               }}
