@@ -90,7 +90,7 @@ export function ColorPicker({
         />
       </div>
       {swatches.length ? (
-        <div className="flex flex-wrap gap-1" aria-label="Tailwind 色板" data-color-swatches="">
+        <div className="flex justify-between gap-1.5" aria-label="Tailwind 色板" data-color-swatches="">
           {swatches.map((swatch) => {
             const selected = swatch.value.toLowerCase() === value.toLowerCase()
             return (
@@ -98,7 +98,7 @@ export function ColorPicker({
                 key={swatch.name}
                 type="button"
                 className={cn(
-                  'grid size-6 cursor-pointer place-items-center rounded-[5px] border p-0 text-white',
+                  'grid size-12 cursor-pointer place-items-center rounded-[5px] border p-0 text-white',
                   'border-[color-mix(in_srgb,var(--swatch-color)_70%,white_30%)] bg-[var(--swatch-color)]',
                   'shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-[border-color,filter] duration-[var(--motion-duration-fast)]',
                   'hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2',
@@ -113,7 +113,7 @@ export function ColorPicker({
                 onClick={() => onChange(swatch.value)}
               >
                 {selected ? (
-                  <Check className="size-3 drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]" aria-hidden="true" />
+                  <Check className="size-6 drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]" aria-hidden="true" />
                 ) : null}
               </button>
             )
