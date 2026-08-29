@@ -210,3 +210,7 @@ tests/
 ## 许可证
 
 FluxPlayer 原创代码采用 [MIT License](LICENSE) 开源。项目包含的第三方代码和依赖仍遵循各自的许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 致谢
+
+感谢 [Linux.do](https://linux.do) 社区。
